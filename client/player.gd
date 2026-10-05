@@ -18,6 +18,7 @@ const SKILL_RADIUS := 90.0
 const SKILL_POWER := 1.2
 const SKILL_COOLDOWN := 2.0
 const REGEN_INTERVAL := 3.0
+const REPATH_INTERVAL := 0.4
 const HERB_ITEM := "herb_potion"
 
 var player_name := "ศิษย์วัด"
@@ -29,9 +30,12 @@ var inventory := {}
 var bounds := Rect2()
 var spawn_point := Vector2.ZERO
 var ghosts: Node
+var nav: Node2D  ## แผนที่ที่มี find_path()
 
-var move_target := Vector2.ZERO
+var path := PackedVector2Array()
+var path_index := 0
 var moving := false
+var repath_timer := 0.0
 var attack_target: Node2D = null
 var attack_cooldown := 0.0
 var skill_cooldown := 0.0
@@ -52,15 +56,15 @@ func _ready() -> void:
 
 func command_move(pos: Vector2) -> void:
 	attack_target = null
-	move_target = Vector2(
+	_set_path(Vector2(
 		clampf(pos.x, bounds.position.x, bounds.end.x),
-		clampf(pos.y, bounds.position.y, bounds.end.y))
-	moving = true
+		clampf(pos.y, bounds.position.y, bounds.end.y)))
 
 
 func command_attack(ghost: Node2D) -> void:
 	attack_target = ghost
 	moving = false
+	repath_timer = 0.0
 
 
 func tick(delta: float) -> void:
@@ -78,17 +82,41 @@ func tick(delta: float) -> void:
 		attack_target = null
 	if attack_target != null:
 		if position.distance_to(attack_target.position) > ATTACK_RANGE:
-			position = position.move_toward(attack_target.position, SPEED * delta)
+			repath_timer -= delta
+			if repath_timer <= 0.0 or not moving:
+				repath_timer = REPATH_INTERVAL
+				_set_path(attack_target.position)
+			_follow_path(delta)
 		elif attack_cooldown <= 0.0:
 			attack_cooldown = ATTACK_INTERVAL
 			swing = 0.2
 			var ghost := attack_target
 			ghost.take_damage(Combat.damage(stats["atk"], ghost.data["def"], "neutral", ghost.data["element"], rng), self)
 	elif moving:
-		position = position.move_toward(move_target, SPEED * delta)
-		if position.distance_to(move_target) < 1.0:
-			moving = false
+		_follow_path(delta)
 	queue_redraw()
+
+
+func _set_path(dest: Vector2) -> void:
+	path = nav.find_path(position, dest) if nav != null else PackedVector2Array([dest])
+	path_index = 0
+	moving = not path.is_empty()
+
+
+func _follow_path(delta: float) -> void:
+	var step := SPEED * delta
+	while step > 0.0 and path_index < path.size():
+		var waypoint := path[path_index]
+		var d := position.distance_to(waypoint)
+		if d <= step:
+			position = waypoint
+			step -= d
+			path_index += 1
+		else:
+			position = position.move_toward(waypoint, step)
+			step = 0.0
+	if path_index >= path.size():
+		moving = false
 
 
 ## สกิล 1: โปรยน้ำมนต์ — ดาเมจธาตุศักดิ์สิทธิ์รอบตัว แรงมากกับผีวิญญาณ
@@ -169,6 +197,7 @@ func _revive() -> void:
 	position = spawn_point
 	attack_target = null
 	moving = false
+	path.clear()
 	hp = stats["max_hp"]
 	sp = stats["max_sp"]
 

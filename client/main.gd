@@ -1,8 +1,9 @@
 extends Node2D
-## M1: ต้นแบบเล่นคนเดียว — หมู่บ้านวัดป่า + ทุ่งป่าช้า
+## M1: ต้นแบบเล่นคนเดียว — ประเทศไทย: หมู่บ้านริมคลอง
 ## ทุกอย่างขับด้วย tick() เพื่อให้ย้ายไปรันบน zone server และทดสอบแบบ headless ได้
 
-const TownMap = preload("res://maps/town_map.gd")
+const StartMap = preload("res://maps/thailand/khlong_village.gd")
+const Ambience = preload("res://client/ambience.gd")
 const Player = preload("res://client/player.gd")
 const Ghost = preload("res://client/ghost.gd")
 const Drop = preload("res://client/drop.gd")
@@ -13,47 +14,65 @@ const PICKUP_RADIUS := 20.0
 const CLICK_RADIUS := 24.0
 
 var map: Node2D
+var world: Node2D
+var ambience: Node
 var player: Node2D
 var ghosts: Node2D
 var drops: Node2D
 var hud: CanvasLayer
-var respawn_queue: Array[Dictionary] = []
+var respawn_queue: Array[Dictionary] = []  # {"spawn": index ใน map.spawns, "time": วินาทีที่เหลือ}
 var rng := RandomNumberGenerator.new()
 var next_ghost_seed := 1
 
 
 func _ready() -> void:
 	rng.seed = 12345
-	map = TownMap.new()
+	map = StartMap.new()
 	add_child(map)
 	drops = Node2D.new()
 	drops.name = "Drops"
 	add_child(drops)
+
+	# ทุกอย่างที่มีความสูงอยู่ใน world ที่ y-sort เพื่อให้เดินหลบหลังต้นไม้/อาคารได้
+	world = Node2D.new()
+	world.name = "World"
+	world.y_sort_enabled = true
+	add_child(world)
+	world.add_child(map.build_props())
 	ghosts = Node2D.new()
 	ghosts.name = "Ghosts"
-	add_child(ghosts)
+	ghosts.y_sort_enabled = true
+	world.add_child(ghosts)
 
 	player = Player.new()
-	player.position = TownMap.SPAWN_POINT
-	player.spawn_point = TownMap.SPAWN_POINT
-	player.bounds = TownMap.WORLD_RECT
+	player.position = map.spawn_point
+	player.spawn_point = map.spawn_point
+	player.bounds = map.world_rect
 	player.ghosts = ghosts
-	add_child(player)
+	player.nav = map
+	world.add_child(player)
 
 	var camera := Camera2D.new()
-	camera.limit_right = int(TownMap.WORLD_RECT.end.x)
-	camera.limit_bottom = int(TownMap.WORLD_RECT.end.y)
+	camera.limit_right = int(map.world_rect.end.x)
+	camera.limit_bottom = int(map.world_rect.end.y)
 	camera.position_smoothing_enabled = true
 	player.add_child(camera)
+
+	ambience = Ambience.new()
+	ambience.setup(map, ghosts)
+	add_child(ambience)
 
 	hud = Hud.new()
 	add_child(hud)
 	hud.bind(player)
+	hud.set_location(map.country, map.map_name)
+	hud.set_phase(ambience.phase)
+	ambience.phase_changed.connect(hud.set_phase)
 
-	for entry in TownMap.SPAWNS:
-		for i in entry["count"]:
-			_spawn_ghost(entry["id"])
-	hud.add_log("ยินดีต้อนรับสู่หมู่บ้านวัดป่า! เดินไปทางขวาเพื่อล่าผีที่ทุ่งป่าช้า")
+	for i in map.spawns.size():
+		for n in map.spawns[i]["count"]:
+			_spawn_ghost(i)
+	hud.add_log("ยินดีต้อนรับสู่%s! ข้ามสะพานไปทางขวาเพื่อล่าผีที่ทุ่งนาและป่าช้า" % map.map_name)
 
 
 func _process(delta: float) -> void:
@@ -104,11 +123,13 @@ func alive_ghosts() -> Array[Node2D]:
 	return result
 
 
-func _spawn_ghost(id: String) -> void:
+func _spawn_ghost(spawn_index: int) -> void:
+	var entry: Dictionary = map.spawns[spawn_index]
+	var r: Rect2 = entry["rect"]
 	var g := Ghost.new()
-	var r := TownMap.FIELD_RECT
 	var pos := Vector2(rng.randf_range(r.position.x, r.end.x), rng.randf_range(r.position.y, r.end.y))
-	g.setup(id, pos, player, next_ghost_seed)
+	g.setup(entry["id"], pos, player, next_ghost_seed)
+	g.set_meta("spawn_index", spawn_index)
 	next_ghost_seed += 1
 	g.died.connect(_on_ghost_died)
 	ghosts.add_child(g)
@@ -122,7 +143,7 @@ func _on_ghost_died(g: Node2D) -> void:
 			drop.item_id = d["item"]
 			drop.position = g.position + Vector2(rng.randf_range(-14, 14), rng.randf_range(-10, 10))
 			drops.add_child(drop)
-	respawn_queue.append({"id": g.ghost_id, "time": RESPAWN_DELAY})
+	respawn_queue.append({"spawn": g.get_meta("spawn_index"), "time": RESPAWN_DELAY})
 
 
 func _tick_respawns(delta: float) -> void:
@@ -133,7 +154,7 @@ func _tick_respawns(delta: float) -> void:
 			due.append(entry)
 	for entry in due:
 		respawn_queue.erase(entry)
-		_spawn_ghost(entry["id"])
+		_spawn_ghost(entry["spawn"])
 
 
 func _tick_pickups() -> void:

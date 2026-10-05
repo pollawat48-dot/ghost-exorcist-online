@@ -1,5 +1,6 @@
 extends SceneTree
-## ถ่ายภาพหน้าจอเกม (ต้องมีหน้าจอ เช่น xvfb-run): godot --path . --script res://tests/screenshot.gd -- out.png
+## ถ่ายภาพหน้าจอเกม (ต้องมีหน้าจอ เช่น xvfb-run):
+## godot --path . --script res://tests/screenshot.gd -- out.png [x y เวลา(0-1) ล่าผี(0/1)]
 
 func _initialize() -> void:
 	_shoot()
@@ -15,8 +16,12 @@ func _shoot() -> void:
 	await process_frame
 	main.set_process(false)
 	var player: Node2D = main.player
-	player.position = Vector2(1050, 700)
-	for i in 400:
+	player.position = Vector2(float(args[1]), float(args[2])) if args.size() > 2 else Vector2(1050, 700)
+	if args.size() > 3:
+		main.ambience.time_of_day = float(args[3])
+		main.ambience.tick(0.0)
+	var hunt := args.size() <= 4 or args[4] == "1"
+	for i in (400 if hunt else 0):
 		if player.attack_target == null:
 			var best: Node2D = null
 			for c in main.alive_ghosts():

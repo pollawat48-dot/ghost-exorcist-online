@@ -1,10 +1,10 @@
 extends CanvasLayer
-## หน้าจอข้อมูลผู้เล่น: HP/SP/EXP, กระเป๋า, ข้อความ, ปุ่มลัด
+## หน้าจอข้อมูลผู้เล่น: HP/SP/EXP, กระเป๋า, ชื่อแผนที่, เวลา, ข้อความ, ปุ่มลัด
 
 const ItemDB = preload("res://shared/data/items.gd")
 const Progression = preload("res://shared/combat/progression.gd")
 
-const MAX_LOG_LINES := 7
+const MAX_LOG_LINES := 5
 
 var player: Node2D
 var info: Label
@@ -13,10 +13,13 @@ var sp_bar: ProgressBar
 var exp_bar: ProgressBar
 var inv_label: Label
 var log_label: Label
+var location_label: Label
+var phase_label: Label
 var lines: Array[String] = []
 
 
 func _ready() -> void:
+	layer = 5
 	var view := Vector2(1280, 720)
 
 	var status := _panel(Vector2(12, 12), 260)
@@ -30,11 +33,20 @@ func _ready() -> void:
 	inv_label = Label.new()
 	inv.add_child(inv_label)
 
-	var log_box := _panel(Vector2(12, view.y - 190), 460)
+	var log_box := _panel(Vector2(12, view.y - 196), 460)
 	log_label = Label.new()
 	log_label.custom_minimum_size = Vector2(460, 140)
 	log_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	log_box.add_child(log_label)
+
+	var banner := _panel(Vector2(view.x / 2.0 - 140, 12), 280)
+	location_label = Label.new()
+	location_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	location_label.add_theme_color_override("font_color", Color(1, 0.88, 0.55))
+	banner.add_child(location_label)
+	phase_label = Label.new()
+	phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.add_child(phase_label)
 
 	var help := Label.new()
 	help.text = "คลิกซ้าย: เดิน / โจมตีผี    1: โปรยน้ำมนต์    Q: ใช้ยาหอมสมุนไพร"
@@ -68,6 +80,16 @@ func refresh() -> void:
 	for item_id in player.inventory:
 		text += "\n• %s x%d" % [ItemDB.ITEMS[item_id]["name"], player.inventory[item_id]]
 	inv_label.text = text
+
+
+func set_location(country: String, map_name: String) -> void:
+	location_label.text = "%s · %s" % [country, map_name]
+
+
+func set_phase(text: String) -> void:
+	phase_label.text = text
+	phase_label.add_theme_color_override("font_color",
+		Color(0.7, 0.8, 1.0) if text == "กลางคืน" else Color(1, 1, 0.85))
 
 
 func add_log(text: String) -> void:

@@ -73,6 +73,25 @@ func _test_gameplay() -> void:
 	_run(main, 2.0)
 	check(player.position.distance_to(dest) < 1.0, "คลิกแล้วเดินไปถึงจุดหมาย")
 
+	var map: Node2D = main.map
+	var canal_mid := Vector2(map.canal_center(500.0), 500.0)
+	check(not map.is_walkable(canal_mid), "เดินลงคลองไม่ได้")
+	check(map.is_walkable(Vector2(map.canal_center(1000.0), 1000.0)), "เดินบนสะพานได้")
+	var route: PackedVector2Array = map.find_path(map.spawn_point, Vector2(1800, 500))
+	var crossed_on_bridge := true
+	var prev: Vector2 = map.spawn_point
+	for p in route:
+		if not map.is_walkable(p):
+			crossed_on_bridge = false
+		if (prev.x - map.canal_center(prev.y)) * (p.x - map.canal_center(p.y)) < 0.0 and absf(p.y - 1000.0) > 48.0:
+			crossed_on_bridge = false
+		prev = p
+	check(route.size() > 0 and crossed_on_bridge, "หาทางจากหมู่บ้านไปทุ่งนาโดยข้ามทางสะพาน")
+	player.command_move(Vector2(1800, 500))
+	_run(main, 30.0)
+	check(player.position.distance_to(Vector2(1800, 500)) < 40.0, "เดินจากวัดข้ามสะพานไปถึงทุ่งนา")
+	player.position = map.spawn_point
+
 	var ghost: Node2D = main.alive_ghosts()[0]
 	check(main.ghost_at(ghost.position + Vector2(5, 5)) == ghost, "คลิกโดนผีแล้วเลือกเป็นเป้าหมาย")
 
