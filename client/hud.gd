@@ -6,7 +6,10 @@ const Progression = preload("res://shared/combat/progression.gd")
 
 const MAX_LOG_LINES := 5
 
-var player: Node2D
+var player: Node3D
+var camera: Camera3D
+var ghosts: Node
+var bars: Control
 var info: Label
 var hp_bar: ProgressBar
 var sp_bar: ProgressBar
@@ -21,6 +24,10 @@ var lines: Array[String] = []
 func _ready() -> void:
 	layer = 5
 	var view := Vector2(1280, 720)
+	bars = Control.new()
+	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bars.draw.connect(_draw_bars)
+	add_child(bars)
 
 	var status := _panel(Vector2(12, 12), 260)
 	info = Label.new()
@@ -56,7 +63,33 @@ func _ready() -> void:
 	add_child(help)
 
 
-func bind(p: Node2D) -> void:
+## วาดหลอด HP เหนือหัวผีที่โดนตี
+func track(cam: Camera3D, ghost_root: Node) -> void:
+	camera = cam
+	ghosts = ghost_root
+
+
+func _process(_delta: float) -> void:
+	if bars != null:
+		bars.queue_redraw()
+
+
+func _draw_bars() -> void:
+	if camera == null:
+		return
+	for g in ghosts.get_children():
+		if not g.has_method("take_damage") or not g.alive or g.hp >= g.data["hp"]:
+			continue
+		var p3: Vector3 = g.global_position + Vector3(0, 1.85, 0)
+		if camera.is_position_behind(p3):
+			continue
+		var p := camera.unproject_position(p3)
+		var ratio := float(g.hp) / float(g.data["hp"])
+		bars.draw_rect(Rect2(p.x - 24, p.y, 48, 6), Color(0, 0, 0, 0.7))
+		bars.draw_rect(Rect2(p.x - 23, p.y + 1, 46 * ratio, 4), Color(0.9, 0.2, 0.2))
+
+
+func bind(p: Node3D) -> void:
 	player = p
 	player.changed.connect(refresh)
 	player.message.connect(add_log)

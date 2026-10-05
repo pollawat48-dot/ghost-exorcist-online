@@ -55,12 +55,12 @@ func _test_progression() -> void:
 
 
 func _test_gameplay() -> void:
-	var main: Node2D = load("res://main.tscn").instantiate()
+	var main: Node3D = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
 	# ปิดเฟรมจริง แล้วขับเกมด้วย tick() เองเพื่อให้ผลแน่นอน
 	main.set_process(false)
-	var player: Node2D = main.player
+	var player: Node3D = main.player
 	check(player != null, "โหลดฉากหลักได้")
 	if player == null:
 		return
@@ -68,12 +68,12 @@ func _test_gameplay() -> void:
 	check(player.hp == player.stats["max_hp"], "ผู้เล่นเริ่มด้วย HP เต็ม")
 	check(main.alive_ghosts().size() == 12, "ผีเกิดครบ 12 ตัว")
 
-	var dest: Vector2 = player.position + Vector2(100, 0)
+	var dest: Vector2 = player.pos + Vector2(100, 0)
 	player.command_move(dest)
 	_run(main, 2.0)
-	check(player.position.distance_to(dest) < 1.0, "คลิกแล้วเดินไปถึงจุดหมาย")
+	check(player.pos.distance_to(dest) < 1.0, "คลิกแล้วเดินไปถึงจุดหมาย")
 
-	var map: Node2D = main.map
+	var map: Node3D = main.map
 	var canal_mid := Vector2(map.canal_center(500.0), 500.0)
 	check(not map.is_walkable(canal_mid), "เดินลงคลองไม่ได้")
 	check(map.is_walkable(Vector2(map.canal_center(1000.0), 1000.0)), "เดินบนสะพานได้")
@@ -89,19 +89,19 @@ func _test_gameplay() -> void:
 	check(route.size() > 0 and crossed_on_bridge, "หาทางจากหมู่บ้านไปทุ่งนาโดยข้ามทางสะพาน")
 	player.command_move(Vector2(1800, 500))
 	_run(main, 30.0)
-	check(player.position.distance_to(Vector2(1800, 500)) < 40.0, "เดินจากวัดข้ามสะพานไปถึงทุ่งนา")
-	player.position = map.spawn_point
+	check(player.pos.distance_to(Vector2(1800, 500)) < 40.0, "เดินจากวัดข้ามสะพานไปถึงทุ่งนา")
+	player.pos = map.spawn_point
 
-	var ghost: Node2D = main.alive_ghosts()[0]
-	check(main.ghost_at(ghost.position + Vector2(5, 5)) == ghost, "คลิกโดนผีแล้วเลือกเป็นเป้าหมาย")
+	var ghost: Node3D = main.alive_ghosts()[0]
+	check(main.ghost_at(ghost.pos + Vector2(5, 5)) == ghost, "คลิกโดนผีแล้วเลือกเป็นเป้าหมาย")
 
 	# ล่าผีแบบที่ผู้เล่นทั่วไปทำ: ตีตัวที่ใกล้ที่สุด, ใช้สกิลตอนประชิด, กินยาตอนเลือดน้อย
 	var time := 0.0
 	var casts := 0
 	while time < 900.0 and player.state["level"] < 3:
 		if player.attack_target == null:
-			player.command_attack(_nearest(main, player.position))
-		elif player.position.distance_to(player.attack_target.position) < 50.0 and player.sp >= 20:
+			player.command_attack(_nearest(main, player.pos))
+		elif player.pos.distance_to(player.attack_target.pos) < 50.0 and player.sp >= 20:
 			if player.cast_holy_water():
 				casts += 1
 		if player.hp < player.stats["max_hp"] * 0.35:
@@ -113,7 +113,7 @@ func _test_gameplay() -> void:
 	_run(main, 9.0)
 	check(main.alive_ghosts().size() == 12, "ผีที่ตายแล้วเกิดใหม่ครบ")
 
-	var drop: Node2D = null
+	var drop: Node3D = null
 	for d in main.drops.get_children():
 		if not d.is_queued_for_deletion():
 			drop = d
@@ -121,7 +121,7 @@ func _test_gameplay() -> void:
 	check(drop != null, "ผีดรอปไอเทม")
 	if drop != null:
 		var before := _item_count(player)
-		player.command_move(drop.position)
+		player.command_move(drop.pos)
 		_run(main, 20.0)
 		check(_item_count(player) > before, "เดินทับไอเทมแล้วเก็บเข้ากระเป๋า")
 
@@ -131,26 +131,27 @@ func _test_gameplay() -> void:
 		check(player.use_herb() and player.hp > 10, "ใช้ยาหอมสมุนไพรแล้ว HP เพิ่ม")
 
 	player.take_damage(9999)
-	check(player.hp == player.stats["max_hp"] and player.position == player.spawn_point, "สลบแล้วฟื้นที่วัดพร้อม HP เต็ม")
+	check(player.hp == player.stats["max_hp"] and player.pos == player.spawn_point, "สลบแล้วฟื้นที่วัดพร้อม HP เต็ม")
+	check(map.props_root.get_child_count() > 100, "สร้างฉาก 3D ครบ (สิ่งของ %d ชิ้น)" % map.props_root.get_child_count())
 	main.free()
 
 
-func _run(main: Node2D, seconds: float) -> void:
+func _run(main: Node3D, seconds: float) -> void:
 	var t := 0.0
 	while t < seconds:
 		main.tick(STEP)
 		t += STEP
 
 
-func _nearest(main: Node2D, pos: Vector2) -> Node2D:
-	var best: Node2D = null
+func _nearest(main: Node3D, pos: Vector2) -> Node3D:
+	var best: Node3D = null
 	for g in main.alive_ghosts():
-		if best == null or pos.distance_to(g.position) < pos.distance_to(best.position):
+		if best == null or pos.distance_to(g.pos) < pos.distance_to(best.pos):
 			best = g
 	return best
 
 
-func _item_count(player: Node2D) -> int:
+func _item_count(player: Node3D) -> int:
 	var n := 0
 	for id in player.inventory:
 		n += player.inventory[id]

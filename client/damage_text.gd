@@ -1,30 +1,30 @@
-extends Node2D
-## ตัวเลขดาเมจ/ข้อความลอยขึ้นแล้วจางหาย
+extends Label3D
+## ตัวเลขดาเมจ/ข้อความลอยขึ้นเหนือหัวแล้วจางหาย
 
-var text := ""
-var color := Color.WHITE
 var life := 0.9
 
 
-static func spawn(parent: Node, pos: Vector2, t: String, c: Color) -> void:
-	var node: Node2D = load("res://client/damage_text.gd").new()
+static func spawn(parent: Node, pos: Vector3, t: String, c: Color) -> void:
+	var node: Label3D = load("res://client/damage_text.gd").new()
 	node.text = t
-	node.color = c
+	node.modulate = c
 	node.position = pos
-	node.z_index = 10
+	node.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	node.font_size = 56
+	node.outline_size = 14
+	node.outline_modulate = Color(0, 0, 0, 0.9)
+	node.pixel_size = 0.007
+	node.no_depth_test = true
+	node.render_priority = 10
+	node.outline_render_priority = 9
 	parent.add_child(node)
 
 
 func _process(delta: float) -> void:
 	life -= delta
-	position.y -= 35.0 * delta
-	modulate.a = clampf(life / 0.5, 0.0, 1.0)
+	position.y += 1.2 * delta
+	var a := clampf(life / 0.5, 0.0, 1.0)
+	modulate.a = a
+	outline_modulate.a = a * 0.9
 	if life <= 0.0:
 		queue_free()
-	queue_redraw()
-
-
-func _draw() -> void:
-	var font := ThemeDB.fallback_font
-	draw_string_outline(font, Vector2(-40, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 80, 16, 4, Color.BLACK)
-	draw_string(font, Vector2(-40, 0), text, HORIZONTAL_ALIGNMENT_CENTER, 80, 16, color)

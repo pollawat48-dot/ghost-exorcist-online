@@ -1,24 +1,23 @@
-extends Node2D
-## ไอเทมที่ตกอยู่บนพื้น เดินทับเพื่อเก็บ
+extends Node3D
+## ไอเทมที่ตกอยู่บนพื้น (อัญมณีหมุนเรืองแสง) เดินทับเพื่อเก็บ
 
+const K = preload("res://maps/props/mesh_kit.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 
 var item_id := ""
+var pos := Vector2.ZERO
 var t := 0.0
+var gem: MeshInstance3D
+
+
+func _ready() -> void:
+	position = K.to3d(pos)
+	var item: Dictionary = ItemDB.ITEMS[item_id]
+	var glow := 2.5 if item["type"] == "soul" else 0.8
+	gem = K.sphere(self, 0.16, Vector3(0, 0.35, 0), K.mat(item["color"], glow, 0.3), 4, Vector3(1, 1.5, 1))
 
 
 func _process(delta: float) -> void:
 	t += delta
-	queue_redraw()
-
-
-func _draw() -> void:
-	var y := sin(t * 4.0) * 2.0
-	var c: Color = ItemDB.ITEMS[item_id]["color"]
-	if ItemDB.ITEMS[item_id]["type"] == "soul":
-		draw_circle(Vector2(0, y), 12.0, Color(c, 0.3))
-	draw_circle(Vector2(0, 7), 5.0, Color(0, 0, 0, 0.25))
-	var pts := PackedVector2Array([Vector2(0, y - 7), Vector2(6, y), Vector2(0, y + 7), Vector2(-6, y)])
-	draw_colored_polygon(pts, c)
-	pts.append(pts[0])
-	draw_polyline(pts, Color(0, 0, 0, 0.6), 1.0)
+	gem.rotation.y = t * 2.0
+	gem.position.y = 0.35 + sin(t * 3.0) * 0.06

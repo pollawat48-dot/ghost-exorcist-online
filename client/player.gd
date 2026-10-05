@@ -1,7 +1,9 @@
-extends Node2D
+extends Node3D
 ## ตัวละครผู้เล่น (ศิษย์วัด): คลิกเพื่อเดิน, คลิกผีเพื่อโจมตี, สกิลโปรยน้ำมนต์
+## ตรรกะใช้ pos (หน่วยเกมบนพื้นราบ) ส่วนโมเดล 3D ตามตำแหน่งนั้น
 ## ตอน M1 คำนวณในเครื่อง ภายหลังผลการต่อสู้จะมาจาก zone server
 
+const K = preload("res://maps/props/mesh_kit.gd")
 const Combat = preload("res://shared/combat/combat.gd")
 const Progression = preload("res://shared/combat/progression.gd")
 const ItemDB = preload("res://shared/data/items.gd")
@@ -27,16 +29,17 @@ var stats := {}
 var hp := 0
 var sp := 0
 var inventory := {}
+var pos := Vector2.ZERO
 var bounds := Rect2()
 var spawn_point := Vector2.ZERO
 var ghosts: Node
-var nav: Node2D  ## แผนที่ที่มี find_path()
+var nav: Node3D  ## แผนที่ที่มี find_path()
 
 var path := PackedVector2Array()
 var path_index := 0
 var moving := false
 var repath_timer := 0.0
-var attack_target: Node2D = null
+var attack_target: Node3D = null
 var attack_cooldown := 0.0
 var skill_cooldown := 0.0
 var regen_timer := 0.0
@@ -44,7 +47,13 @@ var swing := 0.0
 var splash := 0.0
 var levelup_fx := 0.0
 var flash := 0.0
+var walk_t := 0.0
 var rng := RandomNumberGenerator.new()
+var model: Node3D
+var body: Node3D
+var staff: Node3D
+var splash_ring: MeshInstance3D
+var levelup_beam: MeshInstance3D
 
 
 func _ready() -> void:
@@ -52,6 +61,81 @@ func _ready() -> void:
 	hp = stats["max_hp"]
 	sp = stats["max_sp"]
 	inventory[HERB_ITEM] = 3
+	_build_model()
+	_sync(0.0)
+
+
+func _build_model() -> void:
+	model = Node3D.new()
+	add_child(model)
+	body = Node3D.new()
+	model.add_child(body)
+	var robe := K.mat(Color(0.95, 0.55, 0.12), 0.0, 0.8)
+	var skin := K.mat(Color(0.93, 0.76, 0.6), 0.0, 0.7)
+	K.cyl(body, 0.13, 0.11, 0.5, Vector3(-0.1, 0.25, 0), K.mat(Color(0.35, 0.2, 0.1)), 6)
+	K.cyl(body, 0.13, 0.11, 0.5, Vector3(0.1, 0.25, 0), K.mat(Color(0.35, 0.2, 0.1)), 6)
+	K.cyl(body, 0.24, 0.38, 0.85, Vector3(0, 0.75, 0), robe, 12)
+	K.beam(body, Vector3(-0.22, 1.15, 0.12), Vector3(0.28, 0.55, 0.2), 0.1, K.mat(Color(0.75, 0.32, 0.05)))
+	K.sphere(body, 0.24, Vector3(0, 1.38, 0), skin, 14)
+	for x in [-0.08, 0.08]:
+		K.sphere(body, 0.03, Vector3(x, 1.4, 0.21), K.mat(Color(0.05, 0.05, 0.05)), 6)
+	K.sphere(body, 0.08, Vector3(0, 1.05, -0.3), robe, 6)
+	staff = Node3D.new()
+	staff.position = Vector3(0.32, 0.95, 0.05)
+	body.add_child(staff)
+	K.cyl(staff, 0.025, 0.025, 1.5, Vector3(0, 0.2, 0), K.mat(Color(0.5, 0.33, 0.15)), 6)
+	K.sphere(staff, 0.07, Vector3(0, 0.98, 0), K.gold(), 8)
+	K.label(self, player_name, Vector3(0, 2.05, 0), Color(1, 1, 0.8), 36)
+
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.9
+	ring.outer_radius = 1.0
+	splash_ring = MeshInstance3D.new()
+	splash_ring.mesh = ring
+	splash_ring.material_override = K.mat(Color(0.6, 0.9, 1.0, 0.8), 3.0, 0.2)
+	splash_ring.visible = false
+	add_child(splash_ring)
+
+	var beam_mesh := CylinderMesh.new()
+	beam_mesh.top_radius = 0.6
+	beam_mesh.bottom_radius = 0.9
+	beam_mesh.height = 6.0
+	levelup_beam = MeshInstance3D.new()
+	levelup_beam.mesh = beam_mesh
+	levelup_beam.position.y = 3.0
+	levelup_beam.material_override = K.mat(Color(1, 0.9, 0.4, 0.35), 2.5, 0.5)
+	levelup_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	levelup_beam.visible = false
+	add_child(levelup_beam)
+
+
+## ขยับโมเดลให้ตรงกับตรรกะ: ตำแหน่ง, ทิศที่หัน, ท่าเดิน/ตี, เอฟเฟกต์
+func _sync(delta: float) -> void:
+	var prev := position
+	position = K.to3d(pos)
+	var move := Vector2(position.x - prev.x, position.z - prev.z)
+	var facing := move
+	if attack_target != null and is_instance_valid(attack_target):
+		facing = attack_target.pos - pos
+	if facing.length() > 0.001:
+		model.rotation.y = lerp_angle(model.rotation.y, atan2(facing.x, facing.y), 0.3)
+	if move.length() > 0.001:
+		walk_t += delta * 10.0
+		body.position.y = absf(sin(walk_t)) * 0.06
+		body.rotation.z = sin(walk_t) * 0.04
+	else:
+		body.position.y = lerpf(body.position.y, 0.0, 0.3)
+		body.rotation.z = 0.0
+	staff.rotation.x = -sin((0.2 - swing) / 0.2 * PI) * 1.3 if swing > 0.0 else 0.0
+	splash_ring.visible = splash > 0.0
+	if splash > 0.0:
+		var r := SKILL_RADIUS / 32.0 * (1.0 - splash / 0.4 * 0.6)
+		splash_ring.scale = Vector3(r, 1, r)
+		splash_ring.position.y = 0.3
+	levelup_beam.visible = levelup_fx > 0.0
+	if levelup_fx > 0.0:
+		levelup_beam.scale = Vector3(1, levelup_fx / 1.2, 1)
+	model.scale = Vector3.ONE * (1.08 if flash > 0.0 else 1.0)
 
 
 func command_move(pos: Vector2) -> void:
@@ -61,7 +145,7 @@ func command_move(pos: Vector2) -> void:
 		clampf(pos.y, bounds.position.y, bounds.end.y)))
 
 
-func command_attack(ghost: Node2D) -> void:
+func command_attack(ghost: Node3D) -> void:
 	attack_target = ghost
 	moving = false
 	repath_timer = 0.0
@@ -81,11 +165,11 @@ func tick(delta: float) -> void:
 	if attack_target != null and (not is_instance_valid(attack_target) or not attack_target.alive):
 		attack_target = null
 	if attack_target != null:
-		if position.distance_to(attack_target.position) > ATTACK_RANGE:
+		if pos.distance_to(attack_target.pos) > ATTACK_RANGE:
 			repath_timer -= delta
 			if repath_timer <= 0.0 or not moving:
 				repath_timer = REPATH_INTERVAL
-				_set_path(attack_target.position)
+				_set_path(attack_target.pos)
 			_follow_path(delta)
 		elif attack_cooldown <= 0.0:
 			attack_cooldown = ATTACK_INTERVAL
@@ -94,11 +178,12 @@ func tick(delta: float) -> void:
 			ghost.take_damage(Combat.damage(stats["atk"], ghost.data["def"], "neutral", ghost.data["element"], rng), self)
 	elif moving:
 		_follow_path(delta)
-	queue_redraw()
+	if model != null:
+		_sync(delta)
 
 
 func _set_path(dest: Vector2) -> void:
-	path = nav.find_path(position, dest) if nav != null else PackedVector2Array([dest])
+	path = nav.find_path(pos, dest) if nav != null else PackedVector2Array([dest])
 	path_index = 0
 	moving = not path.is_empty()
 
@@ -107,13 +192,13 @@ func _follow_path(delta: float) -> void:
 	var step := SPEED * delta
 	while step > 0.0 and path_index < path.size():
 		var waypoint := path[path_index]
-		var d := position.distance_to(waypoint)
+		var d := pos.distance_to(waypoint)
 		if d <= step:
-			position = waypoint
+			pos = waypoint
 			step -= d
 			path_index += 1
 		else:
-			position = position.move_toward(waypoint, step)
+			pos = pos.move_toward(waypoint, step)
 			step = 0.0
 	if path_index >= path.size():
 		moving = false
@@ -131,7 +216,7 @@ func cast_holy_water() -> bool:
 	splash = 0.4
 	var hit := 0
 	for g in ghosts.get_children():
-		if g.has_method("take_damage") and g.alive and position.distance_to(g.position) <= SKILL_RADIUS:
+		if g.has_method("take_damage") and g.alive and pos.distance_to(g.pos) <= SKILL_RADIUS:
 			g.take_damage(Combat.damage(stats["atk"], g.data["def"], "holy", g.data["element"], rng, SKILL_POWER), self)
 			hit += 1
 	message.emit("โปรยน้ำมนต์! โดนผี %d ตัว" % hit)
@@ -150,7 +235,7 @@ func use_herb() -> bool:
 	_remove_item(HERB_ITEM)
 	var heal: int = ItemDB.ITEMS[HERB_ITEM]["heal"]
 	hp = mini(stats["max_hp"], hp + heal)
-	DamageText.spawn(get_parent(), position + Vector2(0, -36), "+%d" % heal, Color(0.4, 1, 0.4))
+	DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "+%d" % heal, Color(0.4, 1, 0.4))
 	changed.emit()
 	return true
 
@@ -160,7 +245,7 @@ func take_damage(amount: int) -> void:
 		return
 	hp = maxi(0, hp - amount)
 	flash = 0.15
-	DamageText.spawn(get_parent(), position + Vector2(0, -36), str(amount), Color(1, 0.45, 0.45))
+	DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), str(amount), Color(1, 0.45, 0.45))
 	if hp == 0:
 		message.emit("คุณสลบไป... ฟื้นคืนที่วัด")
 		_revive()
@@ -194,7 +279,7 @@ func _remove_item(item_id: String) -> void:
 
 
 func _revive() -> void:
-	position = spawn_point
+	pos = spawn_point
 	attack_target = null
 	moving = false
 	path.clear()
@@ -213,27 +298,3 @@ func _regen(delta: float) -> void:
 	sp = mini(stats["max_sp"], sp + 1 + state["level"] / 4)
 	if hp != old_hp or sp != old_sp:
 		changed.emit()
-
-
-func _draw() -> void:
-	var body := Color.WHITE if flash > 0.0 else Color(0.95, 0.6, 0.15)
-	draw_circle(Vector2(0, 14), 11.0, Color(0, 0, 0, 0.3))
-	if splash > 0.0:
-		var r := SKILL_RADIUS * (1.0 - splash / 0.4 * 0.5)
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(0.6, 0.9, 1.0, splash * 2.0), 4.0)
-	if levelup_fx > 0.0:
-		draw_arc(Vector2(0, -4), 26.0 + (1.2 - levelup_fx) * 20.0, 0.0, TAU, 40, Color(1, 0.95, 0.4, levelup_fx), 3.0)
-	# จีวร
-	draw_colored_polygon(PackedVector2Array([Vector2(-11, 14), Vector2(11, 14), Vector2(7, -6), Vector2(-7, -6)]), body)
-	draw_line(Vector2(-7, -4), Vector2(9, 12), Color(0.8, 0.4, 0.05), 3.0)
-	# หัว
-	draw_circle(Vector2(0, -13), 8.0, Color(0.95, 0.82, 0.68))
-	draw_circle(Vector2(-3, -14), 1.3, Color.BLACK)
-	draw_circle(Vector2(3, -14), 1.3, Color.BLACK)
-	# ไม้เท้า/ลูกประคำตอนตี
-	if swing > 0.0:
-		var a := (0.2 - swing) / 0.2 * PI - PI / 2.0
-		draw_line(Vector2(8, -4), Vector2(8, -4) + Vector2(cos(a), sin(a)) * 22.0, Color(0.55, 0.35, 0.15), 3.0)
-	var font := ThemeDB.fallback_font
-	draw_string_outline(font, Vector2(-60, 32), player_name, HORIZONTAL_ALIGNMENT_CENTER, 120, 12, 3, Color.BLACK)
-	draw_string(font, Vector2(-60, 32), player_name, HORIZONTAL_ALIGNMENT_CENTER, 120, 12, Color(1, 1, 0.8))
