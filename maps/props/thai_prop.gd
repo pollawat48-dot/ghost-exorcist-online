@@ -4,13 +4,14 @@ extends Node3D
 
 const K = preload("res://maps/props/mesh_kit.gd")
 
-const WHITE := Color(0.95, 0.93, 0.88)
-const RED := Color(0.66, 0.12, 0.09)
-const GREEN_TRIM := Color(0.13, 0.42, 0.28)
-const WOOD := Color(0.5, 0.32, 0.18)
-const WOOD_DARK := Color(0.3, 0.18, 0.1)
-const LEAF := Color(0.2, 0.46, 0.16)
-const LEAF_LIGHT := Color(0.34, 0.6, 0.22)
+## โทนพาสเทลแบบการ์ตูน
+const WHITE := Color(1.0, 0.96, 0.9)
+const RED := Color(0.96, 0.47, 0.45)
+const GREEN_TRIM := Color(0.47, 0.78, 0.66)
+const WOOD := Color(0.82, 0.6, 0.44)
+const WOOD_DARK := Color(0.6, 0.42, 0.34)
+const LEAF := Color(0.47, 0.76, 0.42)
+const LEAF_LIGHT := Color(0.64, 0.87, 0.5)
 
 ## ขอบเขตที่เดินผ่านไม่ได้ (หน่วยตรรกะเกม เทียบกับจุดฐาน)
 const FOOTPRINTS := {
@@ -117,7 +118,7 @@ func _ubosot() -> void:
 		for side in [-1.0, 1.0]:
 			K.box(self, Vector3(0.1, 1.0, 0.6), Vector3(side * 4.02, 2.6, z), K.mat(RED))
 	_thai_roof(4.2, 10.4, 7.6, 1.0, 7.2, RED)
-	_thai_roof(5.2, 7.6, 6.8, 3.4, 0.0, Color(0.72, 0.16, 0.1))
+	_thai_roof(5.2, 7.6, 6.8, 3.4, 0.0, Color(0.98, 0.56, 0.52))
 	# หน้าบันทอง
 	K.roof(self, 6.4, 0.12, 2.9, 0.0, Vector3(0, 5.35, 3.42), K.gold())
 	K.roof(self, 4.6, 0.14, 2.0, 0.0, Vector3(0, 5.55, 3.44), K.mat(RED.darkened(0.2)))
@@ -129,8 +130,8 @@ func _ubosot() -> void:
 
 
 func _chedi(ruined: bool) -> void:
-	var stone := K.mat(Color(0.55, 0.52, 0.47), 0.0, 0.95) if ruined else K.mat(WHITE, 0.0, 0.6)
-	var body: Material = K.mat(Color(0.52, 0.49, 0.44), 0.0, 0.95) if ruined else K.gold()
+	var stone := K.mat(Color(0.76, 0.72, 0.72), 0.0, 0.95) if ruined else K.mat(WHITE, 0.0, 0.6)
+	var body: Material = K.mat(Color(0.72, 0.68, 0.68), 0.0, 0.95) if ruined else K.gold()
 	K.cyl(self, 2.4, 2.6, 0.6, Vector3(0, 0.3, 0), stone, 16)
 	K.cyl(self, 2.0, 2.2, 0.6, Vector3(0, 0.9, 0), stone, 16)
 	K.cyl(self, 1.7, 1.8, 0.5, Vector3(0, 1.45, 0), stone, 16)
@@ -139,7 +140,7 @@ func _chedi(ruined: bool) -> void:
 	if ruined:
 		# ยอดหัก ก้อนอิฐหล่น มอสเขียวเกาะ
 		K.cyl(self, 0.3, 0.5, 0.9, Vector3(0.1, 4.6, 0), body, 8, Vector3(0.12, 0, 0.18))
-		var moss := K.mat(Color(0.22, 0.4, 0.18))
+		var moss := K.mat(Color(0.5, 0.74, 0.46))
 		for i in 9:
 			var a := i * 0.7 + variant
 			K.sphere(self, 0.25 + (i % 3) * 0.08, Vector3(cos(a) * 1.4, 2.0 + (i % 4) * 0.5, sin(a) * 1.4), moss, 8)
@@ -159,10 +160,10 @@ func _sala() -> void:
 	K.box(self, Vector3(4.6, 0.4, 3.0), Vector3(0, 0.2, 0), K.mat(WOOD))
 	for x in [-1.9, 0.0, 1.9]:
 		for z in [-1.2, 1.2]:
-			K.cyl(self, 0.12, 0.14, 2.4, Vector3(x, 1.6, z), K.mat(Color(0.55, 0.14, 0.1)), 8)
+			K.cyl(self, 0.12, 0.14, 2.4, Vector3(x, 1.6, z), K.mat(Color(0.9, 0.42, 0.42)), 8)
 	K.box(self, Vector3(4.2, 0.35, 0.15), Vector3(0, 2.6, 1.2), K.gold())
 	_thai_roof(2.8, 5.4, 3.6, 0.6, 3.6, RED)
-	_thai_roof(3.4, 4.0, 3.2, 1.5, 0.0, Color(0.72, 0.16, 0.1))
+	_thai_roof(3.4, 4.0, 3.2, 1.5, 0.0, Color(0.98, 0.56, 0.52))
 	K.roof(self, 3.2, 0.1, 1.25, 0.0, Vector3(0, 3.45, 1.62), K.gold())
 	_chofa(Vector3(0, 4.9, 1.6))
 	_chofa(Vector3(0, 4.9, -1.6))
@@ -177,9 +178,9 @@ func _stilt_house() -> void:
 	K.box(self, Vector3(3.4, 1.9, 2.5), Vector3(0, 2.6, 0), wall)
 	for i in 8:
 		K.box(self, Vector3(0.04, 1.9, 0.02), Vector3(-1.6 + i * 0.46, 2.6, 1.26), K.mat(WOOD_DARK))
-	K.box(self, Vector3(0.6, 0.7, 0.05), Vector3(-0.8, 2.8, 1.27), K.mat(Color(0.08, 0.05, 0.03)))
-	K.box(self, Vector3(0.6, 0.7, 0.05), Vector3(0.8, 2.8, 1.27), K.mat(Color(0.08, 0.05, 0.03)))
-	var roof_c := Color(0.32, 0.2, 0.12) if variant % 2 == 0 else Color(0.55, 0.2, 0.13)
+	K.box(self, Vector3(0.6, 0.7, 0.05), Vector3(-0.8, 2.8, 1.27), K.mat(Color(0.45, 0.32, 0.4)))
+	K.box(self, Vector3(0.6, 0.7, 0.05), Vector3(0.8, 2.8, 1.27), K.mat(Color(0.45, 0.32, 0.4)))
+	var roof_c := Color(0.62, 0.42, 0.36) if variant % 2 == 0 else Color(0.92, 0.5, 0.48)
 	K.roof(self, 4.6, 3.6, 2.2, 0.0, Vector3(0, 3.5, 0), roof_c)
 	for z in [1.85, -1.85]:
 		for side in [-1.0, 1.0]:
@@ -214,13 +215,13 @@ func _rice_hut() -> void:
 		for z in [-0.6, 0.6]:
 			K.cyl(self, 0.06, 0.06, 2.6, Vector3(x, 1.3, z), K.mat(WOOD_DARK), 6)
 	K.box(self, Vector3(1.9, 0.1, 1.5), Vector3(0, 0.9, 0), K.mat(WOOD))
-	K.roof(self, 2.4, 2.0, 1.1, 0.0, Vector3(0, 2.5, 0), Color(0.75, 0.62, 0.32))
+	K.roof(self, 2.4, 2.0, 1.1, 0.0, Vector3(0, 2.5, 0), Color(0.98, 0.84, 0.55))
 
 
 # ---------- ต้นไม้และพืช ----------
 
 func _bodhi() -> void:
-	var bark := K.mat(Color(0.42, 0.33, 0.25), 0.0, 0.95)
+	var bark := K.mat(Color(0.66, 0.5, 0.4), 0.0, 0.95)
 	K.cyl(self, 0.45, 0.75, 4.0, Vector3(0, 2.0, 0), bark, 10)
 	for i in 5:
 		var a := i * TAU / 5.0
@@ -231,7 +232,7 @@ func _bodhi() -> void:
 	for i in 5:
 		var a := i * TAU / 5.0 + 0.3
 		K.beam(self, Vector3(0, 3.8, 0), Vector3(cos(a) * 2.0, 5.4, sin(a) * 2.0), 0.3, bark)
-	var leaves := [K.mat(Color(0.15, 0.36, 0.13)), K.mat(Color(0.2, 0.44, 0.16)), K.mat(Color(0.26, 0.5, 0.18))]
+	var leaves := [K.mat(Color(0.4, 0.68, 0.38)), K.mat(Color(0.5, 0.78, 0.44)), K.mat(Color(0.6, 0.85, 0.5))]
 	for i in 14:
 		var a := i * 2.4
 		var r := 1.0 + (i % 4) * 0.7
@@ -244,7 +245,7 @@ func _bodhi() -> void:
 func _palm() -> void:
 	var lean := Vector3((variant % 5 - 2) * 0.35, 0, (variant % 3 - 1) * 0.3)
 	var height := 6.5 + (variant % 4) * 0.6
-	var bark := K.mat(Color(0.45, 0.36, 0.26), 0.0, 0.95)
+	var bark := K.mat(Color(0.74, 0.58, 0.44), 0.0, 0.95)
 	var prev := Vector3.ZERO
 	for i in range(1, 8):
 		var f := i / 7.0
@@ -269,11 +270,11 @@ func _palm() -> void:
 			K.box(frond, Vector3(w, 0.03, pts[k].distance_to(pts[k + 1])), (pts[k] + pts[k + 1]) / 2.0,
 				K.mat(LEAF if i % 2 == 0 else LEAF_LIGHT), Vector3(-atan2(pts[k + 1].y - pts[k].y, pts[k + 1].z - pts[k].z), 0, 0))
 	for i in 3:
-		K.sphere(crown, 0.18, Vector3(cos(i * 2.1) * 0.25, -0.25, sin(i * 2.1) * 0.25), K.mat(Color(0.4, 0.28, 0.12)), 8)
+		K.sphere(crown, 0.18, Vector3(cos(i * 2.1) * 0.25, -0.25, sin(i * 2.1) * 0.25), K.mat(Color(0.62, 0.45, 0.3)), 8)
 
 
 func _banana() -> void:
-	K.cyl(self, 0.14, 0.2, 1.8, Vector3(0, 0.9, 0), K.mat(Color(0.4, 0.5, 0.2)), 8)
+	K.cyl(self, 0.14, 0.2, 1.8, Vector3(0, 0.9, 0), K.mat(Color(0.62, 0.78, 0.42)), 8)
 	var crown := Node3D.new()
 	crown.position = Vector3(0, 1.8, 0)
 	add_child(crown)
@@ -306,8 +307,8 @@ func _bush() -> void:
 # ---------- ของในป่าช้า/ทุ่ง ----------
 
 func _tomb() -> void:
-	var stone := K.mat(Color(0.6, 0.58, 0.55).darkened(0.08 * (variant % 3)), 0.0, 0.95)
-	K.sphere(self, 0.8, Vector3(0, 0, -0.3), K.mat(Color(0.42, 0.37, 0.27)), 10, Vector3(1, 0.45, 1.2))
+	var stone := K.mat(Color(0.8, 0.78, 0.82).darkened(0.08 * (variant % 3)), 0.0, 0.95)
+	K.sphere(self, 0.8, Vector3(0, 0, -0.3), K.mat(Color(0.72, 0.62, 0.5)), 10, Vector3(1, 0.45, 1.2))
 	K.box(self, Vector3(0.6, 0.85, 0.15), Vector3(0, 0.43, 0.55), stone)
 	K.cyl(self, 0.3, 0.3, 0.15, Vector3(0, 0.86, 0.55), stone, 10, Vector3(PI / 2.0, 0, 0))
 	if variant % 2 == 0:
@@ -328,6 +329,6 @@ func _lantern() -> void:
 func _scarecrow() -> void:
 	K.cyl(self, 0.04, 0.05, 2.0, Vector3(0, 1.0, 0), K.mat(WOOD_DARK), 6)
 	K.box(self, Vector3(1.4, 0.06, 0.06), Vector3(0, 1.45, 0), K.mat(WOOD_DARK))
-	K.box(self, Vector3(0.7, 0.7, 0.3), Vector3(0, 1.2, 0), K.mat(Color(0.3, 0.45, 0.75)))
-	K.sphere(self, 0.22, Vector3(0, 1.85, 0), K.mat(Color(0.85, 0.75, 0.5)), 8)
-	K.cyl(self, 0.01, 0.45, 0.35, Vector3(0, 2.1, 0), K.mat(Color(0.8, 0.65, 0.3)), 10)
+	K.box(self, Vector3(0.7, 0.7, 0.3), Vector3(0, 1.2, 0), K.mat(Color(0.55, 0.7, 0.95)))
+	K.sphere(self, 0.22, Vector3(0, 1.85, 0), K.mat(Color(1.0, 0.9, 0.7)), 8)
+	K.cyl(self, 0.01, 0.45, 0.35, Vector3(0, 2.1, 0), K.mat(Color(1.0, 0.85, 0.5)), 10)

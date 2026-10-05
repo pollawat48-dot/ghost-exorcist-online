@@ -222,7 +222,7 @@ func _build_ground() -> void:
 	var outer := MeshInstance3D.new()
 	outer.name = "OuterGround"
 	outer.mesh = outer_mesh
-	outer.material_override = K.mat(Color(0.2, 0.36, 0.14), 0.0, 1.0)
+	outer.material_override = K.mat(Color(0.62, 0.8, 0.46), 0.0, 1.0, 0.0, false)
 	outer.position = Vector3(size.x / 2.0, -0.12, size.y / 2.0)
 	add_child(outer)
 
@@ -249,12 +249,12 @@ func _build_bridge() -> void:
 	var z := BRIDGE_Y * K.S
 	var length := (CANAL_BANK + 20.0) * 2.0 * K.S
 	var width := BRIDGE_HALF * 2.0 * K.S
-	var plank := K.mat(Color(0.58, 0.4, 0.24))
-	var dark := K.mat(Color(0.33, 0.2, 0.11))
+	var plank := K.mat(Color(0.86, 0.64, 0.46))
+	var dark := K.mat(Color(0.64, 0.45, 0.36))
 	var i := 0.0
 	while i < length:
 		var x := cx - length / 2.0 + i
-		K.box(bridge, Vector3(0.36, 0.08, width), Vector3(x + 0.18, 0.12 + sin(i / length * PI) * 0.35, z), plank if int(i * 3) % 2 == 0 else K.mat(Color(0.52, 0.36, 0.21)))
+		K.box(bridge, Vector3(0.36, 0.08, width), Vector3(x + 0.18, 0.12 + sin(i / length * PI) * 0.35, z), plank if int(i * 3) % 2 == 0 else K.mat(Color(0.8, 0.58, 0.42)))
 		i += 0.38
 	for side in [-1.0, 1.0]:
 		var rz: float = z + side * (width / 2.0 + 0.05)
@@ -311,7 +311,7 @@ func _foliage(mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color], 
 
 
 func _build_rice() -> void:
-	var mesh := _tuft_mesh(9, 0.75, 0.35, Color(0.12, 0.3, 0.06), Color(0.42, 0.7, 0.16))
+	var mesh := _tuft_mesh(9, 0.75, 0.35, Color(0.4, 0.66, 0.3), Color(0.72, 0.92, 0.48))
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
 	var step := 14.0
@@ -326,14 +326,14 @@ func _build_rice() -> void:
 				var ripe := (plot_id.x * 7 + plot_id.y * 13) % 5 == 0
 				var basis := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * _rng.randf_range(0.85, 1.15))
 				transforms.append(Transform3D(basis, K.to3d(p, -0.1)))
-				colors.append(Color(1.9, 1.35, 0.5) if ripe else Color(1, 1, 1))
+				colors.append(Color(1.4, 1.15, 0.6) if ripe else Color(1, 1, 1))
 			x += step
 		y += step
 	_foliage(mesh, transforms, colors, "Rice")
 
 
 func _build_grass() -> void:
-	var mesh := _tuft_mesh(6, 0.35, 0.5, Color(0.16, 0.32, 0.1), Color(0.45, 0.68, 0.25))
+	var mesh := _tuft_mesh(6, 0.35, 0.5, Color(0.46, 0.7, 0.34), Color(0.7, 0.9, 0.5))
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
 	var tries := 0
@@ -352,8 +352,8 @@ func _build_grass() -> void:
 
 
 func _build_lotus() -> void:
-	var pad := K.mat(Color(0.2, 0.45, 0.18), 0.0, 0.6)
-	var flower := K.mat(Color(1.0, 0.6, 0.75), 0.15, 0.6)
+	var pad := K.mat(Color(0.5, 0.78, 0.45), 0.0, 0.6)
+	var flower := K.mat(Color(1.0, 0.66, 0.8), 0.15, 0.6)
 	var y := 30.0
 	while y < world_rect.size.y:
 		if absf(y - BRIDGE_Y) > 90:

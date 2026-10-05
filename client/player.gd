@@ -35,6 +35,7 @@ var spawn_point := Vector2.ZERO
 var ghosts: Node
 var nav: Node3D  ## แผนที่ที่มี find_path()
 
+var stick := Vector2.ZERO  ## ทิศจากจอยบนจอ (มือถือ) หรือคีย์บอร์ด ในหน่วยพื้นราบ ยาวไม่เกิน 1
 var path := PackedVector2Array()
 var path_index := 0
 var moving := false
@@ -70,29 +71,45 @@ func _build_model() -> void:
 	add_child(model)
 	body = Node3D.new()
 	model.add_child(body)
-	var robe := K.mat(Color(0.95, 0.55, 0.12), 0.0, 0.8)
-	var skin := K.mat(Color(0.93, 0.76, 0.6), 0.0, 0.7)
-	K.cyl(body, 0.13, 0.11, 0.5, Vector3(-0.1, 0.25, 0), K.mat(Color(0.35, 0.2, 0.1)), 6)
-	K.cyl(body, 0.13, 0.11, 0.5, Vector3(0.1, 0.25, 0), K.mat(Color(0.35, 0.2, 0.1)), 6)
-	K.cyl(body, 0.24, 0.38, 0.85, Vector3(0, 0.75, 0), robe, 12)
-	K.beam(body, Vector3(-0.22, 1.15, 0.12), Vector3(0.28, 0.55, 0.2), 0.1, K.mat(Color(0.75, 0.32, 0.05)))
-	K.sphere(body, 0.24, Vector3(0, 1.38, 0), skin, 14)
-	for x in [-0.08, 0.08]:
-		K.sphere(body, 0.03, Vector3(x, 1.4, 0.21), K.mat(Color(0.05, 0.05, 0.05)), 6)
-	K.sphere(body, 0.08, Vector3(0, 1.05, -0.3), robe, 6)
+	# ศิษย์วัดแบบจิบิ: หัวโต ตัวเล็ก ตาโตมีประกาย แก้มแดง
+	var robe := K.mat(Color(1.0, 0.72, 0.4), 0.0, 0.8)
+	var sash := K.mat(Color(0.96, 0.52, 0.42))
+	var skin := K.mat(Color(1.0, 0.86, 0.74), 0.0, 0.7)
+	var hair := K.mat(Color(0.36, 0.25, 0.24), 0.0, 0.6)
+	var eye := K.mat(Color(0.2, 0.13, 0.16), 0.0, 0.3, 0.0, false)
+	var shine := K.mat(Color(1, 1, 1), 1.5, 0.3, 0.0, false)
+	var blush := K.mat(Color(1.0, 0.6, 0.65), 0.3, 0.8, 0.0, false)
+	for x in [-0.1, 0.1]:
+		K.sphere(body, 0.09, Vector3(x, 0.07, 0.03), K.mat(Color(0.62, 0.42, 0.36)), 8, Vector3(1, 0.7, 1.3))
+	K.cyl(body, 0.17, 0.3, 0.55, Vector3(0, 0.38, 0), robe, 14)
+	K.beam(body, Vector3(-0.18, 0.62, 0.14), Vector3(0.2, 0.3, 0.17), 0.07, sash)
+	for x in [-0.27, 0.27]:
+		K.sphere(body, 0.08, Vector3(x, 0.42, 0.04), skin, 8)
+	var head := Node3D.new()
+	head.position = Vector3(0, 1.0, 0)
+	head.rotation.x = -0.25  # เงยหน้าเล็กน้อยให้เห็นหน้าจากกล้องมุมสูง
+	body.add_child(head)
+	K.sphere(head, 0.4, Vector3.ZERO, skin, 18)
+	K.sphere(head, 0.41, Vector3(0, 0.15, -0.11), hair, 18, Vector3(1.0, 0.78, 1.0))
+	K.sphere(head, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
+	for x in [-0.15, 0.15]:
+		K.sphere(head, 0.095, Vector3(x, 0.0, 0.34), eye, 10, Vector3(0.85, 1.25, 0.5))
+		K.sphere(head, 0.035, Vector3(x + 0.03, 0.06, 0.39), shine, 6)
+		K.sphere(head, 0.065, Vector3(x * 1.55, -0.11, 0.32), blush, 8, Vector3(1.2, 0.6, 0.4))
+	K.sphere(head, 0.03, Vector3(0, -0.15, 0.38), K.mat(Color(0.85, 0.4, 0.42), 0.0, 0.8, 0.0, false), 6, Vector3(1.4, 0.7, 0.6))
 	staff = Node3D.new()
-	staff.position = Vector3(0.32, 0.95, 0.05)
+	staff.position = Vector3(0.3, 0.45, 0.06)
 	body.add_child(staff)
-	K.cyl(staff, 0.025, 0.025, 1.5, Vector3(0, 0.2, 0), K.mat(Color(0.5, 0.33, 0.15)), 6)
-	K.sphere(staff, 0.07, Vector3(0, 0.98, 0), K.gold(), 8)
-	K.label(self, player_name, Vector3(0, 2.05, 0), Color(1, 1, 0.8), 36)
+	K.cyl(staff, 0.03, 0.03, 1.1, Vector3(0, 0.25, 0), K.mat(Color(0.78, 0.55, 0.38)), 6)
+	K.sphere(staff, 0.09, Vector3(0, 0.85, 0), K.gold(), 10)
+	K.label(self, player_name, Vector3(0, 2.15, 0), Color(1, 0.97, 0.88), 36)
 
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.9
 	ring.outer_radius = 1.0
 	splash_ring = MeshInstance3D.new()
 	splash_ring.mesh = ring
-	splash_ring.material_override = K.mat(Color(0.6, 0.9, 1.0, 0.8), 3.0, 0.2)
+	splash_ring.material_override = K.mat(Color(0.6, 0.9, 1.0, 0.8), 3.0, 0.2, 0.0, false)
 	splash_ring.visible = false
 	add_child(splash_ring)
 
@@ -103,7 +120,7 @@ func _build_model() -> void:
 	levelup_beam = MeshInstance3D.new()
 	levelup_beam.mesh = beam_mesh
 	levelup_beam.position.y = 3.0
-	levelup_beam.material_override = K.mat(Color(1, 0.9, 0.4, 0.35), 2.5, 0.5)
+	levelup_beam.material_override = K.mat(Color(1, 0.9, 0.5, 0.35), 2.5, 0.5, 0.0, false)
 	levelup_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	levelup_beam.visible = false
 	add_child(levelup_beam)
@@ -164,7 +181,11 @@ func tick(delta: float) -> void:
 
 	if attack_target != null and (not is_instance_valid(attack_target) or not attack_target.alive):
 		attack_target = null
-	if attack_target != null:
+	if stick.length() > 0.15:
+		attack_target = null
+		moving = false
+		_walk_dir(stick.limit_length(1.0) * SPEED * delta)
+	elif attack_target != null:
 		if pos.distance_to(attack_target.pos) > ATTACK_RANGE:
 			repath_timer -= delta
 			if repath_timer <= 0.0 or not moving:
@@ -180,6 +201,16 @@ func tick(delta: float) -> void:
 		_follow_path(delta)
 	if model != null:
 		_sync(delta)
+
+
+## เดินตามทิศจอย ถ้าติดน้ำหรือสิ่งกีดขวางให้ไถลไปตามแนวแกนที่ยังเดินได้
+func _walk_dir(step: Vector2) -> void:
+	for candidate in [pos + step, pos + Vector2(step.x, 0), pos + Vector2(0, step.y)]:
+		var c: Vector2 = candidate
+		c = Vector2(clampf(c.x, bounds.position.x, bounds.end.x), clampf(c.y, bounds.position.y, bounds.end.y))
+		if nav == null or (nav.is_walkable(c) and not nav.is_water(c)):
+			pos = c
+			return
 
 
 func _set_path(dest: Vector2) -> void:

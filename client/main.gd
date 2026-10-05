@@ -15,6 +15,7 @@ const RESPAWN_DELAY := 8.0
 const PICKUP_RADIUS := 20.0
 const CLICK_RADIUS := 24.0
 const CLICK_RADIUS_SCREEN := 45.0
+const AUTO_TARGET_RADIUS := 320.0
 
 var map: Node3D
 var world: Node3D
@@ -66,6 +67,8 @@ func _ready() -> void:
 	hud.set_location(map.country, map.map_name)
 	hud.set_phase(ambience.phase)
 	hud.track(camera_rig.camera, ghosts)
+	hud.setup_minimap(map)
+	hud.action.connect(do_action)
 	ambience.phase_changed.connect(hud.set_phase)
 
 	for i in map.spawns.size():
@@ -76,7 +79,54 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	player.stick = _stick_world()
 	tick(delta)
+
+
+## ทิศเดินจากจอยบนจอหรือ WASD แปลงตามมุมกล้อง (ขึ้นจอ = เดินไปข้างหน้ากล้อง)
+func _stick_world() -> Vector2:
+	var v: Vector2 = hud.stick.value
+	if v == Vector2.ZERO:
+		v = Input.get_vector(&"ui_left", &"ui_right", &"ui_up", &"ui_down")
+		var keys := Vector2(
+			float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
+			float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
+		if keys != Vector2.ZERO:
+			v = keys.normalized()
+	if v == Vector2.ZERO:
+		return v
+	var basis: Basis = camera_rig.camera.global_basis
+	var right := Vector2(basis.x.x, basis.x.z).normalized()
+	var forward := Vector2(-basis.z.x, -basis.z.z).normalized()
+	return right * v.x - forward * v.y
+
+
+## ปุ่มบนจอ/แถบสกิล/คีย์ลัด เรียกมาที่นี่ที่เดียว
+func do_action(name: String) -> void:
+	match name:
+		"attack":
+			var target := nearest_ghost(AUTO_TARGET_RADIUS)
+			if target != null:
+				player.command_attack(target)
+			else:
+				hud.add_log("ไม่มีผีอยู่ใกล้ๆ")
+		"holy_water":
+			player.cast_holy_water()
+		"herb":
+			player.use_herb()
+
+
+func nearest_ghost(radius: float) -> Node3D:
+	if player.attack_target != null and is_instance_valid(player.attack_target) and player.attack_target.alive:
+		return player.attack_target
+	var best: Node3D = null
+	var best_dist := radius
+	for g in alive_ghosts():
+		var d: float = player.pos.distance_to(g.pos)
+		if d < best_dist:
+			best = g
+			best_dist = d
+	return best
 
 
 func tick(delta: float) -> void:
@@ -98,9 +148,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_1:
-				player.cast_holy_water()
-			KEY_Q:
-				player.use_herb()
+				do_action("holy_water")
+			KEY_2, KEY_Q:
+				do_action("herb")
+			KEY_SPACE:
+				do_action("attack")
 
 
 ## ผีที่อยู่ใต้เมาส์บนหน้าจอ (เทียบกับตัวผีที่ลอยอยู่ ไม่ใช่เงาบนพื้น)

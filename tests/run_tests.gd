@@ -133,6 +133,24 @@ func _test_gameplay() -> void:
 	player.take_damage(9999)
 	check(player.hp == player.stats["max_hp"] and player.pos == player.spawn_point, "สลบแล้วฟื้นที่วัดพร้อม HP เต็ม")
 	check(map.props_root.get_child_count() > 100, "สร้างฉาก 3D ครบ (สิ่งของ %d ชิ้น)" % map.props_root.get_child_count())
+
+	# จอยบนจอ (มือถือ): ดันจอยแล้วเดินต่อเนื่อง และเดินลงคลองไม่ได้
+	var start: Vector2 = player.pos
+	player.stick = Vector2(0, 1)
+	_run(main, 1.0)
+	player.stick = Vector2.ZERO
+	check(player.pos.y - start.y > player.SPEED * 0.8, "ดันจอยแล้วตัวละครเดินตาม")
+	player.pos = Vector2(map.canal_center(600.0) - 120.0, 600.0)
+	player.stick = Vector2(1, 0)
+	_run(main, 3.0)
+	player.stick = Vector2.ZERO
+	check(not map.is_water(player.pos), "ดันจอยเข้าหาคลองแล้วไม่ตกน้ำ")
+
+	# ปุ่มโจมตีบนจอ: เลือกผีที่ใกล้ที่สุดเป็นเป้าหมายเอง
+	var near_ghost := _nearest(main, player.pos)
+	player.pos = near_ghost.pos + Vector2(60, 0)
+	main.do_action("attack")
+	check(player.attack_target == near_ghost, "กดปุ่มโจมตีแล้วล็อกผีตัวที่ใกล้ที่สุด")
 	main.free()
 
 

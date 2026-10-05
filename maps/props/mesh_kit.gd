@@ -5,22 +5,53 @@ extends RefCounted
 ## 1 เมตร = 32 หน่วยของตรรกะเกม (หน่วยเดิมจากเวอร์ชัน 2D)
 const S := 1.0 / 32.0
 
+## สีเส้นขอบแบบการ์ตูน (น้ำตาลอมม่วง ไม่ใช้ดำสนิทเพื่อให้ดูนุ่ม)
+const OUTLINE_COLOR := Color(0.36, 0.24, 0.26)
+
 static var _materials := {}
 static var _meshes := {}
+static var _outline: StandardMaterial3D
+static var _font: Font
+
+
+static func font() -> Font:
+	if _font == null:
+		_font = load("res://assets/fonts/Mali-Bold.ttf")
+	return _font
+
+
+## เส้นขอบแบบ inverted hull: วาดผิวด้านหลังที่ขยายออกเล็กน้อยด้วยสีทึบ
+static func outline() -> StandardMaterial3D:
+	if _outline == null:
+		_outline = StandardMaterial3D.new()
+		_outline.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline.cull_mode = BaseMaterial3D.CULL_FRONT
+		_outline.albedo_color = OUTLINE_COLOR
+		_outline.grow = true
+		_outline.grow_amount = 0.022
+	return _outline
 
 
 static func to3d(p: Vector2, height: float = 0.0) -> Vector3:
 	return Vector3(p.x * S, height, p.y * S)
 
 
-static func mat(color: Color, emission: float = 0.0, roughness: float = 0.85, metallic: float = 0.0) -> StandardMaterial3D:
-	var key := "%s|%s|%s|%s" % [color.to_html(), emission, roughness, metallic]
+## วัสดุแบบการ์ตูน: แสงเงาเป็นขั้น (toon), ขอบสว่างนุ่มๆ และมีเส้นขอบ
+static func mat(color: Color, emission: float = 0.0, roughness: float = 0.85, metallic: float = 0.0, outlined: bool = true) -> StandardMaterial3D:
+	var key := "%s|%s|%s|%s|%s" % [color.to_html(), emission, roughness, metallic, outlined]
 	if _materials.has(key):
 		return _materials[key]
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
 	m.roughness = roughness
-	m.metallic = metallic
+	m.metallic = metallic * 0.4
+	m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+	m.specular_mode = BaseMaterial3D.SPECULAR_TOON
+	m.rim_enabled = true
+	m.rim = 0.2
+	m.rim_tint = 0.6
+	if outlined and color.a >= 1.0 and emission < 2.0:
+		m.next_pass = outline()
 	if emission > 0.0:
 		m.emission_enabled = true
 		m.emission = color
@@ -32,7 +63,7 @@ static func mat(color: Color, emission: float = 0.0, roughness: float = 0.85, me
 
 
 static func gold() -> StandardMaterial3D:
-	return mat(Color(0.95, 0.72, 0.22), 0.0, 0.32, 0.75)
+	return mat(Color(1.0, 0.8, 0.38), 0.0, 0.35, 0.75)
 
 
 static func _as_mat(c: Variant) -> Material:
@@ -165,9 +196,10 @@ static func label(parent: Node3D, text: String, pos: Vector3, color: Color, size
 	l.position = pos
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.font_size = size
-	l.outline_size = 10
+	l.font = font()
+	l.outline_size = 12
 	l.modulate = color
-	l.outline_modulate = Color(0, 0, 0, 0.85)
+	l.outline_modulate = Color(0.36, 0.24, 0.3, 0.9)
 	l.pixel_size = 0.006
 	l.no_depth_test = true
 	l.render_priority = 5

@@ -35,6 +35,10 @@ func _shoot() -> void:
 		main.camera_rig.yaw = deg_to_rad(float(args[5]))
 	if args.size() > 6:
 		main.camera_rig.distance = float(args[6])
+	# ให้ตัวละครหันหน้าเข้ากล้องเพื่อดูหน้าตา
+	player.attack_target = null
+	player.moving = false
+	player.model.rotation.y = main.camera_rig.yaw
 	main.camera_rig.snap()
 	main.set_process(true)
 	for i in 30:

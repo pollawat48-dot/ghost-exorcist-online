@@ -32,24 +32,25 @@ func _ready() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.6
-	env.ambient_light_color = Color(0.85, 0.78, 0.66)
-	env.ambient_light_sky_contribution = 0.45
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.ambient_light_energy = 0.5
+	env.ambient_light_color = Color(1.0, 0.9, 0.85)
+	env.ambient_light_sky_contribution = 0.3
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.95
 	env.tonemap_white = 6.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.7
+	env.glow_intensity = 0.4
 	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 0.9
+	env.glow_hdr_threshold = 1.2
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.5
+	env.ssao_radius = 0.8
+	env.ssao_intensity = 0.8
 	env.fog_enabled = true
 	env.fog_density = 0.006
 	env.fog_sky_affect = 0.3
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.2
+	env.adjustment_brightness = 1.0
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
@@ -57,7 +58,8 @@ func _ready() -> void:
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 60.0
-	sun.shadow_blur = 1.5
+	sun.shadow_blur = 2.0
+	sun.shadow_opacity = 0.55
 	add_child(sun)
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color(0.55, 0.65, 1.0)
@@ -101,17 +103,17 @@ func tick(delta: float) -> void:
 	# ดวงอาทิตย์เคลื่อนจากตะวันออกไปตะวันตกในช่วงกลางวัน
 	var sun_t := clampf(time_of_day / 0.55, 0.0, 1.0)
 	sun.rotation = Vector3(-0.37 - sin(sun_t * PI) * 0.95, lerpf(-1.4, 1.4, sun_t), 0)
-	sun.light_energy = 1.15 * (1.0 - night)
-	sun.light_color = Color(1.0, 0.96, 0.88).lerp(Color(1.0, 0.55, 0.3), dusk)
-	moon.light_energy = 0.32 * night
+	sun.light_energy = 0.85 * (1.0 - night)
+	sun.light_color = Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.65, 0.5), dusk)
+	moon.light_energy = 0.45 * night
 
-	sky_mat.sky_top_color = Color(0.32, 0.55, 0.85).lerp(Color(0.35, 0.3, 0.55), dusk).lerp(Color(0.02, 0.03, 0.09), clampf(night * 1.5 - 0.5, 0.0, 1.0))
-	sky_mat.sky_horizon_color = Color(0.75, 0.83, 0.9).lerp(Color(1.0, 0.6, 0.38), dusk).lerp(Color(0.08, 0.1, 0.2), clampf(night * 1.5 - 0.5, 0.0, 1.0))
+	sky_mat.sky_top_color = Color(0.55, 0.76, 0.98).lerp(Color(0.7, 0.55, 0.85), dusk).lerp(Color(0.16, 0.16, 0.36), clampf(night * 1.5 - 0.5, 0.0, 1.0))
+	sky_mat.sky_horizon_color = Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.72, 0.62), dusk).lerp(Color(0.32, 0.3, 0.52), clampf(night * 1.5 - 0.5, 0.0, 1.0))
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.1).lerp(Color(0.02, 0.02, 0.04), night)
-	env.ambient_light_energy = lerpf(0.55, 0.3, night)
+	env.ambient_light_energy = lerpf(0.5, 0.45, night)
 	env.fog_light_color = sky_mat.sky_horizon_color
-	env.fog_density = lerpf(0.0015, 0.016, night)
+	env.fog_density = lerpf(0.0015, 0.012, night)
 
 	var lights := get_tree().get_nodes_in_group("night_light") if is_inside_tree() else []
 	for l in lights:

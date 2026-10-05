@@ -49,31 +49,43 @@ func _ready() -> void:
 	model = Node3D.new()
 	add_child(model)
 	var c: Color = data["color"]
+	var eye := K.mat(Color(0.22, 0.12, 0.2), 0.0, 0.3, 0.0, false)
+	var shine := K.mat(Color(1, 1, 1), 1.5, 0.3, 0.0, false)
+	var blush := K.mat(Color(1.0, 0.55, 0.65), 0.4, 0.8, 0.0, false)
 	match ghost_id:
 		"krasue_noi":
-			# หัวลอยได้ ผมดำยาว ตาแดง มีไส้ห้อยระย้า
-			K.sphere(model, 0.26, Vector3.ZERO, K.mat(Color(0.95, 0.88, 0.82), 0.25, 0.6), 14)
-			K.sphere(model, 0.29, Vector3(0, 0.08, -0.12), K.mat(Color(0.06, 0.03, 0.06), 0.0, 0.4), 14, Vector3(1.05, 1.0, 0.9))
-			K.box(model, Vector3(0.52, 0.5, 0.08), Vector3(0, -0.22, -0.2), K.mat(Color(0.06, 0.03, 0.06)))
-			for x in [-0.09, 0.09]:
-				K.sphere(model, 0.045, Vector3(x, 0.02, 0.23), K.mat(Color(1, 0.05, 0.05), 4.0), 6)
-			K.box(model, Vector3(0.1, 0.02, 0.02), Vector3(0, -0.11, 0.24), K.mat(Color(0.5, 0.05, 0.08)))
+			# กระสือน้อยแบบน่ารัก: หัวกลมผมบ๊อบ ตาโตสีชมพูเรือง ไส้ห้อยเป็นริบบิ้นพาสเทล
+			K.sphere(model, 0.34, Vector3.ZERO, K.mat(Color(1.0, 0.93, 0.9), 0.15, 0.6), 18)
+			K.sphere(model, 0.37, Vector3(0, 0.13, -0.12), K.mat(Color(0.33, 0.24, 0.38), 0.0, 0.5), 18, Vector3(1.05, 0.8, 1.0))
+			K.box(model, Vector3(0.62, 0.36, 0.1), Vector3(0, -0.12, -0.24), K.mat(Color(0.33, 0.24, 0.38)))
+			for x in [-0.13, 0.13]:
+				K.sphere(model, 0.085, Vector3(x, -0.03, 0.29), K.mat(Color(0.95, 0.35, 0.55), 1.2, 0.3, 0.0, false), 10, Vector3(0.85, 1.15, 0.5))
+				K.sphere(model, 0.03, Vector3(x + 0.03, 0.03, 0.34), shine, 6)
+				K.sphere(model, 0.06, Vector3(x * 1.6, -0.13, 0.26), blush, 8, Vector3(1.2, 0.6, 0.4))
+			K.sphere(model, 0.035, Vector3(0, -0.16, 0.32), eye, 6, Vector3(1.2, 0.8, 0.6))
+			var ribbon := [Color(1.0, 0.62, 0.72), Color(0.98, 0.78, 0.55), Color(0.86, 0.62, 0.92), Color(1.0, 0.62, 0.72)]
 			for i in 4:
 				var d := Node3D.new()
-				d.position = Vector3(-0.1 + i * 0.07, -0.2, 0.02)
+				d.position = Vector3(-0.12 + i * 0.08, -0.3, 0.02)
 				model.add_child(d)
-				K.cyl(d, 0.025, 0.035, 0.45 + (i % 2) * 0.15, Vector3(0, -0.25, 0), K.mat(Color(0.75, 0.08, 0.15), 0.8, 0.4), 6)
-				K.sphere(d, 0.06, Vector3(0, -0.5 - (i % 2) * 0.12, 0), K.mat(Color(0.85, 0.15, 0.25), 1.2, 0.4), 6)
+				K.cyl(d, 0.03, 0.04, 0.35 + (i % 2) * 0.12, Vector3(0, -0.18, 0), K.mat(ribbon[i], 0.6, 0.5), 6)
+				K.sphere(d, 0.07, Vector3(0, -0.4 - (i % 2) * 0.1, 0), K.mat(ribbon[i], 0.9, 0.5), 8)
 				dangles.append(d)
 		"phi_takiang":
-			# ตะเกียงเรืองแสงมีหน้าตา
-			K.cyl(model, 0.26, 0.3, 0.55, Vector3.ZERO, K.mat(c, 2.2, 0.5), 8)
-			K.cyl(model, 0.18, 0.32, 0.12, Vector3(0, 0.34, 0), K.mat(Color(0.25, 0.15, 0.1)), 8)
-			K.cyl(model, 0.32, 0.22, 0.1, Vector3(0, -0.32, 0), K.mat(Color(0.25, 0.15, 0.1)), 8)
-			K.cyl(model, 0.03, 0.03, 0.25, Vector3(0, 0.5, 0), K.mat(Color(0.2, 0.2, 0.2)), 4)
-			for x in [-0.1, 0.1]:
-				K.sphere(model, 0.05, Vector3(x, 0.06, 0.27), K.mat(Color(0.05, 0.02, 0.02)), 6)
-			K.box(model, Vector3(0.14, 0.04, 0.02), Vector3(0, -0.08, 0.29), K.mat(Color(0.05, 0.02, 0.02)))
+			# ผีตะเกียงตัวกลม หน้าตาง่วงๆ แก้มแดง
+			K.cyl(model, 0.32, 0.36, 0.58, Vector3.ZERO, K.mat(Color(1.0, 0.82, 0.5), 1.4, 0.5), 14)
+			K.cyl(model, 0.2, 0.38, 0.14, Vector3(0, 0.36, 0), K.mat(Color(0.86, 0.5, 0.42)), 14)
+			K.cyl(model, 0.38, 0.26, 0.12, Vector3(0, -0.35, 0), K.mat(Color(0.86, 0.5, 0.42)), 14)
+			K.sphere(model, 0.07, Vector3(0, 0.5, 0), K.mat(Color(0.86, 0.5, 0.42)), 8)
+			var handle := TorusMesh.new()
+			handle.inner_radius = 0.1
+			handle.outer_radius = 0.13
+			K.add(model, handle, Vector3(0, 0.6, 0), K.mat(Color(0.6, 0.42, 0.4)), Vector3(PI / 2, 0, 0))
+			for x in [-0.13, 0.13]:
+				K.sphere(model, 0.07, Vector3(x, 0.05, 0.33), eye, 10, Vector3(0.85, 1.15, 0.5))
+				K.sphere(model, 0.025, Vector3(x + 0.025, 0.09, 0.37), shine, 6)
+				K.sphere(model, 0.055, Vector3(x * 1.6, -0.06, 0.32), blush, 8, Vector3(1.2, 0.6, 0.4))
+			K.sphere(model, 0.05, Vector3(0, -0.1, 0.34), K.mat(Color(0.85, 0.35, 0.4), 0.0, 0.8, 0.0, false), 8, Vector3(1.2, 0.8, 0.5))
 		_:
 			K.sphere(model, 0.3, Vector3.ZERO, K.mat(c, 1.0), 10)
 	var light := OmniLight3D.new()

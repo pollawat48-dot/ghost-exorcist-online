@@ -7,12 +7,13 @@ var life := 0.9
 static func spawn(parent: Node, pos: Vector3, t: String, c: Color) -> void:
 	var node: Label3D = load("res://client/damage_text.gd").new()
 	node.text = t
+	node.font = load("res://maps/props/mesh_kit.gd").font()
 	node.modulate = c
 	node.position = pos
 	node.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	node.font_size = 56
 	node.outline_size = 14
-	node.outline_modulate = Color(0, 0, 0, 0.9)
+	node.outline_modulate = Color(0.36, 0.24, 0.3, 0.95)
 	node.pixel_size = 0.007
 	node.no_depth_test = true
 	node.render_priority = 10

@@ -1,9 +1,9 @@
 shader_type spatial;
-render_mode blend_mix, cull_back, depth_draw_always;
+render_mode blend_mix, cull_back, depth_draw_always, diffuse_toon, specular_toon;
 // น้ำในคลอง: สะท้อนท้องฟ้า มีคลื่นเล็กๆ
 
-uniform vec3 deep_color : source_color = vec3(0.06, 0.22, 0.24);
-uniform vec3 shallow_color : source_color = vec3(0.22, 0.42, 0.36);
+uniform vec3 deep_color : source_color = vec3(0.36, 0.62, 0.86);
+uniform vec3 shallow_color : source_color = vec3(0.6, 0.84, 0.94);
 
 float wave(vec2 p, float t) {
 	return sin(p.x * 1.7 + t * 1.3) * 0.5 + sin(p.y * 2.3 - t * 1.1) * 0.5
@@ -19,8 +19,8 @@ void fragment() {
 	NORMAL = normalize((VIEW_MATRIX * vec4(normalize(vec3(-hx * 0.15, 1.0, -hz * 0.15)), 0.0)).xyz);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
 	ALBEDO = mix(deep_color, shallow_color, 0.4 + 0.3 * fres);
-	ALPHA = 0.88;
-	ROUGHNESS = 0.06;
+	ALPHA = 0.92;
+	ROUGHNESS = 0.2;
 	METALLIC = 0.1;
 	SPECULAR = 0.7;
 }
