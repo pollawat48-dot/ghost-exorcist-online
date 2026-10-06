@@ -37,6 +37,7 @@ const RemotePlayer = preload("res://client/remote_player.gd")
 const Sound = preload("res://client/audio/sound.gd")
 const Skills = preload("res://shared/data/skills.gd")
 const Fishing = preload("res://shared/data/fishing.gd")
+const Graphics = preload("res://client/graphics.gd")
 
 signal logout_requested  ## กดออกจากเกม (กลับหน้าเมนู) — App เป็นคนจัดการ
 
@@ -89,6 +90,8 @@ var fish_pending := Vector2.INF  ## จุดน้ำที่กำลัง�
 
 
 func _ready() -> void:
+	Graphics.level()  # ตั้งความละเอียดโมเดลก่อนสร้างฉาก
+	add_to_group("graphics_listener")
 	rng.seed = 12345
 	world = Node3D.new()
 	world.name = "World"
@@ -316,6 +319,14 @@ func guide_quest(id: String) -> void:
 	if msg != "":
 		hud.add_log(msg)
 		Sound.play(self, "click")
+
+
+## เปลี่ยนคุณภาพภาพ: สร้างฉากและตัวละครใหม่ด้วยความละเอียดโมเดลระดับใหม่ (ยืนที่เดิม)
+func _on_graphics_changed() -> void:
+	if map == null or player == null:
+		return
+	load_map(map.map_id, player.pos)
+	player._build_model()
 
 
 func toggle_auto() -> void:

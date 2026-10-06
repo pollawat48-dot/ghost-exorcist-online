@@ -8,6 +8,10 @@ const S := 1.0 / 32.0
 ## สีเส้นขอบแบบการ์ตูน (น้ำตาลอมม่วง ไม่ใช้ดำสนิทเพื่อให้ดูนุ่ม)
 const OUTLINE_COLOR := Color(0.36, 0.24, 0.26)
 
+## ตัวคูณความละเอียดของทรงกลม/ทรงกระบอก (ตั้งจาก client/graphics.gd ตามระดับคุณภาพภาพ)
+## ทรงที่ตั้งใจให้เป็นเหลี่ยม (น้อยกว่า 8 ด้าน เช่น อัญมณี) คงเดิม
+static var detail := 1.0
+
 static var _materials := {}
 static var _meshes := {}
 static var _outline: StandardMaterial3D
@@ -92,6 +96,7 @@ static func box(parent: Node3D, size: Vector3, pos: Vector3, material: Variant, 
 
 ## ทรงกระบอก/กรวย (pos = จุดกึ่งกลาง)
 static func cyl(parent: Node3D, r_top: float, r_bottom: float, h: float, pos: Vector3, material: Variant, sides: int = 12, rot := Vector3.ZERO) -> MeshInstance3D:
+	sides = _smooth(sides)
 	var key := "cyl%s|%s|%s|%s" % [r_top, r_bottom, h, sides]
 	if not _meshes.has(key):
 		var m := CylinderMesh.new()
@@ -104,7 +109,12 @@ static func cyl(parent: Node3D, r_top: float, r_bottom: float, h: float, pos: Ve
 	return add(parent, _meshes[key], pos, material, rot)
 
 
+static func _smooth(n: int) -> int:
+	return n if n < 8 or detail <= 1.0 else int(round(n * detail))
+
+
 static func sphere(parent: Node3D, r: float, pos: Vector3, material: Variant, segs: int = 12, scl := Vector3.ONE) -> MeshInstance3D:
+	segs = _smooth(segs)
 	var key := "sph%s|%s" % [r, segs]
 	if not _meshes.has(key):
 		var m := SphereMesh.new()

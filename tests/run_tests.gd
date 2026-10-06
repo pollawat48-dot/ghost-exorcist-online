@@ -27,6 +27,7 @@ func _initialize() -> void:
 
 func _run_all() -> void:
 	load("res://client/hud.gd").config_path = "user://test_settings.cfg"
+	load("res://client/graphics.gd").config_path = "user://test_settings.cfg"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_settings.cfg"))
 	print("== combat ==")
 	_test_combat()
@@ -781,6 +782,23 @@ func _test_quest_guide() -> void:
 	guide.tick(0.1)
 	check(is_instance_valid(player.attack_target) and player.attack_target.ghost_id in guide.ghost_ids, "เป้าหมายเดิมถูกลบไปแล้ว: นำทางหาผีตัวใหม่ได้ ไม่ค้าง")
 	guide.stop()
+
+	# คุณภาพภาพ: เปลี่ยนระดับแล้วปรับทันที ยืนที่เดิม
+	var Graphics = load("res://client/graphics.gd")
+	var K = load("res://maps/props/mesh_kit.gd")
+	check(Graphics.level() == "high" and K.detail == 2.0, "คุณภาพภาพเริ่มต้นบน PC = สูง (โมเดลละเอียด x2)")
+	var stand: Vector2 = player.pos
+	var map_before: String = main.map.map_id
+	Graphics.set_level(main.get_tree(), "ultra")
+	var vp: Viewport = main.get_viewport()
+	check(vp.msaa_3d == Viewport.MSAA_8X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED and main.ambience.env.ssil_enabled and main.ambience.env.volumetric_fog_enabled, "ระดับสูงสุด: ลบรอยหยัก 8x ไม่เบลอ มีแสงสะท้อนและหมอกมีแสง")
+	check(K.detail == 2.5 and main.map.map_id == map_before and player.pos.distance_to(stand) < 1.0, "เปลี่ยนระดับแล้วสร้างฉากใหม่ ยืนที่เดิม")
+	Graphics.set_level(main.get_tree(), "low")
+	check(vp.msaa_3d == Viewport.MSAA_DISABLED and vp.scaling_3d_scale < 1.0 and not main.ambience.env.ssao_enabled and K.detail == 1.0, "ระดับต่ำ: ปิดเอฟเฟกต์หนักๆ เรนเดอร์เล็กลงสำหรับมือถือ")
+	var gcfg := ConfigFile.new()
+	gcfg.load(Graphics.config_path)
+	check(gcfg.get_value("graphics", "level", "") == "low", "จำระดับคุณภาพภาพไว้")
+	Graphics.set_level(main.get_tree(), "high")
 
 	# แถบเมนูใต้แผนที่ย่อ: ย่อ/กางได้ และจำค่าไว้
 	check(not hud.menu_collapsed and hud.menu_buttons["bag"].visible and hud.menu_toggle.kind == "fold", "แถบเมนูกางอยู่ตอนเริ่ม มีปุ่มย่อ")
