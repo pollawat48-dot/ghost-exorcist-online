@@ -51,6 +51,23 @@ func _build() -> void:
 			var b := P.button("ใช้", P.PINK, 14)
 			b.pressed.connect(func(): player.use_item(id))
 			r.add_child(b)
+		elif item["type"] == "fashion":
+			var Fashion = load("res://shared/data/fashion.gd")
+			var what: String = Fashion.SLOT_NAMES[item["slot"]]
+			info.add_child(P.label("[%s] แฟชั่น%s · %s" % [ItemDB.RARITY[item["rarity"]]["name"], what, ItemDB.bonus_text(id) if item.has("bonus") else "ช่วยสู้ ใช้สกิลเอง"], 12, ItemDB.color_of(id).darkened(0.3)))
+			var b := P.button("ใส่", P.MINT, 14)
+			b.pressed.connect(func(): player.wear_fashion(id))
+			r.add_child(b)
+		elif item["type"] == "gacha":
+			info.add_child(P.label("เปิดสุ่ม: เกลือเสก ยา หินตี+ แฟชั่น หรือแฟชั่น (ออกยาก)", 12, P.TEXT.lightened(0.2)))
+			var b := P.button("เปิด", P.PINK, 14)
+			b.pressed.connect(func(): player.use_item(id))
+			r.add_child(b)
+		elif item["type"] == "fashion_refine":
+			info.add_child(P.label("ใช้ตีบวกแฟชั่น (ชุด หมวก ปีก) ได้ถึง +10", 12, P.TEXT.lightened(0.2)))
+			var b := P.button("ใช้", P.PINK, 14)
+			b.pressed.connect(func(): player.use_item(id))
+			r.add_child(b)
 		elif item["type"] == "ore":
 			info.add_child(P.label("แร่ ใช้หลอมหินตี+ ที่ร้านหลอมแร่ (ขายได้ %d)" % ItemDB.sell_price(id), 12, P.TEXT.lightened(0.2)))
 		elif item["type"] == "tool":
@@ -62,5 +79,5 @@ func _build() -> void:
 
 
 func _order(id: String) -> int:
-	var order := {"equip": 0, "consumable": 1, "tool": 2, "refine": 3, "amulet": 4, "ore": 5, "fish": 6, "soul": 7, "etc": 8}
+	var order := {"equip": 0, "fashion": 0, "gacha": 1, "consumable": 1, "tool": 2, "refine": 3, "fashion_refine": 3, "amulet": 4, "ore": 5, "fish": 6, "soul": 7, "etc": 8}
 	return order.get(ItemDB.info(id)["type"], 9)

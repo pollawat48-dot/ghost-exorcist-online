@@ -15,6 +15,7 @@ const Protocol = preload("res://shared/net/protocol.gd")
 const Server = preload("res://server/server.gd")
 const NetClient = preload("res://client/net/net_client.gd")
 const LocalStore = preload("res://client/net/local_store.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 const STEP := 0.05
 
@@ -42,6 +43,8 @@ func _run_all() -> void:
 	await _test_expansion()
 	print("== ตกปลา พระเครื่อง บัฟปาร์ตี้ ==")
 	await _test_fishing_buffs()
+	print("== แฟชั่น กาชา ร้าน CC สัตว์เลี้ยง ขุดแร่ เอฟเฟกต์อาวุธ ==")
+	await _test_fashion_pets()
 	print("== กดเควสเดินเอง / หน้าต่างบังปุ่ม ==")
 	await _test_quest_guide()
 	print("== ออนไลน์: ผู้เล่นอื่น แชท ปาร์ตี้แชร์ EXP บัฟ ==")
@@ -172,8 +175,12 @@ func _test_gameplay() -> void:
 	if herbs > 0:
 		check(player.use_herb() and player.hp > 10, "ใช้ยาหอมสมุนไพรแล้ว HP เพิ่ม")
 
-	player.take_damage(9999)
-	check(player.hp == player.stats["max_hp"] and player.pos == player.spawn_point, "สลบแล้วฟื้นที่วัดพร้อม HP เต็ม")
+	player.take_damage(9999, "ผีทดสอบ")
+	check(player.hp == 0 and main.hud.death_layer.visible and "ผีทดสอบ" in main.hud.death_label.text, "สลบแล้วมีป้ายกลางจอบอกว่าโดนใครตี")
+	_run(main, 1.0)
+	check(player.hp == 0, "สลบแล้วไม่ฟื้นเอง รอผู้เล่นกดปุ่ม")
+	main.hud.death_button.pressed.emit()
+	check(player.hp == player.stats["max_hp"] and player.pos == player.spawn_point and not main.hud.death_layer.visible, "กดปุ่มเกิดใหม่แล้วฟื้นที่วัดพร้อม HP เต็ม")
 	check(map.props_root.get_child_count() > 100, "สร้างฉาก 3D ครบ (สิ่งของ %d ชิ้น)" % map.props_root.get_child_count())
 
 	# จอยบนจอ (มือถือ): ดันจอยแล้วเดินต่อเนื่อง และเดินลงคลองไม่ได้
@@ -712,6 +719,166 @@ func _test_expansion() -> void:
 	_run(main, 3.0)
 	await process_frame
 	check(main.map.map_id == "krung_kao", "ออกจากถ้ำกลับกรุงเก่า")
+	main.free()
+
+
+func _test_fashion_pets() -> void:
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	for g in main.alive_ghosts():
+		g.free()
+	main.respawn_queue.clear()
+
+	# ---- ตารางกาชา: รวม 100% แฟชั่นออกยาก ----
+	var total := 0.0
+	var fashion_w := 0.0
+	for e in Fashion.GACHA_TABLE:
+		total += e["weight"]
+		if e["item"] == "@fashion":
+			fashion_w += e["weight"]
+		else:
+			check(ItemDB.ITEMS.has(e["item"]), "กาชามีไอเทม %s" % e["item"])
+	check(is_equal_approx(total, 100.0) and fashion_w <= 10.0, "อัตรากาชารวม 100%% แฟชั่น %.0f%%" % fashion_w)
+	var sum := 0.0
+	for id in Fashion.fashion_pool():
+		sum += Fashion.fashion_chance(id)
+	check(absf(sum - fashion_w / 100.0) < 0.0001, "อัตราแฟชั่นแต่ละชิ้นรวมกันเท่ากลุ่มแฟชั่น")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var counts := {}
+	for i in 4000:
+		var r := Fashion.roll_gacha(rng)
+		var t: String = ItemDB.ITEMS[r["item"]]["type"]
+		counts[t] = counts.get(t, 0) + 1
+	check(counts.get("fashion", 0) > 150 and counts.get("fashion", 0) < 450 and counts.get("fashion_refine", 0) > 1000 and counts.has("consumable"), "สุ่ม 4000 ลูก: แฟชั่น %d หินตี+แฟชั่น %d ยา/เกลือ %d" % [counts.get("fashion", 0), counts.get("fashion_refine", 0), counts.get("consumable", 0)])
+
+	# ---- ร้าน CC ----
+	check(player.cc() == Fashion.CC_START, "ตัวละครใหม่มี %d CC" % Fashion.CC_START)
+	hud.toggle_window("ccshop")
+	check(hud.windows["ccshop"].visible, "เปิดร้าน CC จากเมนูได้")
+	check(player.buy_gacha(10) and player.cc() == Fashion.CC_START - 100 and player.inventory.get("gachapon", 0) == 10, "ซื้อกาชา 10 ลูก จ่าย 100 CC")
+	check(not player.buy_gacha(1), "CC หมดแล้วซื้อไม่ได้")
+	var got: Array = hud.windows["ccshop"].last_results
+	hud.windows["ccshop"].open(10)
+	got = hud.windows["ccshop"].last_results
+	check(got.size() == 10 and player.inventory.get("gachapon", 0) == 0, "เปิดกาชา 10 ลูกได้ของ 10 อย่าง")
+	hud.close_windows()
+
+	# ---- เกลือเสก ----
+	player.inventory["kluea_sek"] = 2
+	var def_before: int = player.stats["def"]
+	check(player.use_item("kluea_sek") and player.stats["def"] > def_before and player.buffs.has("def"), "โปรยเกลือเสกแล้ว DEF เพิ่ม")
+
+	# ---- แฟชั่น: ใส่แยกจากของสวมใส่ ค่าพลังเพิ่ม ----
+	player.inventory["f_pik_kinnari"] = 1
+	player.inventory["f_chut_thai"] = 1
+	player.inventory["f_mongkut_mali"] = 1
+	var atk_before: int = player.stats["atk"]
+	check(player.wear_fashion("f_pik_kinnari") and player.stats["atk"] > atk_before and player.fashion()["wings"] == "f_pik_kinnari", "ใส่ปีกกินรีแล้ว ATK เพิ่ม")
+	check(player.wear_fashion("f_chut_thai") and player.wear_fashion("f_mongkut_mali") and player.state["equipment"].is_empty(), "ใส่ชุด/หมวกแฟชั่นได้ ไม่ไปทับช่องของสวมใส่")
+	check(player.avatar._wings.size() == 2 and player.look_items().has("f_wings"), "ปีกโผล่บนตัวละคร และส่งให้ผู้เล่นอื่นเห็น")
+	player.add_item("suea_yant")
+	player.equip("suea_yant")
+	check(player.state["equipment"].has("armor") and player.fashion().has("costume"), "สวมเสื้อจริงกับชุดแฟชั่นพร้อมกันได้")
+
+	# ---- ตีบวกแฟชั่น ----
+	player.inventory[Fashion.STONE_ID] = 30
+	var vit_before: int = player.stats["vit"]
+	var res: Dictionary = {}
+	for i in 30:
+		res = player.refine_fashion(player.fashion()["costume"], "costume")
+		if ItemDB.refine_of(player.fashion()["costume"]) >= 3:
+			break
+	check(ItemDB.refine_of(player.fashion()["costume"]) >= 3 and player.stats["vit"] > vit_before, "ตีบวกชุดแฟชั่นถึง %s ค่าพลังขึ้น" % ItemDB.display_name(player.fashion()["costume"]))
+	player.inventory.erase(Fashion.STONE_ID)
+	check(player.refine_fashion(player.fashion()["costume"], "costume")["result"] == "error", "หินตี+ แฟชั่นหมดแล้วตีไม่ได้")
+	player.fashion()["hat"] = "f_mongkut_mali+7"
+	player.inventory[Fashion.STONE_ID] = 1
+	player.rng.seed = 1
+	var risky_ok := true
+	for i in 40:
+		player.inventory[Fashion.STONE_ID] = 1
+		player.fashion()["hat"] = "f_mongkut_mali+7"
+		var rr: Dictionary = player.refine_fashion("f_mongkut_mali+7", "hat")
+		risky_ok = risky_ok and (rr["level"] == 8 if rr["result"] == "success" else rr["level"] == 6)
+	check(risky_ok, "ตีแฟชั่นตั้งแต่ +7 พลาดแล้วลด 1 ขั้น")
+
+	# ---- สัตว์เลี้ยง ----
+	player.inventory["pet_maa"] = 1
+	check(player.wear_fashion("pet_maa") and player.pet != null and player.pet_species() == "maa", "ใส่ลูกหมาบางแก้วแล้วออกมาเดินตาม")
+	await process_frame
+	player.pos = main.map.spawn_point
+	player.pet.pos = player.pos + Vector2(400, 0)
+	_run(main, 3.0)
+	check(player.pet.pos.distance_to(player.pos) < 80.0, "สัตว์เลี้ยงเดินตามเจ้าของ")
+	var g: Node3D = load("res://client/ghost.gd").new()
+	g.setup("phi_takiang", player.pos + Vector2(60, 0), player, 999)
+	main.ghosts.add_child(g)
+	g.data = g.data.duplicate()
+	g.data["atk"] = 0
+	var hp0: int = g.hp
+	player.attack_target = g
+	player.attack_cooldown = 999.0
+	_run(main, 3.0)
+	check(not is_instance_valid(g) or not g.alive or g.hp < hp0, "สัตว์เลี้ยงช่วยตีผีที่เจ้าของตี")
+	check(player.pet.skill_cd > 0.0, "สัตว์เลี้ยงใช้สกิลเองแล้ว")
+	if is_instance_valid(g):
+		g.free()
+	player.attack_target = null
+	var d: Dictionary = Fashion.pet_data(player.state, "maa")
+	var lv0: int = d["lv"]
+	var atk0: int = player.pet.atk()
+	player.gain_exp(50000)
+	check(d["lv"] > lv0 and player.pet.atk() > atk0, "สัตว์เลี้ยงเลเวลขึ้นพร้อมเจ้าของ (Lv.%d) และตีแรงขึ้น" % d["lv"])
+	d["lv"] = 29
+	player.state["coins"] = 100000
+	check(not player.can_evolve_pet() and not player.evolve_pet(), "เลเวลไม่ถึงพัฒนาร่างไม่ได้")
+	d["lv"] = 30
+	check(player.evolve_pet() and d["stage"] == 1 and player.pet.atk() > Fashion.pet_atk("maa", 30, 0), "Lv.30 พัฒนาเป็น %s" % Fashion.pet_name("maa", 1))
+	d["lv"] = 60
+	check(player.evolve_pet() and d["stage"] == 2 and not player.evolve_pet(), "Lv.60 พัฒนาเป็น %s (สูงสุด 2 ขั้น)" % Fashion.pet_name("maa", 2))
+	player.remove_fashion("pet")
+	await process_frame
+	check(player.pet == null, "ถอดสัตว์เลี้ยงแล้วเก็บกลับ")
+	player.wear_fashion("pet_maa")
+	check(Fashion.pet_data(player.state, "maa")["stage"] == 2, "ใส่กลับมาเลเวล/ร่างยังอยู่")
+
+	# ---- บันทึก/โหลด: แฟชั่น สัตว์เลี้ยง CC ติดตัวไป ----
+	var saved: Dictionary = player.save_data()
+	var p2: Node3D = load("res://client/player.gd").new()
+	p2.apply_save(JSON.parse_string(JSON.stringify(saved)))
+	check(p2.state["fashion"].get("pet", "") == "pet_maa" and int(p2.state["pets"]["maa"]["stage"]) == 2 and int(p2.state["cc"]) == player.cc(), "เซฟแล้วโหลดได้แฟชั่น สัตว์เลี้ยง และ CC ครบ")
+	p2.free()
+
+	# ---- ขุดแร่: ผีทำร้ายไม่ได้ หลอดขุด 2 วิ ----
+	check(is_equal_approx(player.MINE_TIME, 2.0), "ขุดแร่ครั้งละ 2 วินาที")
+	var Rock = load("res://client/ore_rock.gd")
+	var rock: Node3D = Rock.new()
+	rock.setup(player.pos + Vector2(20, 0), 0, 0)
+	main.rocks.add_child(rock)
+	player.command_mine(rock)
+	_run(main, 0.5)
+	var hp_mine: int = player.hp
+	player.take_damage(50, "ผีทดสอบ")
+	check(player.is_mining() and player.hp == hp_mine and player.mine_progress() > 0.0, "ระหว่างขุดแร่ ผีทำร้ายไม่ได้ (มีหลอดขุด)")
+	player.command_move(player.pos)
+	rock.free()
+
+	# ---- อาวุธตีบวกสูงยิ่งสวย ----
+	player.add_item("maipai_staff+5")
+	player.equip("maipai_staff+5")
+	check(player.avatar._weapon_aura != null and player.avatar._foot_aura == null, "+5: มีแสงหุ้มอาวุธ")
+	player.add_item("maipai_staff+10")
+	player.equip("maipai_staff+10")
+	var particles := 0
+	for c in player.avatar.weapon.get_children():
+		if c is CPUParticles3D:
+			particles += 1
+	check(player.avatar._weapon_aura != null and player.avatar._sparkles != null and particles == 1 and player.avatar._foot_aura != null, "+10: แสงหุ้ม ประกายวน ละอองแสง และวงออร่าใต้เท้า")
 	main.free()
 
 

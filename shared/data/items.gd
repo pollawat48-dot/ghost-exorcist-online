@@ -2,6 +2,7 @@ extends RefCounted
 ## ข้อมูลไอเทม ใช้ร่วมกันทั้ง client และ zone server
 ## type: etc = วัตถุดิบ, consumable = ใช้ได้, soul = ดวงวิญญาณสำหรับผนึก (ระบบผนึกมาใน M5), equip = ของสวมใส่
 ##       ore = แร่จากการขุดในถ้ำ, refine = หินตี+ (กดใช้แล้วเปิดหน้าต่างตีบวก)
+##       gacha = กาชาปอง (เปิดสุ่มของ), fashion = แฟชั่น/สัตว์เลี้ยง, fashion_refine = หินตี+ แฟชั่น
 ##       tool = คันเบ็ด, fish = ปลาจากลำธาร, amulet = พระเครื่อง (ใช้ตอนตีบวก เพิ่มโอกาสสำเร็จ refine_bonus)
 ## ของสวมใส่ที่ตีบวกแล้วเก็บในกระเป๋าด้วยคีย์ "<id>+<ระดับ>" เช่น "mitmo+3" (ใช้ base_id/refine_of แยก)
 ## ของสวมใส่: slot (weapon/armor/head/accessory), line = สายที่ใช้ได้ (any = ทุกสาย), bonus = ค่าที่เพิ่ม, rarity
@@ -159,6 +160,30 @@ const ITEMS := {
 	"thanu_matchu": {"name": "ธนูมัจจุราช", "type": "equip", "slot": "weapon", "line": "ranged", "rarity": "legendary", "bonus": {"atk": 190, "dex": 18, "agi": 8}},
 	"khamphi_matchu": {"name": "คัมภีร์มัจจุราช", "type": "equip", "slot": "weapon", "line": "magic", "rarity": "legendary", "bonus": {"matk": 210, "int": 18, "dex": 8}},
 	"mongkut_matchu": {"name": "มงกุฎมัจจุราช", "type": "equip", "slot": "head", "line": "any", "rarity": "legendary", "bonus": {"def": 30, "str": 6, "vit": 6, "int": 6}},
+
+	# ======== ร้าน CC: กาชาปอง และของที่สุ่มได้ (ดูตาราง shared/data/fashion.gd) ========
+	"gachapon": {"name": "กาชาปองนำโชค", "type": "gacha", "price": 0, "color": Color(1.0, 0.7, 0.82)},
+	"kluea_sek": {"name": "เกลือเสกไล่ผี", "type": "consumable", "buff": {"effect": "def", "power": 0.2, "duration": 90.0}, "buy": 0, "price": 15, "icon": "salt", "color": Color(0.95, 0.96, 1.0)},
+	"hin_ti_fashion": {"name": "หินตี+ แฟชั่น", "type": "fashion_refine", "price": 0, "color": Color(1.0, 0.62, 0.86)},
+	# ---- แฟชั่น: slot = costume (ชุด) / hat (หมวก) / wings (ปีก) / pet (สัตว์เลี้ยง) ใส่แยกจากของสวมใส่ ตีบวกด้วยหินตี+ แฟชั่น ----
+	"f_chut_dek_wat": {"name": "ชุดเด็กวัดลายกนก", "type": "fashion", "slot": "costume", "rarity": "common", "bonus": {"vit": 2, "def": 3}, "tint": Color(1.0, 0.82, 0.55)},
+	"f_chut_thai": {"name": "ชุดไทยจักรีพาสเทล", "type": "fashion", "slot": "costume", "rarity": "rare", "bonus": {"vit": 3, "int": 3, "def": 5}, "tint": Color(0.72, 0.84, 1.0)},
+	"f_chut_nang_ram": {"name": "ชุดนางรำสไบทอง", "type": "fashion", "slot": "costume", "rarity": "epic", "bonus": {"agi": 4, "dex": 4, "def": 8}, "tint": Color(1.0, 0.62, 0.72)},
+	"f_chut_thewada": {"name": "ชุดเทวดาสวรรค์", "type": "fashion", "slot": "costume", "rarity": "legendary", "bonus": {"str": 5, "int": 5, "vit": 5, "def": 12}, "tint": Color(1.0, 0.97, 0.88)},
+	"f_hu_maeo": {"name": "ที่คาดหูแมวชมพู", "type": "fashion", "slot": "hat", "rarity": "common", "bonus": {"luk": 3}, "tint": Color(1.0, 0.72, 0.82)},
+	"f_ngob": {"name": "งอบลายดอกไม้", "type": "fashion", "slot": "hat", "rarity": "rare", "bonus": {"vit": 2, "dex": 3, "def": 2}, "tint": Color(0.94, 0.82, 0.58)},
+	"f_mongkut_mali": {"name": "มงกุฎดอกมะลิ", "type": "fashion", "slot": "hat", "rarity": "epic", "bonus": {"int": 4, "luk": 4}, "tint": Color(0.96, 1.0, 0.94)},
+	"f_chada_thep": {"name": "ชฎาเทพธิดา", "type": "fashion", "slot": "hat", "rarity": "legendary", "bonus": {"str": 4, "int": 4, "luk": 5, "matk": 10}, "tint": Color(1.0, 0.84, 0.4)},
+	"f_pik_khangkhao": {"name": "ปีกค้างคาวน้อย", "type": "fashion", "slot": "wings", "rarity": "common", "bonus": {"agi": 2, "atk": 3}, "tint": Color(0.62, 0.52, 0.78)},
+	"f_pik_phisuea": {"name": "ปีกผีเสื้อพาสเทล", "type": "fashion", "slot": "wings", "rarity": "rare", "bonus": {"agi": 3, "dex": 3, "atk": 5}, "tint": Color(0.7, 0.9, 1.0)},
+	"f_pik_nangfa": {"name": "ปีกนางฟ้า", "type": "fashion", "slot": "wings", "rarity": "epic", "bonus": {"int": 4, "matk": 12}, "tint": Color(1.0, 1.0, 1.0)},
+	"f_pik_kinnari": {"name": "ปีกกินรีทองคำ", "type": "fashion", "slot": "wings", "rarity": "legendary", "bonus": {"agi": 5, "str": 5, "atk": 15, "matk": 15}, "tint": Color(1.0, 0.82, 0.38)},
+	# ---- สัตว์เลี้ยง (ใส่ช่อง pet แล้วออกมาเดินตาม ช่วยสู้ ใช้สกิลเอง) ข้อมูลร่าง/สกิลอยู่ที่ fashion.gd PETS ----
+	"pet_maa": {"name": "ลูกหมาบางแก้ว", "type": "fashion", "slot": "pet", "rarity": "common", "pet": "maa", "tint": Color(0.95, 0.8, 0.6)},
+	"pet_maeo": {"name": "แมววิเชียรมาศ", "type": "fashion", "slot": "pet", "rarity": "rare", "pet": "maeo", "tint": Color(0.96, 0.9, 0.8)},
+	"pet_krathai": {"name": "กระต่ายจันทร์", "type": "fashion", "slot": "pet", "rarity": "rare", "pet": "krathai", "tint": Color(1.0, 0.92, 0.95)},
+	"pet_nok": {"name": "นกแก้วพูดได้", "type": "fashion", "slot": "pet", "rarity": "epic", "pet": "nok", "tint": Color(0.5, 0.88, 0.5)},
+	"pet_chang": {"name": "ลูกช้างเผือก", "type": "fashion", "slot": "pet", "rarity": "legendary", "pet": "chang", "tint": Color(0.92, 0.9, 0.95)},
 }
 
 
@@ -217,7 +242,7 @@ static func refine_fee(level: int) -> int:
 
 static func color_of(item_id: String) -> Color:
 	var item: Dictionary = info(item_id)
-	if item["type"] == "equip":
+	if item["type"] in ["equip", "fashion"]:
 		return RARITY[item["rarity"]]["color"]
 	return item["color"]
 
@@ -241,6 +266,9 @@ static func use_text(item_id: String) -> String:
 		parts.append("HP +%d" % item["heal"])
 	if item.has("sp"):
 		parts.append("SP +%d" % item["sp"])
+	if item.has("buff"):
+		var b: Dictionary = item["buff"]
+		return "%s +%d%% %d วินาที" % [STAT_NAMES.get(b["effect"], b["effect"]), int(round(b["power"] * 100)), int(b["duration"])]
 	return " · ".join(parts) + " (+10% ของสูงสุด)"
 
 

@@ -2,7 +2,8 @@ extends Node3D
 ## โมเดลตัวละครจิบิ (ใช้ทั้งผู้เล่นเองและผู้เล่นออนไลน์คนอื่น)
 ## หน้าตามาจาก: คลาส (สีจีวร ผ้าคาด อาวุธ หมวก ผ้าคลุม ออร่า) + look (เพศ สีผม สีผิว) + ของที่สวมอยู่
 ## ของสวมใส่เปลี่ยนหน้าตาจริง: อาวุธที่ถือ, ชุด (สี/ลาย/เกราะ), หมวก (แทนหมวกของคลาส), เครื่องราง (ชิ้นเล็กที่มองเห็น)
-## ของระดับตำนานเรืองแสงอ่อนๆ อาวุธตีบวก +7 ขึ้นไปมีประกายวิ้งๆ +10 แรงขึ้น
+## ของระดับตำนานเรืองแสงอ่อนๆ อาวุธตีบวกยิ่งสูงยิ่งสวย: +4 เรืองแสงหุ้มอาวุธ, +7 ประกายวน, +9 ละอองแสงลอยขึ้น, +10 วงออร่าทองใต้เท้า
+## แฟชั่น (คีย์ f_costume / f_hat / f_wings ใน equipment) ทับหน้าตาชุดและหมวก และเพิ่มปีกด้านหลัง
 ## ตาราง WEAPON_LOOK / ARMOR_LOOK / HEAD_LOOK / ACC_LOOK แมปตาม id ไอเทม ถ้าไม่มีจะเดาจาก line / ความหายาก / ชื่อ
 
 const K = preload("res://maps/props/mesh_kit.gd")
@@ -84,6 +85,10 @@ var display_name := ""
 var walk_t := 0.0
 var anim_t := 0.0
 var _sparkles: Node3D  ## ประกายรอบอาวุธที่ตีบวกสูง
+var _weapon_aura: MeshInstance3D  ## แสงหุ้มอาวุธ (+4 ขึ้นไป)
+var _foot_aura: Node3D  ## วงออร่าใต้เท้า (+10)
+var _wings: Array[Node3D] = []  ## ปีกแฟชั่น (ซ้าย ขวา) กระพือเบาๆ
+var dead := false  ## สลบ: นอนราบกับพื้น
 var _orb: Node3D  ## แก้วลอยข้างตัว (เครื่องรางบางชิ้น)
 var _rod_tip: Node3D
 var _line: MeshInstance3D
@@ -112,6 +117,9 @@ func build(p_class_id: String, look: Dictionary, p_equipment: Dictionary, p_disp
 		name_label.queue_free()
 	_sparkles = null
 	_orb = null
+	_weapon_aura = null
+	_foot_aura = null
+	_wings.clear()
 	_build_model()
 	model.rotation.y = keep_rot
 	if levelup_beam == null:
@@ -152,8 +160,21 @@ func animate(delta: float, moving: bool, facing: Vector2, swing: float, flash: b
 	if _orb != null:
 		_orb.position.y = 1.05 + sin(anim_t * 2.0) * 0.06
 		_orb.rotation.y += delta * 1.2
+	if _weapon_aura != null:
+		var m := _weapon_aura.material_override as StandardMaterial3D
+		if m != null:
+			m.albedo_color.a = 0.32 + 0.14 * sin(anim_t * 4.0)
+	if _foot_aura != null:
+		_foot_aura.rotation.y -= delta * 0.8
+		_foot_aura.scale = Vector3.ONE * (1.0 + 0.05 * sin(anim_t * 3.0))
+	for i in _wings.size():
+		var sgn := -1.0 if i == 0 else 1.0
+		_wings[i].rotation.y = sgn * (0.35 + sin(anim_t * (9.0 if moving else 4.0)) * 0.25)
 	if fishing:
 		_update_line()
+	# สลบ: นอนหงายกับพื้น
+	model.rotation.x = lerpf(model.rotation.x, -1.4 if dead else 0.0, 0.2)
+	model.position.y = lerpf(model.position.y, 0.32 if dead else 0.0, 0.2)
 	levelup_beam.visible = levelup_fx > 0.0
 	if levelup_fx > 0.0:
 		levelup_beam.scale = Vector3(1, levelup_fx / 1.2, 1)
@@ -223,9 +244,20 @@ func _build_model() -> void:
 	var armor_style := _armor_style(armor_key)
 	var head_key := _item_for("head")
 	var head_style := _head_style(head_key)
+	var costume_key := _item_for("f_costume")
+	var hat_key := _item_for("f_hat")
+	if costume_key != "":
+		# แฟชั่นชุดทับหน้าตาชุดเกราะ (ค่าพลังเกราะยังอยู่)
+		armor_key = ""
+		armor_style = ""
+	if hat_key != "":
+		head_key = ""
+		head_style = ""
 	var robe_c: Color = look["robe"]
 	if armor_style in ["yant_shirt", "jiwon", "yant_robe", "hunter", "reaper"]:
 		robe_c = ItemIcons.tint_of(armor_key)
+	if costume_key != "":
+		robe_c = ItemIcons.tint_of(costume_key)
 	model = Node3D.new()
 	add_child(model)
 	body = Node3D.new()
@@ -258,7 +290,11 @@ func _build_model() -> void:
 	for x in [-0.27, 0.27]:
 		K.sphere(body, 0.08, Vector3(x, 0.42, 0.04), skin, 8)
 	_build_armor(armor_key, armor_style, look)
+	if costume_key != "":
+		_build_costume(costume_key)
 	_build_accessory(_item_for("accessory"))
+	if _item_for("f_wings") != "":
+		_build_wings(_item_for("f_wings"))
 	head = Node3D.new()
 	head.position = Vector3(0, 1.0, 0)
 	head.rotation.x = -0.25  # เงยหน้าเล็กน้อยให้เห็นหน้าจากกล้องมุมสูง
@@ -278,7 +314,9 @@ func _build_model() -> void:
 			K.box(head, Vector3(0.06, 0.025, 0.02), Vector3(x * 1.55, 0.09, 0.33), eye, Vector3(0, -signf(x) * 0.5, signf(x) * 0.5))
 	K.sphere(head, 0.03, Vector3(0, -0.15, 0.38), K.mat(Color(0.85, 0.4, 0.42), 0.0, 0.8, 0.0, false), 6, Vector3(1.4, 0.7, 0.6))
 	_label_y = 2.15
-	if head_style != "":
+	if hat_key != "":
+		_build_fashion_hat(head, hat_key, hair)
+	elif head_style != "":
 		_build_headgear(head, head_key, head_style, hair, female)
 	elif armor_style == "reaper":
 		_build_hat(head, {"hat": "hood", "robe": robe_c, "sash": look["sash"]}, hair, female)
@@ -449,8 +487,8 @@ func _build_gear_weapon(key: String, look: Dictionary) -> void:
 	var glow := 0.0
 	if legend:
 		glow = 0.6
-	if lv >= 7:
-		glow = maxf(glow, 0.9 if lv < 10 else 1.6)
+	if lv >= 4:
+		glow = maxf(glow, 0.45 if lv < 7 else (0.9 if lv < 10 else 1.6))
 	var guard := K.gold() if fancy else K.mat(tint.darkened(0.3), 0.0, 0.4, 0.6)
 	var gem := K.mat(rc.lightened(0.2), 1.2, 0.3, 0.0, false)
 	var top := 1.0  # ความสูงปลายอาวุธ (ไว้วางประกาย)
@@ -552,11 +590,12 @@ func _build_gear_weapon(key: String, look: Dictionary) -> void:
 				var off := float(i) - (cards - 1) / 2.0
 				K.box(weapon, Vector3(0.1, 0.2, 0.01), Vector3(off * 0.2, 0.3 + (0.05 if cards == 3 and i == 1 else 0.0), 0), K.mat(card_c, 1.2 + glow, 0.5, 0.0, false), Vector3(0, 0, off * 0.4))
 			top = 0.4
+	_build_refine_fx(lv, top, rc)
 	if lv >= 7:
 		_sparkles = Node3D.new()
 		_sparkles.position = Vector3(0, top * 0.6, 0)
 		weapon.add_child(_sparkles)
-		var n := 3 if lv < 10 else 5
+		var n := 3 if lv < 9 else (4 if lv < 10 else 6)
 		var sc := Color(1.0, 0.95, 0.6) if lv < 10 else rc.lightened(0.35)
 		for i in n:
 			var a := i * TAU / n
@@ -992,3 +1031,211 @@ func _build_fx() -> void:
 	levelup_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	levelup_beam.visible = false
 	add_child(levelup_beam)
+
+
+# ---------- เอฟเฟกต์อาวุธตามขั้นตีบวก ----------
+
+## สีแสงตามขั้น: +4–6 ฟ้า, +7–8 ม่วงชมพู, +9 ชมพูบานเย็น, +10 ทอง
+static func refine_color(lv: int) -> Color:
+	if lv >= 10:
+		return Color(1.0, 0.82, 0.3)
+	if lv >= 9:
+		return Color(1.0, 0.45, 0.8)
+	if lv >= 7:
+		return Color(0.78, 0.6, 1.0)
+	return Color(0.55, 0.85, 1.0)
+
+
+func _build_refine_fx(lv: int, top: float, rc: Color) -> void:
+	if lv < 4:
+		return
+	var c := refine_color(lv)
+	# แสงใสหุ้มตัวอาวุธ (เต้นเป็นจังหวะใน animate)
+	var aura_mesh := SphereMesh.new()
+	aura_mesh.radius = 0.15 if lv < 7 else (0.2 if lv < 10 else 0.24)
+	aura_mesh.height = maxf(0.4, top + 0.25)
+	var m: StandardMaterial3D = K.mat(Color(c, 0.4), 2.0 + lv * 0.15, 0.3, 0.0, false).duplicate()  # สำเนา: animate เปลี่ยนความใสได้ไม่กระทบวัสดุที่แชร์
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_weapon_aura = K.add(weapon, aura_mesh, Vector3(0, top * 0.5, 0), m)
+	_weapon_aura.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if lv >= 7:
+		var light := OmniLight3D.new()
+		light.light_color = c
+		light.light_energy = 0.6 if lv < 10 else 1.2
+		light.omni_range = 1.6
+		light.position = Vector3(0, top * 0.7, 0)
+		weapon.add_child(light)
+	if lv >= 9:
+		# ละอองแสงลอยขึ้นจากอาวุธ
+		var p := CPUParticles3D.new()
+		var dot := SphereMesh.new()
+		dot.radius = 0.04
+		dot.height = 0.08
+		dot.radial_segments = 6
+		dot.rings = 3
+		p.mesh = dot
+		var pm := K.mat(c.lightened(0.3), 3.0, 0.3, 0.0, false)
+		p.material_override = pm
+		p.amount = 14 if lv < 10 else 24
+		p.lifetime = 1.1
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		p.emission_box_extents = Vector3(0.08, top * 0.5, 0.08)
+		p.position = Vector3(0, top * 0.5, 0)
+		p.direction = Vector3(0, 1, 0)
+		p.spread = 25.0
+		p.gravity = Vector3(0, 0.6, 0)
+		p.initial_velocity_min = 0.2
+		p.initial_velocity_max = 0.5
+		p.scale_amount_min = 0.6
+		p.scale_amount_max = 1.3
+		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		weapon.add_child(p)
+	if lv >= 10:
+		# วงออร่าทองหมุนใต้เท้า + ลายดาวแปดแฉก
+		_foot_aura = Node3D.new()
+		_foot_aura.position.y = 0.03
+		model.add_child(_foot_aura)
+		for r in [[0.62, 0.68], [0.82, 0.86]]:
+			var ring := TorusMesh.new()
+			ring.inner_radius = r[0]
+			ring.outer_radius = r[1]
+			var mi := K.add(_foot_aura, ring, Vector3.ZERO, K.mat(Color(c, 0.85), 2.6, 0.3, 0.0, false), Vector3.ZERO, Vector3(1, 0.15, 1))
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for i in 8:
+			var a := i * TAU / 8.0
+			var mi := K.box(_foot_aura, Vector3(0.05, 0.01, 0.2), Vector3(cos(a) * 0.74, 0, sin(a) * 0.74), K.mat(c.lightened(0.3), 3.0, 0.3, 0.0, false), Vector3(0, -a + PI / 2.0, 0))
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+# ---------- แฟชั่น ----------
+
+func _fashion_glow(key: String) -> float:
+	var lv := ItemDB.refine_of(key)
+	var g := 0.4 if _rarity(key) == "legendary" else 0.0
+	if lv >= 7:
+		g = maxf(g, 0.5 + (lv - 7) * 0.25)
+	return g
+
+
+## ชุดแฟชั่น: สีจีวรเปลี่ยนเป็นสีชุด (ตั้งไว้ตอนสร้างตัว) + เข็มขัด ปกคอ สไบ ตามชุด
+func _build_costume(key: String) -> void:
+	var id := ItemDB.base_id(key)
+	var tint := ItemIcons.tint_of(key)
+	var glow := _fashion_glow(key)
+	var gold := K.mat(Color(1.0, 0.8, 0.32), 0.3 + glow, 0.35, 0.6)
+	var trim: Color = {"f_chut_dek_wat": Color(0.95, 0.5, 0.3), "f_chut_thai": Color(0.95, 0.75, 0.35),
+		"f_chut_nang_ram": Color(1.0, 0.82, 0.35), "f_chut_thewada": Color(1.0, 0.85, 0.4)}.get(id, tint.darkened(0.3))
+	# เข็มขัดทอง + ปกคอ
+	K.cyl(body, 0.275, 0.275, 0.06, Vector3(0, 0.3, 0), gold, 16)
+	var collar := TorusMesh.new()
+	collar.inner_radius = 0.16
+	collar.outer_radius = 0.23
+	K.add(body, collar, Vector3(0, 0.66, 0), K.mat(trim, glow, 0.5), Vector3.ZERO, Vector3(1, 0.5, 1))
+	# สไบ/ผ้าพาดเฉียง
+	K.beam(body, Vector3(-0.2, 0.64, 0.12), Vector3(0.22, 0.28, 0.2), 0.065, K.mat(trim, glow, 0.6))
+	# ลายกนกทองที่ชายผ้า
+	for i in 10:
+		var a := i * TAU / 10.0
+		K.sphere(body, 0.03, Vector3(sin(a) * 0.31, 0.13, cos(a) * 0.31), gold, 6)
+	if _rarity(key) in ["epic", "legendary"]:
+		# อินทรธนู (ไหล่ทองโค้ง)
+		for x in [-0.25, 0.25]:
+			K.sphere(body, 0.1, Vector3(x, 0.62, 0), gold, 10, Vector3(1.2, 0.5, 1.0))
+			K.box(body, Vector3(0.05, 0.12, 0.05), Vector3(x * 1.25, 0.66, 0), gold, Vector3(0, 0, -signf(x) * 0.6))
+	if id == "f_chut_thewada":
+		# ทับทรวงทองประดับพลอย
+		K.sphere(body, 0.09, _chest(0.52, 0.03), gold, 10, Vector3(1.2, 1.2, 0.4))
+		K.sphere(body, 0.045, _chest(0.52, 0.07), K.mat(Color(1.0, 0.45, 0.55), 1.5, 0.3, 0.0, false), 8)
+
+
+## หมวกแฟชั่น
+func _build_fashion_hat(h: Node3D, key: String, hair: Material) -> void:
+	var id := ItemDB.base_id(key)
+	var tint := ItemIcons.tint_of(key)
+	var glow := _fashion_glow(key)
+	var gold := K.mat(Color(1.0, 0.8, 0.32), 0.3 + glow, 0.35, 0.6)
+	match id:
+		"f_hu_maeo":
+			var band := TorusMesh.new()
+			band.inner_radius = 0.38
+			band.outer_radius = 0.42
+			K.add(h, band, Vector3(0, 0.22, -0.04), K.mat(tint.darkened(0.15), glow), Vector3(0.35, 0, PI / 2.0))
+			for x in [-0.22, 0.22]:
+				K.cyl(h, 0.0, 0.13, 0.26, Vector3(x, 0.44, -0.02), K.mat(tint, glow), 4, Vector3(0, 0, -signf(x) * 0.35))
+				K.cyl(h, 0.0, 0.075, 0.16, Vector3(x * 0.97, 0.42, 0.03), K.mat(Color(1.0, 0.9, 0.93), glow), 4, Vector3(0, 0, -signf(x) * 0.35))
+			_label_y += 0.1
+		"f_ngob":
+			K.cyl(h, 0.08, 0.66, 0.24, Vector3(0, 0.42, -0.03), K.mat(tint, glow, 0.9), 16, Vector3(-0.1, 0, 0))
+			var band := TorusMesh.new()
+			band.inner_radius = 0.3
+			band.outer_radius = 0.34
+			K.add(h, band, Vector3(0, 0.38, -0.03), K.mat(Color(0.9, 0.35, 0.45), glow), Vector3(-0.1, 0, 0))
+			for i in 3:
+				var a := -0.6 + i * 0.6
+				K.sphere(h, 0.06, Vector3(sin(a) * 0.33, 0.42, cos(a) * 0.33), K.mat([Color(1.0, 0.6, 0.7), Color(1.0, 0.9, 0.5), Color(0.7, 0.85, 1.0)][i], 0.3), 8)
+			_label_y += 0.1
+		"f_mongkut_mali":
+			for i in 14:
+				var a := i * TAU / 14.0
+				K.sphere(h, 0.055, Vector3(cos(a) * 0.36, 0.3 + sin(a * 2.0) * 0.015, sin(a) * 0.36 - 0.02), K.mat(tint, 0.4 + glow, 0.6), 6)
+				if i % 2 == 0:
+					K.sphere(h, 0.04, Vector3(cos(a + 0.2) * 0.38, 0.27, sin(a + 0.2) * 0.38 - 0.02), K.mat(Color(0.5, 0.8, 0.5)), 5, Vector3(1.4, 0.5, 0.8))
+			K.sphere(h, 0.07, Vector3(0, 0.36, 0.36), K.mat(Color(1.0, 0.7, 0.8), 0.6 + glow), 8)
+		"f_chada_thep":
+			# ชฎาทรงยอดแหลมซ้อนชั้น
+			var y := 0.3
+			for i in 5:
+				var r := 0.36 - i * 0.065
+				K.cyl(h, r * 0.85, r, 0.13, Vector3(0, y, -0.04), gold, 12)
+				K.cyl(h, r * 0.86, r * 0.86, 0.02, Vector3(0, y + 0.07, -0.04), K.mat(Color(1.0, 0.45, 0.55), 0.8 + glow, 0.3), 12)
+				y += 0.13
+			K.cyl(h, 0.0, 0.06, 0.32, Vector3(0, y + 0.12, -0.04), gold, 8)
+			K.sphere(h, 0.06, Vector3(0, 0.34, 0.33), K.mat(Color(0.45, 0.85, 1.0), 1.5 + glow, 0.3, 0.0, false), 8)
+			for x in [-0.36, 0.36]:
+				K.box(h, Vector3(0.03, 0.22, 0.12), Vector3(x, 0.08, 0.02), gold, Vector3(0, 0, signf(x) * 0.3))
+			_label_y += 0.8
+		_:
+			K.sphere(h, 0.42, Vector3(0, 0.2, -0.05), K.mat(tint, glow), 14, Vector3(1, 0.6, 1))
+
+
+## ปีกแฟชั่นด้านหลัง (สองข้าง กระพือใน animate)
+func _build_wings(key: String) -> void:
+	var id := ItemDB.base_id(key)
+	var tint := ItemIcons.tint_of(key)
+	var glow := _fashion_glow(key)
+	for sgn in [-1.0, 1.0]:
+		var pivot := Node3D.new()
+		pivot.position = Vector3(sgn * 0.08, 0.6, -0.24)
+		body.add_child(pivot)
+		_wings.append(pivot)
+		match id:
+			"f_pik_khangkhao":
+				var m := K.mat(tint, glow, 0.7)
+				for k in 3:
+					K.sphere(pivot, 0.16, Vector3(sgn * (0.16 + k * 0.13), 0.1 - k * 0.07, -0.04), m, 10, Vector3(1.0, 1.2, 0.18))
+				K.beam(pivot, Vector3.ZERO, Vector3(sgn * 0.48, 0.2, -0.04), 0.03, K.mat(tint.darkened(0.35)))
+			"f_pik_phisuea":
+				var m1 := K.mat(Color(tint, 0.9), 0.5 + glow, 0.4, 0.0, false)
+				var m2 := K.mat(Color(1.0, 0.75, 0.88), 0.5 + glow, 0.4, 0.0, false)
+				K.sphere(pivot, 0.26, Vector3(sgn * 0.26, 0.18, -0.04), m1, 12, Vector3(1.0, 1.1, 0.12))
+				K.sphere(pivot, 0.17, Vector3(sgn * 0.22, -0.16, -0.04), m2, 12, Vector3(1.0, 1.1, 0.12))
+				K.sphere(pivot, 0.07, Vector3(sgn * 0.3, 0.22, -0.02), K.mat(Color(1, 1, 1), 1.2, 0.3, 0.0, false), 8, Vector3(1, 1, 0.3))
+			_:
+				# ปีกขนนก: ขนยาวเรียงเป็นพัด (นางฟ้าขาว / กินรีทอง)
+				var big := id == "f_pik_kinnari"
+				var m := K.mat(tint, 0.35 + glow, 0.5, 0.2 if big else 0.0)
+				var n := 6 if big else 5
+				var span := 0.62 if big else 0.5
+				for k in n:
+					var t := float(k) / (n - 1)
+					var length := lerpf(span, span * 0.45, t)
+					var ang := lerpf(0.5, -0.7, t)
+					var dir := Vector3(sgn * cos(ang), sin(ang), 0)
+					_feather(pivot, dir, length, m)
+
+
+## ขนปีกหนึ่งเส้น: ทรงรีแบนวางตามทิศ dir จากโคนปีก
+func _feather(pivot: Node3D, dir: Vector3, length: float, m: Material) -> void:
+	var mi := K.sphere(pivot, 0.5, dir * length * 0.5, m, 8, Vector3(length, length * 0.26, 0.06))
+	mi.rotation.z = atan2(dir.y, dir.x)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

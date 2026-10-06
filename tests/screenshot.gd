@@ -169,6 +169,48 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 				for id in load("res://shared/data/quests.gd").for_giver(n.npc_id()):
 					player.accept_quest(id)
 		main._refresh_npc_markers()
+	elif mode.begins_with("fashion:"):
+		# fashion:<ชุด>,<หมวก>,<ปีก> คั่นด้วย / เช่น fashion:f_chut_thewada+7/f_chada_thep/f_pik_kinnari
+		for key in mode.substr(8).split("/", false):
+			player.inventory[key] = 1
+			player.wear_fashion(key)
+	elif mode.begins_with("pet:"):
+		# pet:<ชนิด>:<ร่าง 0-2>:<เลเวล>
+		var bits := mode.split(":")
+		var Fashion = load("res://shared/data/fashion.gd")
+		var sp: String = bits[1]
+		var d: Dictionary = Fashion.pet_data(player.state, sp)
+		d["stage"] = int(bits[2]) if bits.size() > 2 else 0
+		d["lv"] = int(bits[3]) if bits.size() > 3 else 1
+		player.inventory[Fashion.PETS[sp]["item"]] = 1
+		player.wear_fashion(Fashion.PETS[sp]["item"])
+		player.pet.pos = player.pos + Vector2(-60, 30)
+		player.pet.rebuild()
+	elif mode.begins_with("weapon:"):
+		# weapon:<คีย์> เช่น weapon:maipai_staff+10
+		player.add_item(mode.substr(7))
+		player.equip(mode.substr(7))
+	elif mode == "fashionwin":
+		player.inventory["hin_ti_fashion"] = 6
+		for id in ["f_hu_maeo", "f_pik_phisuea", "pet_krathai"]:
+			player.inventory[id] = 1
+		main.hud.toggle_window("fashion")
+	elif mode == "ccshop":
+		player.state["cc"] = 340
+		player.rng.seed = 21
+		main.hud.toggle_window("ccshop")
+		player.buy_gacha(10)
+		main.hud.windows["ccshop"].open(10)
+	elif mode == "dead":
+		player.take_damage(999999, "ผีกระสือ")
+	elif mode == "mining":
+		var Rock = load("res://client/ore_rock.gd")
+		var rock: Node3D = Rock.new()
+		rock.setup(player.pos + Vector2(26, -6), 1, 0)
+		main.rocks.add_child(rock)
+		player.command_mine(rock)
+		for i in 26:
+			main.tick(0.05)
 	elif mode == "loot":
 		for id in ["red_thread", "spirit_shard", "lantern_oil", "soul_krasue", "khamot_ember", "mitmo"]:
 			player.add_item(id, 3)

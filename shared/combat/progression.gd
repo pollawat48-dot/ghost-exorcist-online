@@ -4,6 +4,7 @@ extends RefCounted
 
 const Classes = preload("res://shared/data/classes.gd")
 const ItemDB = preload("res://shared/data/items.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 const MAX_LEVEL := 150
 const STATS := ["str", "agi", "vit", "int", "dex", "luk"]
@@ -36,12 +37,13 @@ static func new_state() -> Dictionary:
 		"coins": START_COINS, "quests": {}, "quests_done": {},
 		"visited": {}, "caves": [],
 		"skill_slots": ["holy_water", "", "", "", "", "", "", "", ""],
+		"fashion": {}, "pets": {}, "cc": Fashion.CC_START,
 	}
 
 
-## รวมค่าสเตตัสจากของสวมใส่
+## รวมค่าสเตตัสจากของสวมใส่ + แฟชั่น + สัตว์เลี้ยง
 static func equipment_bonus(state: Dictionary) -> Dictionary:
-	var total := {}
+	var total := Fashion.bonus(state)
 	for slot in state["equipment"]:
 		var bonus := ItemDB.bonus_of(state["equipment"][slot])
 		for key in bonus:

@@ -286,13 +286,13 @@ func tick(delta: float) -> void:
 		if aoe_timer <= 0.0 and pos.distance_to(target.pos) < data["aoe_radius"]:
 			aoe_timer = data["aoe_interval"]
 			Effect.ring(get_parent(), position, data["aoe_radius"] / 32.0, Color(1.0, 0.4, 0.7))
-			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng, data["aoe_power"]))
+			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng, data["aoe_power"]), data["name"])
 	if target != null:
 		if pos.distance_to(target.pos) > data["attack_range"]:
 			pos = pos.move_toward(target.pos, data["speed"] * 1.3 * delta)
 		elif attack_cooldown <= 0.0:
 			attack_cooldown = data["attack_interval"]
-			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng))
+			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng), data["name"])
 	else:
 		_wander(delta)
 	if model != null:

@@ -16,6 +16,8 @@ const Fishing = preload("res://shared/data/fishing.gd")
 const DamageText = preload("res://client/damage_text.gd")
 const Effect = preload("res://client/effect.gd")
 const Avatar = preload("res://client/avatar.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
+const Pet = preload("res://client/pet.gd")
 
 signal changed
 signal message(text: String)
@@ -24,6 +26,8 @@ signal open_refine(stone_id: String)  ## กดใช้หินตี+ จา�
 signal party_cast(fields: Dictionary)  ## ใช้บัฟ/ฮีลปาร์ตี้ ให้ main ส่งต่อไปเพื่อนผ่านเซิร์ฟเวอร์
 signal caught(item_id: String)  ## ตกปลาได้ของ
 signal sfx(id: String)  ## ขอเล่นเสียง (main ส่งต่อให้ระบบเสียง)
+signal died(by: String)  ## สลบ (HUD แสดงป้ายกลางจอ ให้กดปุ่มเกิดเอง)
+signal respawned
 
 const SPEED := 140.0
 const REGEN_INTERVAL := 3.0
@@ -34,7 +38,7 @@ const SP_ITEM := "nam_mon"
 const HP_POTIONS := ["herb_potion", "ya_hom_thong"]
 const SP_POTIONS := ["nam_mon", "nam_mon_yai"]
 const POTION_COOLDOWN := 0.6
-const MINE_TIME := 1.2  ## วินาทีต่อการขุดหนึ่งครั้ง
+const MINE_TIME := 2.0  ## วินาทีต่อการขุดหนึ่งครั้ง (มีหลอดขุดเหนือหัว) ระหว่างขุดผีทำร้ายไม่ได้
 const MINE_REACH := 46.0
 const BUFF_EFFECTS := ["atk", "def", "aspd", "speed", "sp_regen"]
 const Protocol = preload("res://shared/net/protocol.gd")
@@ -85,6 +89,8 @@ var weapon: Node3D
 var aura: Node3D
 var name_label: Label3D
 var avatar: Node3D  ## โมเดลจิบิ (client/avatar.gd) ใช้ร่วมกับผู้เล่นคนอื่น
+var pet: Node3D = null  ## สัตว์เลี้ยงที่ออกมาด้วย (client/pet.gd)
+var dead_by := ""  ## ใครทำให้สลบ (โชว์บนป้ายตาย)
 
 
 func _ready() -> void:
@@ -97,6 +103,7 @@ func _ready() -> void:
 		inventory[SP_ITEM] = 3
 	_build_model()
 	_sync(0.0)
+	_refresh_pet.call_deferred()
 
 
 ## คำนวณค่าพลังใหม่ (หลังอัปสเตตัส สวมของ เปลี่ยนคลาส หรือบัฟหมด)
@@ -126,13 +133,22 @@ func _build_model() -> void:
 	if avatar == null:
 		avatar = Avatar.new()
 		add_child(avatar)
-	avatar.build(state["class"], look, state["equipment"], player_name)
+	avatar.build(state["class"], look, look_items(), player_name)
 	model = avatar.model
 	body = avatar.body
 	weapon = avatar.weapon
 	aura = avatar.aura
 	name_label = avatar.name_label
 	avatar.set_fishing(fishing)
+
+
+## ของที่มองเห็นบนตัว: ของสวมใส่ + แฟชั่น (คีย์ "f_<ช่อง>") ใช้ทั้งโมเดลตัวเองและส่งให้ผู้เล่นอื่นเห็น
+func look_items() -> Dictionary:
+	var out: Dictionary = state["equipment"].duplicate()
+	for slot in state.get("fashion", {}):
+		if slot != "pet":
+			out["f_" + slot] = state["fashion"][slot]
+	return out
 
 
 ## ขยับโมเดลให้ตรงกับตรรกะ: ตำแหน่ง, ทิศที่หัน, ท่าเดิน/ตี, เอฟเฟกต์
@@ -147,6 +163,7 @@ func _sync(delta: float) -> void:
 		facing = fish_spot - pos
 	if avatar.fishing != fishing:
 		avatar.set_fishing(fishing)
+	avatar.dead = hp <= 0
 	avatar.animate(delta, move.length() > 0.001, facing, swing, flash > 0.0, levelup_fx)
 	if fishing and avatar.bobber != null:
 		avatar.bobber.position.y = sin(fish_timer * 3.0) * 0.04 - (0.12 if fish_timer > fish_time() - 0.6 else 0.0)
@@ -174,7 +191,11 @@ func command_attack(ghost: Node3D) -> void:
 
 
 func tick(delta: float) -> void:
+	if pet != null:
+		pet.tick(delta)
 	if hp <= 0:
+		if model != null:
+			_sync(delta)
 		return
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	potion_cd = maxf(0.0, potion_cd - delta)
@@ -678,8 +699,26 @@ func use_item(item_id: String) -> bool:
 	if item["type"] in ["refine", "amulet"]:
 		open_refine.emit(item_id if item["type"] == "refine" else "")
 		return true
+	if item["type"] == "fashion_refine":
+		open_refine.emit("fashion")
+		return true
+	if item["type"] == "gacha":
+		open_gacha(1)
+		return true
+	if item["type"] == "fashion":
+		return wear_fashion(item_id)
 	if item["type"] != "consumable":
 		return false
+	if item.has("buff"):
+		var b: Dictionary = item["buff"]
+		_remove_item(item_id)
+		potion_cd = POTION_COOLDOWN
+		apply_buff(b["effect"], b["power"], b["duration"], item["name"])
+		Effect.ring(get_parent(), position, 1.4, Color(0.95, 0.97, 1.0))
+		sfx.emit("buff")
+		message.emit("โปรย%s! %s" % [item["name"], ItemDB.use_text(item_id)])
+		changed.emit()
+		return true
 	var heal: int = item.get("heal", 0)
 	var mana: int = item.get("sp", 0)
 	if (heal == 0 or hp >= stats["max_hp"]) and (mana == 0 or sp >= stats["max_sp"]):
@@ -1007,6 +1046,224 @@ func pay_warp(map_id: String) -> bool:
 	return true
 
 
+# ---------- แฟชั่น (ชุด หมวก ปีก สัตว์เลี้ยง) แยกจากของสวมใส่ ----------
+
+func fashion() -> Dictionary:
+	if not state.has("fashion"):
+		state["fashion"] = {}
+	return state["fashion"]
+
+
+func wear_fashion(key: String) -> bool:
+	if inventory.get(key, 0) <= 0 or not Fashion.is_fashion(key):
+		return false
+	var slot := Fashion.slot_of(key)
+	if fashion().has(slot):
+		remove_fashion(slot, false)
+	_remove_item(key)
+	fashion()[slot] = key
+	_after_fashion_change()
+	message.emit("ใส่แฟชั่น %s" % ItemDB.display_name(key))
+	sfx.emit("buff")
+	changed.emit()
+	return true
+
+
+func remove_fashion(slot: String, notify: bool = true) -> bool:
+	if not fashion().has(slot):
+		return false
+	var key: String = fashion()[slot]
+	fashion().erase(slot)
+	inventory[key] = inventory.get(key, 0) + 1
+	if notify:
+		_after_fashion_change()
+		changed.emit()
+	return true
+
+
+func _after_fashion_change() -> void:
+	var old_max: int = stats.get("max_hp", 0)
+	recalc()
+	hp = mini(stats["max_hp"], hp + maxi(0, stats["max_hp"] - old_max))
+	if avatar != null:
+		_build_model()
+	_refresh_pet()
+
+
+## แฟชั่นที่ตีบวกได้ (ไม่รวมสัตว์เลี้ยง): ที่ใส่อยู่ (slot = ช่อง) และในกระเป๋า (slot = "")
+func fashion_refinable() -> Array:
+	var result := []
+	for slot in Fashion.SLOTS:
+		if slot != "pet" and fashion().has(slot):
+			result.append({"key": fashion()[slot], "slot": slot})
+	for key in inventory:
+		if Fashion.is_fashion(key) and Fashion.slot_of(key) != "pet":
+			result.append({"key": key, "slot": ""})
+	return result
+
+
+## ตีบวกแฟชั่นด้วยหินตี+ แฟชั่น 1 ก้อน (ไม่เสียเหรียญ) ตั้งแต่ +7 พลาดแล้วลด 1 ขั้น
+## คืน {"ok", "result": "success"/"fail"/"down"/"error", "key", "level"}
+func refine_fashion(key: String, slot: String = "") -> Dictionary:
+	var err := {"ok": false, "result": "error", "key": key, "level": ItemDB.refine_of(key)}
+	var owned: bool = fashion().get(slot, "") == key if slot != "" else inventory.get(key, 0) > 0
+	if not owned or not Fashion.is_fashion(key) or Fashion.slot_of(key) == "pet":
+		return err
+	var lv := ItemDB.refine_of(key)
+	if lv >= Fashion.REFINE_MAX:
+		message.emit("%s ตีถึง +%d สูงสุดแล้ว" % [ItemDB.display_name(key), Fashion.REFINE_MAX])
+		return err
+	if inventory.get(Fashion.STONE_ID, 0) <= 0:
+		message.emit("ต้องมีหินตี+ แฟชั่น (สุ่มได้จากกาชาปอง)")
+		return err
+	_remove_item(Fashion.STONE_ID)
+	var new_lv := lv
+	var result := "fail"
+	if rng.randf() < Fashion.REFINE_CHANCE[lv]:
+		new_lv = lv + 1
+		result = "success"
+	elif lv >= Fashion.REFINE_RISKY_FROM:
+		new_lv = lv - 1
+		result = "down"
+	var new_key := ItemDB.refined_key(ItemDB.base_id(key), new_lv)
+	if slot != "":
+		fashion()[slot] = new_key
+		_after_fashion_change()
+	else:
+		_remove_item(key)
+		inventory[new_key] = inventory.get(new_key, 0) + 1
+	match result:
+		"success":
+			levelup_fx = 0.6
+			message.emit("ตีบวกแฟชั่นสำเร็จ! ได้ %s" % ItemDB.display_name(new_key))
+		"down":
+			message.emit("ตีบวกแฟชั่นล้มเหลว... ลดเหลือ +%d" % new_lv)
+		_:
+			message.emit("ตีบวกแฟชั่นล้มเหลว (ยังอยู่ +%d)" % lv)
+	sfx.emit({"success": "refine_ok", "down": "refine_down"}.get(result, "refine_fail"))
+	changed.emit()
+	return {"ok": result == "success", "result": result, "key": new_key, "level": new_lv}
+
+
+# ---------- เงิน CC และกาชาปอง ----------
+
+func cc() -> int:
+	return int(state.get("cc", 0))
+
+
+func add_cc(amount: int, why: String = "") -> void:
+	if amount <= 0:
+		return
+	state["cc"] = cc() + amount
+	message.emit("+%d CC%s" % [amount, (" (" + why + ")") if why != "" else ""])
+	changed.emit()
+
+
+## ซื้อกาชาปองที่ร้าน CC (ลูกละ Fashion.GACHA_PRICE)
+func buy_gacha(count: int = 1) -> bool:
+	var price := Fashion.GACHA_PRICE * count
+	if count <= 0:
+		return false
+	if cc() < price:
+		message.emit("CC ไม่พอ (ต้องใช้ %d CC)" % price)
+		return false
+	state["cc"] = cc() - price
+	inventory[Fashion.GACHA_ID] = inventory.get(Fashion.GACHA_ID, 0) + count
+	sfx.emit("coin")
+	message.emit("ซื้อกาชาปอง x%d (-%d CC)" % [count, price])
+	changed.emit()
+	return true
+
+
+## เปิดกาชาปองในกระเป๋า คืนรายการ [{"item", "count"}] ที่ได้
+func open_gacha(count: int = 1) -> Array:
+	var got := []
+	count = mini(count, inventory.get(Fashion.GACHA_ID, 0))
+	for i in count:
+		_remove_item(Fashion.GACHA_ID)
+		var r := Fashion.roll_gacha(rng)
+		inventory[r["item"]] = inventory.get(r["item"], 0) + r["count"]
+		got.append(r)
+		var rare: bool = ItemDB.info(r["item"])["type"] == "fashion"
+		message.emit("%sกาชาได้ %s x%d" % ["✨ " if rare else "", ItemDB.display_name(r["item"]), r["count"]])
+		if rare:
+			levelup_fx = 1.0
+	if not got.is_empty():
+		sfx.emit("rare" if got.any(func(r): return ItemDB.info(r["item"])["type"] == "fashion") else "pickup")
+		changed.emit()
+	return got
+
+
+# ---------- สัตว์เลี้ยง ----------
+
+func pet_species() -> String:
+	return Fashion.pet_of(fashion().get("pet", ""))
+
+
+## ให้สัตว์เลี้ยงออกมา/เก็บกลับ ตามช่องแฟชั่น "pet"
+func _refresh_pet() -> void:
+	var sp := pet_species()
+	if pet != null and (sp == "" or pet.species != sp):
+		pet.queue_free()
+		pet = null
+	if sp != "" and pet == null and get_parent() != null:
+		pet = Pet.new()
+		pet.setup(self, sp)
+		get_parent().add_child(pet)
+
+
+## สัตว์เลี้ยงที่ออกมาด้วยได้ EXP เท่ากับเจ้าของ
+func _pet_exp(amount: int) -> void:
+	var sp := pet_species()
+	if sp == "" or amount <= 0:
+		return
+	var d := Fashion.pet_data(state, sp)
+	var ups := Fashion.add_pet_exp(d, amount)
+	if ups > 0:
+		recalc()
+		message.emit("%s เลเวลอัป! ตอนนี้ Lv.%d" % [Fashion.pet_name(sp, d["stage"]), d["lv"]])
+	if pet != null:
+		pet.refresh_label()
+
+
+func can_evolve_pet() -> bool:
+	var sp := pet_species()
+	if sp == "":
+		return false
+	var d := Fashion.pet_data(state, sp)
+	return d["stage"] < 2 and d["lv"] >= Fashion.EVOLVE_LEVEL[d["stage"]] and state["coins"] >= Fashion.EVOLVE_FEE[d["stage"]]
+
+
+## พัฒนาร่างสัตว์เลี้ยงที่ออกมาอยู่ (ได้อีก 2 ขั้น) ต้องถึงเลเวลและจ่ายเหรียญ
+func evolve_pet() -> bool:
+	var sp := pet_species()
+	if sp == "":
+		return false
+	var d := Fashion.pet_data(state, sp)
+	if d["stage"] >= 2:
+		message.emit("พัฒนาร่างครบแล้ว")
+		return false
+	var need: int = Fashion.EVOLVE_LEVEL[d["stage"]]
+	var fee: int = Fashion.EVOLVE_FEE[d["stage"]]
+	if d["lv"] < need:
+		message.emit("สัตว์เลี้ยงต้องถึง Lv.%d ก่อนพัฒนาร่าง" % need)
+		return false
+	if state["coins"] < fee:
+		message.emit("เหรียญไม่พอ (ค่าพัฒนาร่าง %d)" % fee)
+		return false
+	state["coins"] -= fee
+	d["stage"] += 1
+	recalc()
+	if pet != null:
+		pet.rebuild()
+		Effect.pillar(get_parent(), pet.position, 0.8, Fashion.STAGE_COLORS[d["stage"]])
+	levelup_fx = 1.2
+	sfx.emit("levelup")
+	message.emit("พัฒนาร่างสำเร็จ! กลายเป็น %s" % Fashion.pet_name(sp, d["stage"]))
+	changed.emit()
+	return true
+
+
 # ---------- บันทึก/โหลดตัวละคร (เซิร์ฟเวอร์หรือเครื่องตัวเองสำหรับ guest) ----------
 
 func save_data() -> Dictionary:
@@ -1039,21 +1296,66 @@ func apply_save(data: Dictionary) -> void:
 	sp = clampi(int(data.get("sp", stats["max_sp"])), 0, stats["max_sp"])
 
 
-func take_damage(amount: int) -> void:
+## กำลังขุดแร่อยู่ (ยืนถึงหินแล้ว) ระหว่างนี้ผีทำร้ายไม่ได้
+func is_mining() -> bool:
+	return mine_target != null and is_instance_valid(mine_target) and pos.distance_to(mine_target.pos) <= MINE_REACH
+
+
+## ความคืบหน้าการขุดครั้งนี้ 0–1 (หลอดเหนือหัว)
+func mine_progress() -> float:
+	return clampf(mine_timer / MINE_TIME, 0.0, 1.0)
+
+
+func take_damage(amount: int, by: String = "") -> void:
 	if hp <= 0:
+		return
+	if is_mining():
+		DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "กันได้", Color(0.75, 0.85, 1.0))
 		return
 	hp = maxi(0, hp - amount)
 	flash = 0.15
 	sfx.emit("hurt")
 	DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), str(amount), Color(1, 0.45, 0.45))
 	if hp == 0:
-		message.emit("คุณสลบไป... ฟื้นคืนที่วัด")
-		_revive()
+		_die(by)
 	changed.emit()
+
+
+## สลบ: หยุดทุกอย่าง นอนลงกับพื้น รอผู้เล่นกดปุ่มเกิดเอง
+func _die(by: String) -> void:
+	dead_by = by
+	attack_target = null
+	mine_target = null
+	pending_skill = ""
+	fishing = false
+	moving = false
+	path.clear()
+	message.emit("คุณสลบไป%s... กดปุ่มเกิดใหม่เพื่อฟื้นที่จุดเกิด" % ((" เพราะ" + by) if by != "" else ""))
+	died.emit(by)
+
+
+func is_dead() -> bool:
+	return hp <= 0
+
+
+## กดปุ่มเกิดใหม่: ฟื้นที่จุดเกิดของแผนที่ HP/SP เต็ม
+func respawn() -> bool:
+	if hp > 0:
+		return false
+	_revive()
+	dead_by = ""
+	levelup_fx = 0.6
+	if pet != null:
+		pet.pos = pos + Pet.FOLLOW_OFFSET
+	message.emit("ฟื้นคืนสติแล้ว")
+	respawned.emit()
+	changed.emit()
+	return true
 
 
 func gain_exp(amount: int, coin_amount: int = 0) -> void:
 	var ups := Progression.add_exp(state, amount)
+	_pet_exp(amount)
 	if amount > 0:
 		message.emit("+%d EXP · +%d เหรียญ" % [amount, coin_amount] if coin_amount > 0 else "+%d EXP" % amount)
 	elif coin_amount > 0:
@@ -1065,6 +1367,7 @@ func gain_exp(amount: int, coin_amount: int = 0) -> void:
 		levelup_fx = 1.2
 		sfx.emit("levelup")
 		message.emit("เลเวลอัป! ตอนนี้เลเวล %d (แต้มสเตตัส %d)" % [state["level"], state["stat_points"]])
+		add_cc(Fashion.CC_PER_LEVEL * ups, "เลเวลอัป")
 		if class_level_reached() and state["level"] - ups < class_change_status()["level"]:
 			message.emit("ถึงเลเวลเปลี่ยนอาชีพแล้ว! ไปคุยกับครูใหญ่สำนักหน้าโบสถ์เพื่อรับบททดสอบ")
 	changed.emit()
@@ -1076,7 +1379,7 @@ func add_item(item_id: String, count: int = 1) -> void:
 	var note := ""
 	if item["type"] == "soul":
 		note = " ✨ (ไว้ผนึกพลังในอนาคต)"
-	elif item["type"] == "equip":
+	elif item["type"] == "equip" or (item["type"] == "fashion" and item.has("bonus")):
 		note = " [%s] %s" % [ItemDB.RARITY[item["rarity"]]["name"], ItemDB.bonus_text(item_id)]
 	message.emit("ได้รับ %s x%d%s" % [ItemDB.display_name(item_id), count, note])
 	changed.emit()

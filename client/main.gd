@@ -38,6 +38,7 @@ const Sound = preload("res://client/audio/sound.gd")
 const Skills = preload("res://shared/data/skills.gd")
 const Fishing = preload("res://shared/data/fishing.gd")
 const Graphics = preload("res://client/graphics.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 signal logout_requested  ## กดออกจากเกม (กลับหน้าเมนู) — App เป็นคนจัดการ
 
@@ -302,6 +303,9 @@ func do_action(name: String) -> void:
 			toggle_auto()
 		"fish":
 			start_fishing()
+		"respawn":
+			player.respawn()
+			camera_rig.snap()
 		"logout":
 			save_now()
 			logout_requested.emit()
@@ -522,7 +526,7 @@ func _tick_net(delta: float) -> void:
 	pos_timer -= delta
 	if pos_timer <= 0.0:
 		pos_timer = POS_INTERVAL
-		net.send_pos(map.map_id, player.pos, {"cls": player.state["class"], "lv": player.state["level"], "hp": player.hp, "mhp": player.stats["max_hp"], "equip": player.state["equipment"].duplicate()})
+		net.send_pos(map.map_id, player.pos, {"cls": player.state["class"], "lv": player.state["level"], "hp": player.hp, "mhp": player.stats["max_hp"], "equip": player.look_items()})
 
 
 func remote_at_screen(screen: Vector2) -> Node3D:
@@ -790,6 +794,7 @@ func _on_ghost_died(g: Node3D) -> void:
 			_drop(equip_pool[rng.randi() % equip_pool.size()], g.pos, spread)
 		boss = null
 		boss_timer = rng.randf_range(BOSS_RESPAWN_DELAY.x, BOSS_RESPAWN_DELAY.y)
+		player.add_cc(Fashion.CC_PER_BOSS, "ปราบบอส")
 		hud.announce("ปราบ%sสำเร็จ! ของรางวัลตกอยู่เต็มพื้น" % g.data["name"])
 		return
 	respawn_queue.append({"spawn": g.get_meta("spawn_index"), "time": RESPAWN_DELAY})
