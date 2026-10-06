@@ -5,6 +5,8 @@ const Quests = preload("res://shared/data/quests.gd")
 const ItemIcons = preload("res://client/ui/item_icons.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 
+signal guide_requested(id: String)  ## กดนำทาง: เดินไปล่าผี/กลับไปส่งเควสให้อัตโนมัติ
+
 var npc := {}  ## ว่าง = สมุดเควส (ดูเควสที่รับไว้ทั้งหมด)
 
 
@@ -107,15 +109,22 @@ func _quest_card(list: VBoxContainer, id: String) -> void:
 			h.add_child(b)
 		"ready":
 			var b := P.button("ส่งเควส", P.LEMON, 15)
-			b.disabled = not npc.is_empty() and npc["id"] != q["giver"]
-			b.pressed.connect(func(): player.complete_quest(id))
 			if npc.is_empty():
-				b.text = "กลับไปส่ง"
-				b.disabled = true
+				# เปิดจากสมุดเควส: ส่งตรงนี้ไม่ได้ ให้เดินกลับไปหาผู้ให้เควสแทน
+				b.text = "เดินกลับไปส่ง"
+				b.pressed.connect(func(): guide_requested.emit(id))
+			else:
+				b.disabled = npc["id"] != q["giver"]
+				b.pressed.connect(func(): player.complete_quest(id))
 			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			h.add_child(b)
 		"active":
+			var col := VBoxContainer.new()
+			col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h.add_child(col)
+			var go := P.button("ไปล่าผี", P.MINT, 14)
+			go.pressed.connect(func(): guide_requested.emit(id))
+			col.add_child(go)
 			var b := P.button("ยกเลิก", P.PINK, 13)
 			b.pressed.connect(func(): player.abandon_quest(id))
-			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			h.add_child(b)
+			col.add_child(b)

@@ -28,6 +28,7 @@ var unread := {}
 
 
 func _ready() -> void:
+	add_to_group(P.UI_BLOCK)
 	add_theme_stylebox_override("panel", P.panel_style(14, Color(1, 0.97, 0.94, 0.78), Color(P.LAVENDER, 0.7)))
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)

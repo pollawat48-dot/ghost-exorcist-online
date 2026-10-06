@@ -271,6 +271,19 @@ static func button(text: String, fill: Color = PINK, font_size: int = 15) -> But
 	return b
 
 
+## กลุ่มของหน้าต่าง/ป๊อปอัป: จุดที่ถูกบังด้วยของในกลุ่มนี้ ปุ่มบนจอ (TouchButton/จอย) ด้านหลังจะไม่รับการกด
+const UI_BLOCK := "ui_block"
+
+
+## จุดบนจอนี้ถูกหน้าต่างที่เปิดอยู่บังไว้หรือไม่ (ไม่นับหน้าต่างที่ node อยู่ข้างในเอง)
+static func covered(node: Control, p: Vector2) -> bool:
+	for c in node.get_tree().get_nodes_in_group(UI_BLOCK):
+		var w := c as Control
+		if w != null and w.is_visible_in_tree() and not w.is_ancestor_of(node) and w.get_global_rect().has_point(p):
+			return true
+	return false
+
+
 static func label(text: String, font_size: int = 15, color: Color = TEXT) -> Label:
 	var l := Label.new()
 	l.text = text

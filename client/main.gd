@@ -22,6 +22,7 @@ const START_MAP := "khlong_village"
 const Npc = preload("res://client/npc.gd")
 const Portal = preload("res://client/portal.gd")
 const AutoPlay = preload("res://client/auto_play.gd")
+const QuestGuide = preload("res://client/quest_guide.gd")
 const GhostDB = preload("res://shared/data/ghosts.gd")
 const Quests = preload("res://shared/data/quests.gd")
 const Ambience = preload("res://client/ambience.gd")
@@ -74,6 +75,7 @@ var rocks: Node3D
 var props: Node3D
 var fader: Node
 var auto: RefCounted
+var guide: RefCounted  ## นำทางเควส (กดเควสแล้วเดินไปหาผี/กลับไปส่ง)
 var talk_target: Node3D = null  ## NPC ที่กำลังเดินไปคุย
 var portal_lock := 0.0  ## กันวาร์ปเด้งไปมาทันทีหลังเปลี่ยนแผนที่
 ## ตัวละครที่เลือกจากหน้าเมนู {"name", "look", "data", "guest": bool} (ว่าง = เล่นทดสอบแบบเดิม)
@@ -128,6 +130,7 @@ func _ready() -> void:
 	fader = OcclusionFader.new()
 	add_child(fader)
 	auto = AutoPlay.new(self)
+	guide = QuestGuide.new(self)
 
 	hud = Hud.new()
 	add_child(hud)
@@ -143,6 +146,7 @@ func _ready() -> void:
 	player.caught.connect(func(_id: String): hud.refresh_fishing())
 	hud.chat_sent.connect(_on_chat_sent)
 	hud.party_request.connect(_on_party_request)
+	hud.quest_clicked.connect(guide_quest)
 	hud.bind_net(net)
 	_bind_net()
 
@@ -242,6 +246,7 @@ func _process(delta: float) -> void:
 	player.stick = Vector2.ZERO if hud.typing() else _stick_world()
 	if player.stick != Vector2.ZERO:
 		auto.pause(1.5)
+		guide.stop()
 	tick(delta)
 
 
@@ -304,6 +309,15 @@ func do_action(name: String) -> void:
 				player.use_skill(name.substr(6))
 
 
+## กดเควสในรายการ: ยังไม่ครบ = เดินไปล่าผีเป้าหมาย, ครบแล้ว = เดินกลับไปส่งที่ NPC
+func guide_quest(id: String) -> void:
+	hud.close_windows()
+	var msg: String = guide.start(id)
+	if msg != "":
+		hud.add_log(msg)
+		Sound.play(self, "click")
+
+
 func toggle_auto() -> void:
 	auto.set_enabled(not auto.enabled)
 	hud.add_log("เปิดระบบออโต้: ตีผี ใช้สกิล เก็บของ และกินยาเอง" if auto.enabled else "ปิดระบบออโต้แล้ว")
@@ -314,6 +328,7 @@ func toggle_auto() -> void:
 func warp_to(map_id: String) -> bool:
 	if map_id == map.map_id or not player.pay_warp(map_id):
 		return false
+	guide.stop()
 	auto.set_enabled(false)
 	hud.refresh_auto()
 	load_map(map_id)
@@ -602,6 +617,7 @@ func nearest_ghost(radius: float) -> Node3D:
 
 func tick(delta: float) -> void:
 	auto.tick(delta)
+	guide.tick(delta)
 	player.tick(delta)
 	_tick_talk()
 	_tick_portals(delta)
@@ -620,6 +636,7 @@ func tick(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		auto.pause()
+		guide.stop()
 		var npc := npc_at_screen(event.position)
 		if npc != null:
 			talk_to(npc)

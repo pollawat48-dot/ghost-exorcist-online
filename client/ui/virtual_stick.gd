@@ -18,7 +18,7 @@ func _input(event: InputEvent) -> void:
 	var center := get_global_rect().get_center()
 	var radius := size.x * 0.5
 	if event is InputEventScreenTouch:
-		if event.pressed and _touch == -2 and event.position.distance_to(center) <= radius:
+		if event.pressed and _touch == -2 and _hit(event.position, center, radius):
 			_touch = event.index
 			_update(event.position - center)
 		elif not event.pressed and event.index == _touch:
@@ -27,15 +27,19 @@ func _input(event: InputEvent) -> void:
 		_update(event.position - center)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.device == InputEvent.DEVICE_ID_EMULATION:
-			if event.position.distance_to(center) <= radius:
+			if _hit(event.position, center, radius):
 				get_viewport().set_input_as_handled()
-		elif event.pressed and _touch == -2 and event.position.distance_to(center) <= radius:
+		elif event.pressed and _touch == -2 and _hit(event.position, center, radius):
 			_touch = -1
 			_update(event.position - center)
 		elif not event.pressed and _touch == -1:
 			_reset()
 	elif event is InputEventMouseMotion and _touch == -1 and event.device != InputEvent.DEVICE_ID_EMULATION:
 		_update(event.position - center)
+
+
+func _hit(p: Vector2, center: Vector2, radius: float) -> bool:
+	return p.distance_to(center) <= radius and not P.covered(self, p)
 
 
 func _update(d: Vector2) -> void:

@@ -30,6 +30,7 @@ const Sound = preload("res://client/audio/sound.gd")
 
 signal action(name: String)  ## "attack", "potion_hp", "potion_sp", "auto", "fish", "logout", "skill:<id>", "warp:<map>"
 signal chat_sent(ch: String, text: String, to: String)
+signal quest_clicked(id: String)  ## กดเควสในรายการ: นำทางไปล่าผี/กลับไปส่ง
 signal party_request(what: String)  ## invite:<ชื่อ> / kick:<ชื่อ> / leave / accept:<ชื่อ> / decline:<ชื่อ>
 
 const MAX_LOG_LINES := 5
@@ -64,6 +65,8 @@ var auto_play: RefCounted
 var coin_label: Label
 var quest_panel: PanelContainer
 var quest_label: Label
+var quest_rows: VBoxContainer
+var _quest_rows_key := ""
 var attack_button: Control
 var lines: Array[String] = []
 var chat: PanelContainer
@@ -182,10 +185,16 @@ func _ready() -> void:
 	quest_panel = PanelContainer.new()
 	quest_panel.add_theme_stylebox_override("panel", P.panel_style(14, Color(0.94, 1.0, 0.96, 0.78), Color(P.MINT.darkened(0.2), 0.8)))
 	quest_panel.position = Vector2(14, 418)
-	quest_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(quest_panel)
-	quest_label = _label(quest_panel, "", 13, P.TEXT)
+	quest_panel.add_to_group(P.UI_BLOCK)
+	var quest_box := VBoxContainer.new()
+	quest_box.add_theme_constant_override("separation", 0)
+	quest_panel.add_child(quest_box)
+	quest_label = _label(quest_box, "เควส · กดเพื่อเดินไปเอง", 13, P.TEXT)
 	quest_label.custom_minimum_size = Vector2(250, 0)
+	quest_rows = VBoxContainer.new()
+	quest_rows.add_theme_constant_override("separation", 0)
+	quest_box.add_child(quest_rows)
 	quest_panel.visible = false
 
 	# ---- จอย ----
@@ -297,6 +306,8 @@ func _ready() -> void:
 	windows["auto"].toggle_requested.connect(func(): action.emit("auto"))
 	windows["warp"].warp_requested.connect(func(id: String): action.emit("warp:" + id))
 	windows["smith"].open_refine_requested.connect(func(): open_refine(""))
+	for key in ["quest", "questlog"]:
+		windows[key].guide_requested.connect(func(id: String): quest_clicked.emit(id))
 	windows["party"].request.connect(func(what: String): party_request.emit(what))
 	windows["settings"].logout_requested.connect(func(): action.emit("logout"))
 
@@ -575,13 +586,45 @@ func _refresh_buffs() -> void:
 
 
 func _refresh_quests() -> void:
-	var rows: Array[String] = []
+	var rows := []
 	for id in player.active_quests():
-		var mark := "★ " if player.quest_status(id) == "ready" else "- "
-		rows.append(mark + Quests.goal_text(player.state, player.inventory, id))
+		var ready: bool = player.quest_status(id) == "ready"
+		var text := ("★ " if ready else "▸ ") + Quests.goal_text(player.state, player.inventory, id) + ("  (กลับไปส่ง)" if ready else "")
+		rows.append([id, text, ready])
+	rows = rows.slice(0, 4)
 	quest_panel.visible = not rows.is_empty()
-	quest_label.text = "เควส\n" + "\n".join(rows.slice(0, 4))
+	var key := str(rows)
+	if key == _quest_rows_key:
+		return
+	_quest_rows_key = key
+	for c in quest_rows.get_children():
+		quest_rows.remove_child(c)
+		c.queue_free()
+	for r in rows:
+		quest_rows.add_child(_quest_row(r[0], r[1], r[2]))
 	quest_panel.reset_size()
+
+
+## แถวเควสบนจอ กดแล้วเดินไปหาผีเป้าหมาย (หรือกลับไปส่งถ้าครบแล้ว)
+func _quest_row(id: String, text: String, ready: bool) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.add_theme_font_size_override("font_size", 13)
+	var color: Color = P.PINK_DEEP if ready else P.TEXT
+	for k in ["font_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(k, color)
+	b.add_theme_color_override("font_hover_color", color.lightened(0.25))
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Color(1, 1, 1, 0.55)
+	hover.set_corner_radius_all(8)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", hover)
+	b.pressed.connect(func(): quest_clicked.emit(id))
+	return b
 
 
 static func _commas(n: int) -> String:
@@ -711,6 +754,7 @@ func _popup(parent: Node, bg: Color, border: Color) -> PanelContainer:
 	box.add_theme_constant_override("separation", 8)
 	panel.add_child(box)
 	panel.visible = false
+	panel.add_to_group(P.UI_BLOCK)
 	parent.add_child(panel)
 	return panel
 

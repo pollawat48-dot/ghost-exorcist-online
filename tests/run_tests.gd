@@ -39,6 +39,8 @@ func _run_all() -> void:
 	await _test_expansion()
 	print("== ตกปลา พระเครื่อง บัฟปาร์ตี้ ==")
 	await _test_fishing_buffs()
+	print("== กดเควสเดินเอง / หน้าต่างบังปุ่ม ==")
+	await _test_quest_guide()
 	print("== ออนไลน์: ผู้เล่นอื่น แชท ปาร์ตี้แชร์ EXP บัฟ ==")
 	await _test_online_game()
 	print("== หน้าเมนู: Guest ออฟไลน์ สร้างตัวละคร เข้าเกม บันทึก ==")
@@ -343,7 +345,7 @@ func _test_world() -> void:
 		main.tick(STEP)
 		time += STEP
 	check(player.quest_status("q_krasue") == "ready", "ปราบกระสือครบ 8 ตัว เควสพร้อมส่ง (%d วินาที)" % time)
-	check(hud.quest_panel.visible and hud.quest_label.text.contains("8/8"), "รายการเควสบนจอแสดงความคืบหน้า")
+	check(hud.quest_panel.visible and hud.quest_rows.get_child_count() > 0 and hud.quest_rows.get_child(0).text.contains("8/8"), "รายการเควสบนจอแสดงความคืบหน้า")
 	luang_ta._process(0.0)
 	main._refresh_npc_markers()
 	check(luang_ta.marker_state == "ready", "หลวงตาขึ้นเครื่องหมาย ? ให้กลับไปส่ง")
@@ -663,6 +665,90 @@ func _test_expansion() -> void:
 	await process_frame
 	check(main.map.map_id == "krung_kao", "ออกจากถ้ำกลับกรุงเก่า")
 	main.free()
+
+
+func _test_quest_guide() -> void:
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	var guide: RefCounted = main.guide
+	check(guide.next_hop("lam_than", "pa_cha") == "khlong_village" and guide.next_hop("khlong_village", "krung_kao") == "pa_cha", "หาเส้นทางข้ามแผนที่ผ่านประตูวาร์ปได้")
+	check(guide.targets("q_thread") == ["krasue_noi"] and guide.targets("q_krasue") == ["krasue_noi"], "เควสหาของรู้ว่าต้องตีผีตัวไหน")
+
+	# ยังทำไม่เสร็จ: อยู่ลำธาร กดเควสแล้วเดินข้ามแผนที่ไปตีกระสือเองจนครบ
+	player.accept_quest("q_krasue")
+	player.add_item("herb_potion", 40)
+	main.load_map("lam_than")
+	hud.quest_rows.get_child(0).pressed.emit()
+	check(guide.active() and guide.mode == "hunt" and guide.goal_map == "khlong_village", "กดเควสในรายการ: เริ่มนำทางไปหาผี")
+	var time := 0.0
+	while time < 400.0 and player.quest_status("q_krasue") != "ready":
+		if player.hp < player.stats["max_hp"] * 0.4:
+			player.use_potion("hp")
+		main.tick(0.1)
+		time += 0.1
+	check(main.map.map_id == "khlong_village" and player.quest_status("q_krasue") == "ready", "เดินข้ามแผนที่ไปตีกระสือเองจนเควสครบ (%d วินาที)" % time)
+	main.tick(0.1)
+	check(not guide.active(), "เควสครบแล้วหยุดนำทาง")
+
+	# ทำเสร็จแล้ว: กดเควสอีกครั้งเดินกลับไปหาหลวงตาแล้วเปิดหน้าส่งเควส
+	hud.quest_rows.get_child(0).pressed.emit()
+	check(guide.mode == "return" or main.talk_target != null, "กดเควสที่ครบแล้ว: เดินกลับไปส่ง")
+	time = 0.0
+	while time < 120.0 and not hud.windows["quest"].visible:
+		main.tick(0.1)
+		time += 0.1
+	check(hud.windows["quest"].visible and hud.windows["quest"].npc.get("id", "") == "luang_ta", "เดินถึงหลวงตาแล้วเปิดหน้าส่งเควส (%d วินาที)" % time)
+	player.complete_quest("q_krasue")
+	hud.close_windows()
+
+	# ส่งจากต่างแผนที่: อยู่ป่าช้า เควสหาของครบ กดแล้วเดินกลับหมู่บ้านไปส่ง
+	player.accept_quest("q_shard")
+	player.add_item("spirit_shard", 10)
+	main.load_map("pa_cha")
+	main.guide_quest("q_shard")
+	time = 0.0
+	while time < 300.0 and not hud.windows["quest"].visible:
+		player.hp = player.stats["max_hp"]
+		main.tick(0.1)
+		time += 0.1
+	check(main.map.map_id == "khlong_village" and hud.windows["quest"].visible, "ส่งเควสจากต่างแผนที่: เดินผ่านประตูกลับไปหาหลวงตา (%d วินาที)" % time)
+	hud.close_windows()
+
+	# บังคับเองแล้วหยุดนำทาง
+	player.accept_quest("q_takiang")
+	main.guide_quest("q_takiang")
+	check(guide.active(), "เควสปราบผีตะเกียง: เริ่มนำทาง")
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = Vector2(640, 500)
+	main._unhandled_input(click)
+	check(not guide.active(), "คลิกเดินเองแล้วยกเลิกการนำทาง")
+
+	# หน้าต่างบังปุ่มบนจอ: กดที่หน้าต่างต้องไม่ทะลุไปกดปุ่มโจมตีข้างหลัง
+	var btn: Control = hud.attack_button
+	var hits := [0]
+	btn.pressed.connect(func(): hits[0] += 1)
+	var at := btn.get_global_rect().get_center()
+	var w: Control = hud.windows["bag"]
+	hud.toggle_window("bag")
+	w.global_position = at - w.size / 2.0
+	click.position = at
+	btn._input(click)
+	check(hits[0] == 0, "กดบนหน้าต่าง ปุ่มโจมตีที่อยู่ข้างหลังไม่ทำงาน")
+	hud.close_windows()
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	btn._input(up)
+	btn._input(click)
+	check(hits[0] == 1, "ปิดหน้าต่างแล้วกดปุ่มโจมตีได้ตามปกติ")
+	btn._input(up)
+	main.queue_free()
+	await process_frame
 
 
 func _test_fishing_buffs() -> void:

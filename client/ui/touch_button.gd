@@ -59,6 +59,8 @@ func _release() -> void:
 
 
 func _hit(p: Vector2) -> bool:
+	if P.covered(self, p):
+		return false
 	var r := get_global_rect()
 	if round:
 		return p.distance_to(r.get_center()) <= r.size.x * 0.5
