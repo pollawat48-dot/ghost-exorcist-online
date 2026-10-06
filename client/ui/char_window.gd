@@ -83,7 +83,7 @@ func _build() -> void:
 		r.add_child(P.label("%s:" % ItemDB.SLOT_NAMES[slot], 14))
 		if st["equipment"].has(slot):
 			var id: String = st["equipment"][slot]
-			var l := P.label(ItemDB.ITEMS[id]["name"], 14, ItemDB.color_of(id).darkened(0.25))
+			var l := P.label(ItemDB.display_name(id), 14, ItemDB.color_of(id).darkened(0.25))
 			l.tooltip_text = ItemDB.bonus_text(id)
 			l.mouse_filter = Control.MOUSE_FILTER_PASS
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL

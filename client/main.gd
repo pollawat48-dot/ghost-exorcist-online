@@ -1,12 +1,20 @@
 extends Node3D
-## M1: ต้นแบบเล่นคนเดียว (3D) — ประเทศไทย: หมู่บ้านริมคลอง → ป่าช้าวัดร้าง
+## M1: ต้นแบบเล่นคนเดียว (3D) — ประเทศไทย: หมู่บ้าน → ป่าช้า → กรุงเก่า → ดอย → บึงนาคา → ยมโลก
+## บางแผนที่ถูกสุ่มให้มีถ้ำ (เก็บใน state["caves"]) เข้าไปเจอผีพิเศษและขุดแร่ได้
 ## ทุกอย่างขับด้วย tick() เพื่อให้ย้ายไปรันบน zone server และทดสอบแบบ headless ได้
 ## ตรรกะเกมอยู่บนพื้นราบ 2D (pos) ส่วนสิ่งที่เห็นเป็น 3D
 
 const MAPS := {
 	"khlong_village": preload("res://maps/thailand/khlong_village.gd"),
 	"pa_cha": preload("res://maps/thailand/pa_cha.gd"),
+	"krung_kao": preload("res://maps/thailand/krung_kao.gd"),
+	"doi_phi": preload("res://maps/thailand/doi_phi.gd"),
+	"nong_naga": preload("res://maps/thailand/nong_naga.gd"),
+	"yom_lok": preload("res://maps/thailand/yom_lok.gd"),
 }
+const CaveMap = preload("res://maps/cave.gd")
+const OreRock = preload("res://client/ore_rock.gd")
+const World = preload("res://shared/data/world.gd")
 const START_MAP := "khlong_village"
 const Npc = preload("res://client/npc.gd")
 const Portal = preload("res://client/portal.gd")
@@ -48,6 +56,7 @@ var boss_timer := 0.0
 var boss_place := ""
 var npcs: Node3D
 var portals: Node3D
+var rocks: Node3D
 var props: Node3D
 var fader: Node
 var auto: RefCounted
@@ -72,6 +81,9 @@ func _ready() -> void:
 	portals = Node3D.new()
 	portals.name = "Portals"
 	world.add_child(portals)
+	rocks = Node3D.new()
+	rocks.name = "OreRocks"
+	world.add_child(rocks)
 
 	player = Player.new()
 	player.ghosts = ghosts
@@ -95,7 +107,13 @@ func _ready() -> void:
 	hud.action.connect(do_action)
 	ambience.phase_changed.connect(hud.set_phase)
 	player.changed.connect(_refresh_npc_markers)
+	player.open_refine.connect(hud.open_refine)
 
+	# โลกใหม่: สุ่มว่าแผนที่ไหนมีถ้ำ (ทุกโลกไม่เหมือนกัน)
+	if player.state["caves"].is_empty():
+		var cave_rng := RandomNumberGenerator.new()
+		cave_rng.randomize()
+		player.state["caves"] = World.pick_caves(cave_rng)
 	load_map(START_MAP)
 	hud.add_log("ยินดีต้อนรับสู่%s! คุยกับหลวงตาเพื่อรับเควส ซื้อยาที่ร้านยาย แล้วข้ามสะพานไปล่าผี" % map.map_name)
 
@@ -105,14 +123,27 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 	if map != null:
 		map.queue_free()
 		props.queue_free()
-		for root in [ghosts, drops, npcs, portals]:
+		for root in [ghosts, drops, npcs, portals, rocks]:
 			for c in root.get_children():
 				root.remove_child(c)
 				c.queue_free()
 	respawn_queue.clear()
 	boss = null
 	talk_target = null
-	map = MAPS[map_id].new()
+	if World.is_cave(map_id):
+		var parent := World.cave_parent(map_id)
+		var probe: Node3D = MAPS[parent].new()
+		var parent_spot: Vector2 = probe.cave_spot
+		probe.free()
+		map = CaveMap.new()
+		map.configure(parent, parent_spot + Vector2(0, -90))
+	else:
+		map = MAPS[map_id].new()
+		player.state["visited"][map_id] = true
+		# แผนที่ที่ถูกสุ่มให้มีถ้ำ: เพิ่มปากถ้ำเป็นประตูอีกบาน
+		if map_id in player.state["caves"] and map.cave_spot != Vector2.INF:
+			map.portals.append({"pos": map.cave_spot, "to": World.CAVE_PREFIX + map_id, "to_pos": CaveMap.ENTRANCE + Vector2(130, 0),
+				"name": World.map_name(World.CAVE_PREFIX + map_id), "style": "cave"})
 	add_child(map)
 	props = map.build_props()
 	world.add_child(props)
@@ -136,12 +167,19 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 		var w := Portal.new()
 		w.setup(entry_portal)
 		portals.add_child(w)
+	for p in map.ore_rocks:
+		var r := OreRock.new()
+		r.setup(p, map.cave_tier, rocks.get_child_count())
+		rocks.add_child(r)
 	boss_timer = rng.randf_range(BOSS_FIRST_DELAY.x, BOSS_FIRST_DELAY.y)
 	for i in map.spawns.size():
 		for n in map.spawns[i]["count"]:
 			_spawn_ghost(i)
 	portal_lock = 1.0
 	hud.set_location(map.country, map.map_name)
+	hud.set_map_id(map.map_id)
+	if World.is_cave(map.map_id):
+		hud.add_log("ในถ้ำมืดมีผีพิเศษ และมีหินแร่ให้ขุด (คลิกที่หิน) แร่ที่ได้เอาไปหลอมเป็นหินตี+ ได้")
 	hud.setup_minimap(map, npcs, portals)
 	hud.close_windows()
 	_refresh_npc_markers()
@@ -184,6 +222,11 @@ func do_action(name: String) -> void:
 			if target != null:
 				auto.pause()
 				player.command_attack(target)
+				return
+			var rock := nearest_rock(160.0)
+			if rock != null:
+				auto.pause()
+				player.command_mine(rock)
 			else:
 				hud.add_log("ไม่มีผีอยู่ใกล้ๆ")
 		"holy_water":
@@ -195,7 +238,9 @@ func do_action(name: String) -> void:
 		"auto":
 			toggle_auto()
 		_:
-			if name.begins_with("skill:"):
+			if name.begins_with("warp:"):
+				warp_to(name.substr(5))
+			elif name.begins_with("skill:"):
 				player.use_skill(name.substr(6))
 
 
@@ -203,6 +248,45 @@ func toggle_auto() -> void:
 	auto.set_enabled(not auto.enabled)
 	hud.add_log("เปิดระบบออโต้: ตีผี ใช้สกิล เก็บของ และกินยาเอง" if auto.enabled else "ปิดระบบออโต้แล้ว")
 	hud.refresh_auto()
+
+
+## ร่างทรงนำทาง: จ่ายค่าวาร์ปแล้วไปจุดเริ่มของแผนที่นั้น
+func warp_to(map_id: String) -> bool:
+	if map_id == map.map_id or not player.pay_warp(map_id):
+		return false
+	auto.set_enabled(false)
+	hud.refresh_auto()
+	load_map(map_id)
+	hud.add_log("วาร์ปมาถึง%s" % map.map_name)
+	return true
+
+
+func nearest_rock(radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_dist := radius
+	for r in rocks.get_children():
+		var d: float = player.pos.distance_to(r.pos)
+		if r.has_ore() and d < best_dist:
+			best = r
+			best_dist = d
+	return best
+
+
+func rock_at_screen(screen: Vector2) -> Node3D:
+	var cam: Camera3D = camera_rig.camera
+	var best: Node3D = null
+	var best_dist := CLICK_RADIUS_SCREEN
+	for r in rocks.get_children():
+		if not r.has_ore():
+			continue
+		var wp: Vector3 = r.global_position + Vector3(0, 0.4, 0)
+		if cam.is_position_behind(wp):
+			continue
+		var d := screen.distance_to(cam.unproject_position(wp))
+		if d < best_dist:
+			best = r
+			best_dist = d
+	return best
 
 
 func nearest_npc(radius: float) -> Node3D:
@@ -232,8 +316,8 @@ func _refresh_npc_markers() -> void:
 	if npcs == null:
 		return
 	for n in npcs.get_children():
-		if n.role() == "shop":
-			n.set_marker("shop")
+		if n.role() in ["shop", "warp", "smith"]:
+			n.set_marker(n.role())
 			continue
 		var mark := "ready" if n.role() == "class" and player.can_change_class() else ""
 		for id in Quests.for_giver(n.npc_id()):
@@ -273,6 +357,8 @@ func tick(delta: float) -> void:
 			g.tick(delta)
 	_tick_respawns(delta)
 	_tick_boss(delta)
+	for r in rocks.get_children():
+		r.tick(delta)
 	_tick_pickups()
 
 
@@ -285,8 +371,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		talk_target = null
 		var ghost := ghost_at_screen(event.position)
+		var rock := rock_at_screen(event.position)
 		if ghost != null:
 			player.command_attack(ghost)
+		elif rock != null:
+			player.command_mine(rock)
 		else:
 			player.command_move(camera_rig.ground_point(event.position))
 	elif event is InputEventKey and event.pressed and not event.echo:
@@ -412,6 +501,8 @@ func _drop(item_id: String, at: Vector2, spread: float) -> void:
 
 ## นับถอยหลังแล้วเรียกบอสประจำถิ่น
 func _tick_boss(delta: float) -> void:
+	if map.boss_id == "":
+		return
 	if boss != null:
 		if not is_instance_valid(boss) or not boss.alive:
 			boss = null
@@ -424,6 +515,8 @@ func _tick_boss(delta: float) -> void:
 func spawn_boss(place_index: int = -1) -> Node3D:
 	if boss != null and is_instance_valid(boss) and boss.alive:
 		return boss
+	if map.boss_spawns.is_empty():
+		return null
 	if place_index < 0:
 		place_index = rng.randi() % map.boss_spawns.size()
 	var place: Dictionary = map.boss_spawns[place_index]

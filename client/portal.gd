@@ -2,6 +2,7 @@ extends Node3D
 ## ประตูวาร์ปแบบ RO: วงแหวนเรืองแสงหมุนบนพื้น มีดวงไฟลอยวน เดินเข้าไปเพื่อย้ายแผนที่
 
 const K = preload("res://maps/props/mesh_kit.gd")
+const Prop = preload("res://maps/props/thai_prop.gd")
 
 const RADIUS := 34.0  ## ระยะที่ถือว่าเหยียบประตู (หน่วยเกม)
 
@@ -19,6 +20,16 @@ func setup(entry: Dictionary) -> void:
 
 func _ready() -> void:
 	position = K.to3d(pos)
+	if data.get("style", "") == "cave":
+		# ปากถ้ำ: ซุ้มหินมีดวงไฟแร่ เดินเข้าไปเพื่อลงถ้ำ
+		var mouth := Prop.new()
+		mouth.kind = "cave_mouth"
+		mouth.position = Vector3(0, 0, -0.6)
+		add_child(mouth)
+		spin = Node3D.new()
+		add_child(spin)
+		K.label(self, "เข้า" + data["name"], Vector3(0, 3.6, 0), Color(1.0, 0.9, 0.65), 38)
+		return
 	var glow := Color(0.62, 0.85, 1.0)
 	spin = Node3D.new()
 	add_child(spin)

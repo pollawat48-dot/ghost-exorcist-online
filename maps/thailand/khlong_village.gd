@@ -64,6 +64,13 @@ func _init() -> void:
 			"look": {"robe": Color(1.0, 0.66, 0.3), "sash": Color(0.95, 0.55, 0.25), "hat": "bald"}},
 		{"id": "khru_yai", "name": "ครูใหญ่สำนัก (เปลี่ยนอาชีพ)", "role": "class", "pos": Vector2(760, 1045),
 			"look": {"robe": Color(0.55, 0.5, 0.82), "sash": Color(1.0, 0.82, 0.35), "hat": "topknot"}},
+		{"id": "village_warp", "name": "ร่างทรงนำทาง (วาร์ป)", "role": "warp", "pos": Vector2(940, 925),
+			"look": {"robe": Color(0.98, 0.95, 1.0), "sash": Color(0.55, 0.8, 1.0), "hat": "topknot"}},
+		{"id": "lung_lek", "name": "ลุงเหล็ก ร้านอาวุธ", "role": "shop", "sign": "ร้านอาวุธ", "pos": Vector2(940, 1075),
+			"look": {"robe": Color(0.72, 0.62, 0.55), "sash": Color(0.95, 0.6, 0.4), "hat": "farmer"},
+			"stock": ["maipai_staff", "suea_yant", "pha_khat_hua", "saisin", "mitmo", "khan_thanu", "khamphi_yant", "suea_kraphan", "mongkhon", "takrut", "phra_khrueang"]},
+		{"id": "chang_lom", "name": "ช่างหลอมแร่", "role": "smith", "pos": Vector2(1060, 925),
+			"look": {"robe": Color(0.55, 0.52, 0.6), "sash": Color(1.0, 0.6, 0.35), "hat": "headband"}},
 	]
 	portals = [
 		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 12+)"},

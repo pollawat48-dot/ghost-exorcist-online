@@ -2,6 +2,8 @@ extends RefCounted
 ## เควสจาก NPC ใช้ร่วมกันทั้ง client และ zone server
 ## type: kill = ปราบผีให้ครบ, collect = หาของมาส่ง (ส่งแล้วของถูกหักออกจากกระเป๋า)
 ## giver = id ของ NPC, requires = ต้องทำเควสนี้จบก่อน, repeatable = รับซ้ำได้หลังส่ง
+## เควสแผนที่ 3 ขึ้นไปไม่เขียนรางวัลเอง: ใส่ prize = "coins" (เงิน) / "potion" (ยา) / "gear" (ของสวมใส่)
+## แล้ว reward() คำนวณจำนวนตามความเก่งของผีเป้าหมาย (เควสหาของใช้ source = ผีที่ดรอปของนั้น)
 ## สถานะในตัวละคร: state["quests"] = {id: จำนวนที่ปราบแล้ว}, state["quests_done"] = {id: จำนวนครั้งที่ส่ง}
 
 const GhostDB = preload("res://shared/data/ghosts.gd")
@@ -95,6 +97,130 @@ const QUESTS := {
 		"desc": "เจ้าแห่งเปรตทั้งหลายตื่นขึ้นแล้ว ใครปราบได้จะได้รางวัลงาม",
 		"reward": {"exp": 20000, "coins": 5000, "items": {"nam_mon_yai": 5}},
 	},
+	# ---- พระธุดงค์ (กรุงเก่าร้าง) ----
+	"q_tai_hong": {
+		"giver": "phra_thudong", "name": "วิญญาณตายโหง", "type": "kill", "target": "phi_tai_hong", "count": 15,
+		"min_level": 30, "requires": "", "repeatable": false, "prize": "potion",
+		"desc": "ผีตายโหงยังวนเวียนอยู่ตามซากวัด ช่วยส่งพวกเขาไปสู่สุคติ 15 ดวง",
+	},
+	"q_prae": {
+		"giver": "phra_thudong", "name": "ผ้าแพรถวายวัด", "type": "collect", "target": "pha_prae", "count": 12, "source": "phi_tai_hong",
+		"min_level": 30, "requires": "q_tai_hong", "repeatable": true, "prize": "coins",
+		"desc": "หลวงพ่อจะนำผ้าแพรไปห่มองค์พระ ขอ 12 ผืน",
+	},
+	"q_hua_khat": {
+		"giver": "phra_thudong", "name": "ผีหัวขาดหาหัว", "type": "kill", "target": "phi_hua_khat", "count": 15,
+		"min_level": 38, "requires": "q_tai_hong", "repeatable": false, "prize": "gear",
+		"desc": "ผีหัวขาดเดินถือหัวไล่หลอกคนเดินทาง ปราบ 15 ตน",
+	},
+	"q_thahan": {
+		"giver": "phra_thudong", "name": "กองทัพผีกรุงเก่า", "type": "kill", "target": "thahan_phi", "count": 15,
+		"min_level": 46, "requires": "q_hua_khat", "repeatable": false, "prize": "coins",
+		"desc": "ทหารผียังเฝ้ากำแพงเมืองไม่ยอมไปไหน ปลดปล่อยพวกเขา 15 นาย",
+	},
+	"q_lek_krung": {
+		"giver": "phra_thudong", "name": "เศษเกราะในกรุ", "type": "collect", "target": "lek_krung", "count": 10, "source": "thahan_phi",
+		"min_level": 46, "requires": "q_thahan", "repeatable": true, "prize": "potion",
+		"desc": "เศษเกราะเก่าใช้ทำพิธีบังสุกุล นำมา 10 ชิ้น",
+	},
+	"q_khun_suek": {
+		"giver": "phra_thudong", "name": "ขุนศึกผีกรุงเก่า", "type": "kill", "target": "khun_suek", "count": 1,
+		"min_level": 60, "requires": "q_thahan", "repeatable": true, "prize": "gear",
+		"desc": "ขุนศึกผีออกนำทัพผีแล้ว ปราบให้ได้แล้วกลับมารับรางวัล",
+	},
+	# ---- ปู่จันทร์หมอผีดอย (ดอยผีปันน้ำ) ----
+	"q_ka": {
+		"giver": "pu_chan", "name": "ไล่ผีกะ", "type": "kill", "target": "phi_ka", "count": 15,
+		"min_level": 60, "requires": "", "repeatable": false, "prize": "potion",
+		"desc": "ผีกะเข้าสิงหม้อดินชาวบ้าน ปราบ 15 ตัว",
+	},
+	"q_mo_din": {
+		"giver": "pu_chan", "name": "หม้อดินผีกะ", "type": "collect", "target": "mo_din", "count": 12, "source": "phi_ka",
+		"min_level": 60, "requires": "q_ka", "repeatable": true, "prize": "coins",
+		"desc": "ปู่จะเอาหม้อดินไปฝังผนึก ขอ 12 ใบ",
+	},
+	"q_pong": {
+		"giver": "pu_chan", "name": "ดับไฟผีโป่ง", "type": "kill", "target": "phi_pong", "count": 15,
+		"min_level": 70, "requires": "q_ka", "repeatable": false, "prize": "gear",
+		"desc": "ผีโป่งเรืองแสงล่อพรานเข้าป่าลึก ดับมัน 15 ดวง",
+	},
+	"q_nang_mai": {
+		"giver": "pu_chan", "name": "นางไม้โกรธ", "type": "kill", "target": "nang_mai", "count": 15,
+		"min_level": 80, "requires": "q_pong", "repeatable": false, "prize": "coins",
+		"desc": "นางไม้ตะเคียนโกรธคนตัดไม้ สงบนางลง 15 ตน",
+	},
+	"q_bai": {
+		"giver": "pu_chan", "name": "ใบตะเคียนทอง", "type": "collect", "target": "bai_takhian", "count": 10, "source": "nang_mai",
+		"min_level": 80, "requires": "q_nang_mai", "repeatable": true, "prize": "potion",
+		"desc": "ใบตะเคียนทองใช้ทำยาวิเศษ นำมา 10 ใบ",
+	},
+	"q_phrai_boss": {
+		"giver": "pu_chan", "name": "พญาพรายเจ้าป่า", "type": "kill", "target": "phraya_phrai", "count": 1,
+		"min_level": 90, "requires": "q_nang_mai", "repeatable": true, "prize": "gear",
+		"desc": "เจ้าป่าตื่นแล้ว ใครปราบได้ปู่มีของดีให้",
+	},
+	# ---- ยายเฝ้าบึง (บึงนาคาบาดาล) ----
+	"q_phrai_nam": {
+		"giver": "yai_bueng", "name": "พรายน้ำดึงขา", "type": "kill", "target": "phrai_nam", "count": 15,
+		"min_level": 94, "requires": "", "repeatable": false, "prize": "potion",
+		"desc": "ผีพรายน้ำดึงขาคนพายเรือ ปราบ 15 ตน",
+	},
+	"q_sarai": {
+		"giver": "yai_bueng", "name": "สาหร่ายพราย", "type": "collect", "target": "sarai_phrai", "count": 12, "source": "phrai_nam",
+		"min_level": 94, "requires": "q_phrai_nam", "repeatable": true, "prize": "coins",
+		"desc": "สาหร่ายพรายใช้ทำน้ำมนต์ ขอ 12 กำ",
+	},
+	"q_naga": {
+		"giver": "yai_bueng", "name": "ผีนาคาเลื้อยขึ้นฝั่ง", "type": "kill", "target": "phi_naga", "count": 15,
+		"min_level": 105, "requires": "q_phrai_nam", "repeatable": false, "prize": "gear",
+		"desc": "ผีนาคาเลื้อยขึ้นมาไล่ฉกคน ปราบ 15 ตัว",
+	},
+	"q_kong_koi": {
+		"giver": "yai_bueng", "name": "กองกอยกระโดดตัวเดียว", "type": "kill", "target": "kong_koi", "count": 15,
+		"min_level": 118, "requires": "q_naga", "repeatable": false, "prize": "coins",
+		"desc": "ผีกองกอยขาเดียวกระโดดไล่กินปลาในบึง ปราบ 15 ตัว",
+	},
+	"q_klet": {
+		"giver": "yai_bueng", "name": "เกล็ดนาคศักดิ์สิทธิ์", "type": "collect", "target": "klet_nak", "count": 10, "source": "phi_naga",
+		"min_level": 118, "requires": "q_kong_koi", "repeatable": true, "prize": "potion",
+		"desc": "ยายจะเอาเกล็ดนาคไปทำเครื่องราง นำมา 10 เกล็ด",
+	},
+	"q_nak_boss": {
+		"giver": "yai_bueng", "name": "พญานาคทมิฬ", "type": "kill", "target": "phaya_nak", "count": 1,
+		"min_level": 125, "requires": "q_kong_koi", "repeatable": true, "prize": "gear",
+		"desc": "พญานาคทมิฬโผล่จากบาดาล ปราบให้ได้",
+	},
+	# ---- พระมาลัย (ยมโลก) ----
+	"q_asura": {
+		"giver": "phra_malai", "name": "อสุรกายคลั่ง", "type": "kill", "target": "asurakai", "count": 15,
+		"min_level": 128, "requires": "", "repeatable": false, "prize": "potion",
+		"desc": "อสุรกายหนีจากขุมนรกขึ้นมา ปราบ 15 ตน",
+	},
+	"q_khiao": {
+		"giver": "phra_malai", "name": "เขี้ยวอสุรกาย", "type": "collect", "target": "khiao_asura", "count": 12, "source": "asurakai",
+		"min_level": 128, "requires": "q_asura", "repeatable": true, "prize": "coins",
+		"desc": "นำเขี้ยวอสุรกายมาทำพิธีผนึก 12 เขี้ยว",
+	},
+	"q_yom": {
+		"giver": "phra_malai", "name": "ยมทูตหลงทาง", "type": "kill", "target": "yomathut", "count": 15,
+		"min_level": 136, "requires": "q_asura", "repeatable": false, "prize": "gear",
+		"desc": "ยมทูตจับวิญญาณผิดตัว ช่วยปราบ 15 ตน",
+	},
+	"q_awe": {
+		"giver": "phra_malai", "name": "เปรตอเวจี", "type": "kill", "target": "pret_awe", "count": 15,
+		"min_level": 144, "requires": "q_yom", "repeatable": false, "prize": "coins",
+		"desc": "เปรตอเวจีร้องหิวทั้งคืน ส่งพวกเขาไปสู่สุคติ 15 ตน",
+	},
+	"q_fai": {
+		"giver": "phra_malai", "name": "ไฟอเวจี", "type": "collect", "target": "fai_awe", "count": 10, "source": "pret_awe",
+		"min_level": 144, "requires": "q_awe", "repeatable": true, "prize": "potion",
+		"desc": "ไฟอเวจีใช้จุดตะเกียงส่งวิญญาณ นำมา 10 ดวง",
+	},
+	"q_matchu": {
+		"giver": "phra_malai", "name": "พญามัจจุราช", "type": "kill", "target": "matchurat", "count": 1,
+		"min_level": 145, "requires": "q_awe", "repeatable": true, "prize": "gear",
+		"desc": "บททดสอบสุดท้ายของผู้ปราบผี ปราบพญามัจจุราช",
+	},
 }
 
 
@@ -141,8 +267,63 @@ static func goal_text(state: Dictionary, inventory: Dictionary, id: String) -> S
 	return "%s%s %d/%d" % [verb, target_name(id), progress(state, inventory, id), q["count"]]
 
 
-static func reward_text(id: String) -> String:
-	var r: Dictionary = QUESTS[id]["reward"]
+const PRIZE_NAMES := {"coins": "เงิน", "potion": "ยา", "gear": "ของสวมใส่"}
+const RARITY_RANK := {"common": 0, "rare": 1, "epic": 2, "legendary": 3}
+
+
+## รางวัลของเควส (line = สายของผู้เล่น ใช้เลือกของสวมใส่ที่ใช้ได้)
+## เควสที่มี prize: EXP/เงิน/จำนวนยา คิดจาก EXP และเหรียญของผีเป้าหมาย x จำนวน ยิ่งผีเก่งยิ่งได้มาก
+static func reward(id: String, line: String = "any") -> Dictionary:
+	var q: Dictionary = QUESTS[id]
+	if q.has("reward"):
+		return q["reward"]
+	var src: String = q["target"] if q["type"] == "kill" else q["source"]
+	var g: Dictionary = GhostDB.GHOSTS[src]
+	var boss: bool = g.get("boss", false)
+	var n: int = q["count"]
+	var lv: int = g["level"]
+	var exp := int(g["exp"] * n * (0.6 if boss else (1.2 if q["type"] == "kill" else 0.9)))
+	var coins := int(g["coins"] * n * (0.5 if boss else 2.0))
+	var items := {}
+	match q["prize"]:
+		"coins":
+			coins *= 3
+		"potion":
+			var hp_id := "ya_hom_thong" if lv < 60 else "ya_thip"
+			var sp_id := "nam_mon_yai" if lv < 60 else "nam_mon_thep"
+			var amount := clampi(n / 2 + lv / 15, 4, 20) * (3 if boss else 1)
+			items[hp_id] = amount
+			items[sp_id] = maxi(2, amount / 2)
+		"gear":
+			var gear := gear_for(src, line)
+			if gear != "":
+				items[gear] = 1
+	return {"exp": exp, "coins": coins, "items": items}
+
+
+## ของสวมใส่รางวัล: จากของที่ผีตัวนั้นดรอป เลือกที่สายผู้เล่นใช้ได้ (เน้นอาวุธ)
+## ผีธรรมดาให้ของระดับต่ำสุดในตาราง บอสให้ของระดับล้ำค่า (ของตำนานต้องลุ้นดรอปเอง)
+static func gear_for(ghost_id: String, line: String) -> String:
+	var g: Dictionary = GhostDB.GHOSTS[ghost_id]
+	var boss: bool = g.get("boss", false)
+	var best := ""
+	var best_score := INF
+	for d in g["drops"]:
+		var item: Dictionary = ItemDB.ITEMS[d["item"]]
+		if item["type"] != "equip" or not (item["line"] == "any" or item["line"] == line or line == "any"):
+			continue
+		var rank: int = RARITY_RANK[item["rarity"]]
+		if boss and rank > 2:
+			continue
+		var score := float(-rank if boss else rank) * 10.0 - (1.0 if item["slot"] == "weapon" and item["line"] == line else 0.0)
+		if score < best_score:
+			best = d["item"]
+			best_score = score
+	return best
+
+
+static func reward_text(id: String, line: String = "any") -> String:
+	var r := reward(id, line)
 	var parts: Array[String] = ["EXP %d" % r["exp"]]
 	if r["coins"] > 0:
 		parts.append("%d เหรียญ" % r["coins"])

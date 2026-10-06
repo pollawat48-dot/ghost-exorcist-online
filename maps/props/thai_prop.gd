@@ -33,8 +33,17 @@ const FOOTPRINTS := {
 	"ossuary": Rect2(-16, -16, 32, 32),
 	"meru": Rect2(-112, -125, 224, 215),
 	"ruin_wall": Rect2(-80, -12, 160, 24),
+	"buddha_head": Rect2(-40, -40, 80, 80),
+	"brick_pillar": Rect2(-14, -14, 28, 28),
+	"pine": Rect2(-12, -12, 24, 24),
+	"rock": Rect2(-24, -20, 48, 40),
+	"naga_statue": Rect2(-20, -40, 40, 80),
+	"cauldron": Rect2(-56, -56, 112, 112),
+	"ngiw_tree": Rect2(-14, -14, 28, 28),
+	"stalagmite": Rect2(-18, -18, 36, 36),
+	"crystal": Rect2(-16, -16, 32, 32),
 }
-const SWAYING := ["palm", "banana", "bamboo", "laundry", "haunted_house", "campfire", "meru"]
+const SWAYING := ["palm", "banana", "bamboo", "laundry", "haunted_house", "campfire", "meru", "cauldron", "crystal", "cave_mouth"]
 
 ## สีผนังบ้านพาสเทล: ชมพู มิ้นต์ ครีมเหลือง ฟ้า และหลังคาคู่กัน
 const COTTAGE_WALLS := [Color(1.0, 0.86, 0.84), Color(0.84, 0.95, 0.86), Color(1.0, 0.93, 0.74), Color(0.84, 0.9, 1.0)]
@@ -91,6 +100,17 @@ func _ready() -> void:
 		"campfire": _campfire()
 		"ruin_wall": _ruin_wall()
 		"incense": _incense()
+		"buddha_head": _buddha_head()
+		"brick_pillar": _brick_pillar()
+		"pine": _pine()
+		"rock": _rock()
+		"lotus": _lotus()
+		"naga_statue": _naga_statue()
+		"cauldron": _cauldron()
+		"ngiw_tree": _ngiw_tree()
+		"cave_mouth": _cave_mouth()
+		"stalagmite": _stalagmite()
+		"crystal": _crystal()
 	set_process(kind in SWAYING)
 
 
@@ -804,3 +824,185 @@ func _incense() -> void:
 	for x in [-0.3, 0.3]:
 		K.cyl(self, 0.04, 0.04, 0.25, Vector3(x, 0.12, 0.05), K.mat(Color(1.0, 0.96, 0.85)), 6)
 		K.sphere(self, 0.035, Vector3(x, 0.28, 0.05), K.mat(Color(1.0, 0.8, 0.4), 3.0, 0.5, 0.0, false), 6, Vector3(1, 1.6, 1))
+
+
+# ---------- แผนที่ 3–6 และถ้ำ ----------
+
+## เศียรพระในรากโพธิ์ (ภาพจำของกรุงเก่า) แบบน่ารัก หน้ายิ้มสงบ
+func _buddha_head() -> void:
+	var bark := K.mat(Color(0.6, 0.5, 0.46), 0.0, 0.95)
+	var stone := K.mat(Color(0.82, 0.72, 0.66), 0.0, 0.9)
+	K.cyl(self, 0.5, 0.9, 1.6, Vector3(0, 0.8, -0.4), bark, 10)
+	for i in 7:
+		var a := -1.3 + i * 0.43
+		K.beam(self, Vector3(sin(a) * 0.5, 1.2, -0.3), Vector3(sin(a) * 1.25, 0.05, cos(a) * 0.9), 0.14, bark)
+	K.sphere(self, 0.62, Vector3(0, 0.75, 0.25), stone, 14)
+	for i in 10:
+		var a := i * TAU / 10.0
+		K.sphere(self, 0.12, Vector3(cos(a) * 0.45, 1.15 + sin(a * 2.0) * 0.05, 0.1 + sin(a) * 0.3), stone, 6)
+	K.cyl(self, 0.04, 0.16, 0.35, Vector3(0, 1.45, 0.15), stone, 8)
+	for x in [-0.2, 0.2]:
+		K.box(self, Vector3(0.16, 0.03, 0.03), Vector3(x, 0.82, 0.83), K.mat(Color(0.45, 0.36, 0.36)))
+	K.box(self, Vector3(0.14, 0.03, 0.03), Vector3(0, 0.56, 0.84), K.mat(Color(0.6, 0.4, 0.42)))
+	var greens := [K.mat(Color(0.45, 0.72, 0.45)), K.mat(Color(0.55, 0.8, 0.5))]
+	for i in 5:
+		var a := i * TAU / 5.0
+		K.sphere(self, 1.0, Vector3(cos(a) * 1.0, 3.0 + (i % 2) * 0.4, -0.4 + sin(a) * 0.8), greens[i % 2], 10, Vector3(1, 0.7, 1))
+	K.cyl(self, 0.3, 0.45, 1.6, Vector3(0, 2.2, -0.4), bark, 8)
+
+
+## เสาอิฐโบราณหักครึ่ง ปูนกะเทาะ
+func _brick_pillar() -> void:
+	var brick := K.mat(Color(0.86, 0.58, 0.5), 0.0, 0.95)
+	var plaster := K.mat(Color(0.92, 0.88, 0.84), 0.0, 0.95)
+	var h := 1.4 + float(variant % 4) * 0.45
+	K.box(self, Vector3(0.7, 0.3, 0.7), Vector3(0, 0.15, 0), plaster)
+	K.box(self, Vector3(0.5, h, 0.5), Vector3(0, 0.3 + h / 2.0, 0), brick if variant % 2 else plaster)
+	K.box(self, Vector3(0.3, 0.3, 0.3), Vector3(0.12, 0.45 + h, 0.05), brick, Vector3(0.3, 0.4, 0.2))
+	if variant % 3 == 0:
+		K.box(self, Vector3(0.6, 0.25, 0.4), Vector3(0.6, 0.12, 0.4), brick, Vector3(0, 0.6, 0.1))
+
+
+## ต้นสนบนดอย ทรงกรวยซ้อนสามชั้น
+func _pine() -> void:
+	K.cyl(self, 0.14, 0.22, 1.2, Vector3(0, 0.6, 0), K.mat(Color(0.55, 0.4, 0.34)), 8)
+	var tones := [Color(0.32, 0.58, 0.48), Color(0.38, 0.66, 0.52), Color(0.45, 0.72, 0.56)]
+	var s := 0.85 + float(variant % 4) * 0.12
+	for i in 3:
+		K.cyl(self, 0.05, (1.25 - i * 0.3) * s, 1.3 * s, Vector3(0, (1.3 + i * 0.85) * s, 0), K.mat(tones[i]), 10)
+
+
+## ก้อนหินมนๆ กลุ่มเล็ก มีตะไคร่
+func _rock() -> void:
+	var stone := K.mat(Color(0.7, 0.68, 0.74), 0.0, 0.95)
+	K.sphere(self, 0.75, Vector3(0, 0.35, 0), stone, 7, Vector3(1.3, 0.75, 1.0))
+	K.sphere(self, 0.45, Vector3(0.75, 0.2, 0.25), stone, 6)
+	if variant % 2 == 0:
+		K.sphere(self, 0.35, Vector3(-0.6, 0.15, 0.4), K.mat(Color(0.64, 0.62, 0.7), 0.0, 0.95), 6)
+	K.sphere(self, 0.3, Vector3(0.1, 0.78, 0.2), K.mat(Color(0.5, 0.72, 0.5)), 6, Vector3(1.4, 0.4, 1.2))
+
+
+## ใบบัวลอยน้ำกับดอกบัวชมพู
+func _lotus() -> void:
+	var pad := K.mat(Color(0.42, 0.72, 0.5), 0.0, 0.8, 0.0, false)
+	for i in 3:
+		var a := i * 2.1 + variant
+		K.cyl(self, 0.45 - i * 0.08, 0.45 - i * 0.08, 0.03, Vector3(cos(a) * 0.6, 0.04, sin(a) * 0.6), pad, 12)
+	if variant % 2 == 0:
+		var petal := K.mat(Color(1.0, 0.7, 0.8), 0.4, 0.6)
+		for i in 6:
+			var a := i * TAU / 6.0
+			K.sphere(self, 0.1, Vector3(cos(a) * 0.1, 0.22, sin(a) * 0.1), petal, 6, Vector3(0.7, 1.4, 0.7))
+		K.sphere(self, 0.07, Vector3(0, 0.3, 0), K.mat(Color(1.0, 0.9, 0.5), 1.0), 6)
+
+
+## รูปปั้นนาคเฝ้าทาง: หัวนาคชูขึ้น ลำตัวขดเป็นวง สีเขียวมรกต
+func _naga_statue() -> void:
+	var scale_mat := K.mat(Color(0.42, 0.75, 0.62), 0.2, 0.6)
+	var belly := K.mat(Color(0.95, 0.88, 0.6))
+	K.box(self, Vector3(1.0, 0.4, 2.2), Vector3(0, 0.2, 0), K.mat(Color(0.82, 0.8, 0.84)))
+	for i in 6:
+		var z := -0.9 + i * 0.32
+		K.sphere(self, 0.3 - i * 0.02, Vector3(sin(i * 1.2) * 0.15, 0.6 + i * 0.05, z), scale_mat, 8)
+	K.cyl(self, 0.22, 0.28, 1.2, Vector3(0, 1.2, 0.9), scale_mat, 10, Vector3(0.25, 0, 0))
+	K.sphere(self, 0.42, Vector3(0, 1.95, 1.05), scale_mat, 12, Vector3(1.2, 0.9, 1.1))
+	# แผงหงอนนาคเป็นพัด
+	for i in 5:
+		var a := -0.8 + i * 0.4
+		K.cyl(self, 0.02, 0.12, 0.6, Vector3(sin(a) * 0.4, 2.3, 0.9 - cos(a) * 0.1), K.gold(), 6, Vector3(-0.3, 0, -a))
+	for x in [-0.16, 0.16]:
+		K.sphere(self, 0.07, Vector3(x, 2.0, 1.4), K.mat(Color(1.0, 0.4, 0.4), 1.5, 0.3, 0.0, false), 6)
+	K.box(self, Vector3(0.3, 0.06, 0.3), Vector3(0, 1.75, 1.3), belly)
+
+
+## กระทะทองแดงในยมโลก: น้ำเดือดสีส้มเรืองแสง ไอร้อนลอยขึ้น
+func _cauldron() -> void:
+	var copper := K.mat(Color(0.82, 0.48, 0.36), 0.2, 0.5, 0.4)
+	for i in 6:
+		var a := i * TAU / 6.0
+		K.sphere(self, 0.3, Vector3(cos(a) * 1.2, 0.15, sin(a) * 1.2), K.mat(Color(0.4, 0.36, 0.4)), 6, Vector3(1.2, 0.7, 1.0))
+	K.cyl(self, 1.6, 1.1, 1.0, Vector3(0, 0.9, 0), copper, 16)
+	var rim := TorusMesh.new()
+	rim.inner_radius = 1.5
+	rim.outer_radius = 1.7
+	K.add(self, rim, Vector3(0, 1.42, 0), copper)
+	K.cyl(self, 1.5, 1.5, 0.04, Vector3(0, 1.36, 0), K.mat(Color(1.0, 0.55, 0.25), 2.5, 0.4, 0.0, false), 16)
+	for i in 3:
+		var f := Node3D.new()
+		f.position = Vector3((i - 1) * 0.5, 1.5, (i % 2) * 0.3)
+		add_child(f)
+		K.sphere(f, 0.18, Vector3(0, 0.2, 0), K.mat(Color(1.0, 0.7, 0.4, 0.7), 2.0, 0.4, 0.0, false), 6)
+		_flames.append(f)
+	_night_light(Vector3(0, 2.2, 0), Color(1.0, 0.5, 0.3), 2.0, 9.0)
+	var light := OmniLight3D.new()
+	light.position = Vector3(0, 2.2, 0)
+	light.light_color = Color(1.0, 0.5, 0.3)
+	light.omni_range = 6.0
+	light.light_energy = 1.0
+	add_child(light)
+
+
+## ต้นงิ้วหนามแหลม (ต้นไม้ในนรกตามคติไทย) สีม่วงเข้ม
+func _ngiw_tree() -> void:
+	var bark := K.mat(Color(0.42, 0.32, 0.4), 0.0, 0.95)
+	var thorn := K.mat(Color(0.92, 0.86, 0.8))
+	K.cyl(self, 0.18, 0.3, 3.4, Vector3(0, 1.7, 0), bark, 8)
+	for i in 14:
+		var y := 0.5 + i * 0.2
+		var a := i * 2.3 + variant
+		K.cyl(self, 0.0, 0.05, 0.3, Vector3(cos(a) * 0.22, y, sin(a) * 0.22), thorn, 4, Vector3(0, -a, PI / 2.0))
+	for i in 3:
+		var a := i * TAU / 3.0 + variant
+		K.beam(self, Vector3(0, 2.8, 0), Vector3(cos(a) * 1.1, 3.7, sin(a) * 1.1), 0.09, bark)
+		K.sphere(self, 0.12, Vector3(cos(a) * 1.1, 3.75, sin(a) * 1.1), K.mat(Color(1.0, 0.4, 0.4), 1.5), 6)
+
+
+## ปากถ้ำ: กองหินโค้งเป็นซุ้ม ข้างในมืด มีดวงไฟแร่ระยิบระยับ
+func _cave_mouth() -> void:
+	var stone := K.mat(Color(0.62, 0.58, 0.66), 0.0, 0.95)
+	for i in 9:
+		var a := PI * i / 8.0
+		K.sphere(self, 0.75, Vector3(cos(a) * 1.8, sin(a) * 2.0 + 0.3, 0), stone, 7, Vector3(1.0, 1.0, 1.4))
+	K.sphere(self, 1.7, Vector3(0, 0.6, -0.9), K.mat(Color(0.12, 0.1, 0.16), 0.0, 1.0, 0.0, false), 12, Vector3(1.0, 1.1, 0.6))
+	for i in 3:
+		var f := Node3D.new()
+		f.position = Vector3(-0.6 + i * 0.6, 0.8 + (i % 2) * 0.5, -0.4)
+		add_child(f)
+		K.sphere(f, 0.08, Vector3.ZERO, K.mat([Color(1.0, 0.85, 0.35), Color(0.6, 0.95, 1.0), Color(0.85, 0.85, 0.9)][i], 3.0, 0.3, 0.0, false), 4, Vector3(1, 1.5, 1))
+		_flames.append(f)
+	var light := OmniLight3D.new()
+	light.position = Vector3(0, 1.4, 0.6)
+	light.light_color = Color(0.7, 0.85, 1.0)
+	light.omni_range = 5.0
+	light.light_energy = 1.0
+	add_child(light)
+
+
+## หินงอกในถ้ำ
+func _stalagmite() -> void:
+	var stone := K.mat(Color(0.5, 0.46, 0.56), 0.0, 0.95)
+	var h := 1.4 + float(variant % 4) * 0.5
+	K.cyl(self, 0.02, 0.5, h, Vector3(0, h / 2.0, 0), stone, 7)
+	K.cyl(self, 0.02, 0.3, h * 0.6, Vector3(0.45, h * 0.3, 0.2), stone, 6)
+	if variant % 2 == 0:
+		K.cyl(self, 0.02, 0.25, h * 0.5, Vector3(-0.35, h * 0.25, -0.2), K.mat(Color(0.56, 0.52, 0.62), 0.0, 0.95), 6)
+
+
+## ผลึกเรืองแสงในถ้ำ (ให้แสงสว่างในถ้ำมืด)
+func _crystal() -> void:
+	var colors := [Color(0.6, 0.9, 1.0), Color(0.85, 0.6, 1.0), Color(0.6, 1.0, 0.8)]
+	var c: Color = colors[variant % 3]
+	K.sphere(self, 0.35, Vector3(0, 0.12, 0), K.mat(Color(0.45, 0.42, 0.5)), 6, Vector3(1.4, 0.5, 1.2))
+	for i in 4:
+		var a := i * TAU / 4.0 + variant
+		var f := Node3D.new()
+		f.position = Vector3(cos(a) * 0.18, 0.2, sin(a) * 0.18)
+		f.rotation = Vector3(sin(a) * 0.4, 0, cos(a) * 0.4)
+		add_child(f)
+		K.cyl(f, 0.0, 0.14, 0.8 - i * 0.12, Vector3(0, 0.4 - i * 0.06, 0), K.mat(c, 2.2, 0.2, 0.0, false), 6)
+	var light := OmniLight3D.new()
+	light.position = Vector3(0, 1.0, 0)
+	light.light_color = c
+	light.omni_range = 5.5
+	light.light_energy = 1.3
+	add_child(light)

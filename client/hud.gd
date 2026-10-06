@@ -19,9 +19,12 @@ const ClassWindow = preload("res://client/ui/class_window.gd")
 const ShopWindow = preload("res://client/ui/shop_window.gd")
 const QuestWindow = preload("res://client/ui/quest_window.gd")
 const AutoWindow = preload("res://client/ui/auto_window.gd")
+const WarpWindow = preload("res://client/ui/warp_window.gd")
+const SmithWindow = preload("res://client/ui/smith_window.gd")
+const RefineWindow = preload("res://client/ui/refine_window.gd")
 const Quests = preload("res://shared/data/quests.gd")
 
-signal action(name: String)  ## "attack", "potion_hp", "potion_sp", "auto", "skill:<id>"
+signal action(name: String)  ## "attack", "potion_hp", "potion_sp", "auto", "skill:<id>", "warp:<map>"
 
 const MAX_LOG_LINES := 5
 const ANNOUNCE_TIME := 7.0
@@ -211,13 +214,16 @@ func _ready() -> void:
 
 	# ---- หน้าต่างเมนู ----
 	var kinds := {"char": CharWindow, "skills": SkillWindow, "bag": BagWindow, "class": ClassWindow,
-		"shop": ShopWindow, "quest": QuestWindow, "questlog": QuestWindow, "auto": AutoWindow}
+		"shop": ShopWindow, "quest": QuestWindow, "questlog": QuestWindow, "auto": AutoWindow,
+		"warp": WarpWindow, "smith": SmithWindow, "refine": RefineWindow}
 	for key in kinds:
 		var w: Control = kinds[key].new()
 		add_child(w)
 		windows[key] = w
 	windows["char"].open_class_change.connect(func(): toggle_window("class"))
 	windows["auto"].toggle_requested.connect(func(): action.emit("auto"))
+	windows["warp"].warp_requested.connect(func(id: String): action.emit("warp:" + id))
+	windows["smith"].open_refine_requested.connect(func(): open_refine(""))
 
 
 func _anchor(ax: float, ay: float) -> Control:
@@ -252,8 +258,18 @@ func press_slot(i: int) -> void:
 ## เปิดหน้าต่างของ NPC ที่คุยด้วย (ร้านค้า หรือรายการเควส)
 func open_npc(npc: Dictionary) -> void:
 	close_windows()
-	var w: Control = windows[{"shop": "shop", "class": "class"}.get(npc["role"], "quest")]
+	var w: Control = windows[{"shop": "shop", "class": "class", "warp": "warp", "smith": "smith"}.get(npc["role"], "quest")]
 	w.open_for(npc)
+
+
+## กดใช้หินตี+ (หรือปุ่มที่ร้านหลอม): เปิดหน้าต่างตีบวก
+func open_refine(stone_id: String) -> void:
+	close_windows()
+	windows["refine"].open_with(stone_id)
+
+
+func set_map_id(map_id: String) -> void:
+	windows["warp"].current_map = map_id
 
 
 func bind_auto(a: RefCounted) -> void:

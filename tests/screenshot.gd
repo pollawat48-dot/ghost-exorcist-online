@@ -18,6 +18,10 @@ func _shoot() -> void:
 	var player: Node3D = main.player
 	var mode := args[7] if args.size() > 7 else ""
 	for part in mode.split(",", false):
+		if part == "allcaves":
+			player.state["caves"] = load("res://shared/data/world.gd").CAVE_CANDIDATES.duplicate()
+			for id in load("res://shared/data/world.gd").ORDER:
+				player.state["visited"][id] = true
 		if part.begins_with("map:"):
 			main.load_map(part.substr(4))
 	player.pos = Vector2(float(args[1]), float(args[2])) if args.size() > 2 else Vector2(1050, 700)
@@ -103,10 +107,38 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 			player.equip(id)
 	elif mode in ["char", "skills", "bag", "class", "questlog", "auto"]:
 		main.hud.toggle_window(mode)
-	elif mode in ["shop", "quest", "master"]:
+	elif mode in ["shop", "quest", "master", "warp", "smith"]:
 		for n in main.npcs.get_children():
-			if n.role() == ("class" if mode == "master" else mode):
+			if n.role() == ("class" if mode == "master" else mode) and n.data.get("sign", "") == "":
 				main.hud.open_npc(n.data)
+				break
+	elif mode == "gearshop":
+		player.state["coins"] = 9000
+		for n in main.npcs.get_children():
+			if n.data.get("sign", "") == "ร้านอาวุธ":
+				main.hud.open_npc(n.data)
+	elif mode == "ores":
+		player.state["coins"] = 25000
+		var ores := {"ore_zinc": 23, "ore_iron": 9, "ore_gold": 3, "ore_diamond": 1}
+		for ore in ores:
+			player.inventory[ore] = ores[ore]
+	elif mode == "refine":
+		player.state["coins"] = 120000
+		player.state["class"] = "nak_rob"
+		player.inventory["mitmo+7"] = 1
+		player.inventory["dab_krung+3"] = 1
+		player.inventory["suea_kraphan"] = 1
+		player.inventory["hin_ti_2"] = 4
+		player.inventory["hin_ti_3"] = 2
+		player.recalc()
+		main.hud.open_refine("hin_ti_3")
+		var w: Control = main.hud.windows["refine"]
+		w.selected = {"key": "mitmo+7", "slot": ""}
+		w.refresh()
+	elif mode == "bagall":
+		for id in ["hin_ti_1", "hin_ti_2", "ore_zinc", "ore_gold", "ore_diamond", "dab_krung+5"]:
+			player.add_item(id, 2)
+		main.hud.toggle_window("bag")
 	elif mode == "autoon":
 		main.toggle_auto()
 	elif mode == "quests":

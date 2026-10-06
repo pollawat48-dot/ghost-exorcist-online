@@ -10,6 +10,7 @@ const TEMPLE := Rect2(980, 200, 760, 520)
 const MERU_POS := Vector2(1360, 380)
 const OSSUARY_FIELD := Rect2(1500, 1330, 560, 480)
 const PORTAL_WEST := Vector2(80, 1000)
+const PORTAL_EAST := Vector2(2730, 1000)
 ## ลานหลุมศพ (ศูนย์กลาง, รัศมี)
 const GRAVES := [
 	[Vector2(720, 560), 250.0],
@@ -22,7 +23,7 @@ const PATH_SEGS := [
 	[Vector2(60, 1000), Vector2(700, 990)],
 	[Vector2(700, 990), Vector2(1250, 1060)],
 	[Vector2(1250, 1060), Vector2(1850, 960)],
-	[Vector2(1850, 960), Vector2(2650, 1000)],
+	[Vector2(1850, 960), Vector2(2760, 1000)],
 	[Vector2(1250, 1060), Vector2(1330, 720)],
 	[Vector2(1850, 960), Vector2(1790, 1330)],
 	[Vector2(700, 990), Vector2(720, 800)],
@@ -39,6 +40,7 @@ func _init() -> void:
 	path_segs = PATH_SEGS
 	gloom = 0.55
 	firefly_color = Color(0.55, 0.95, 1.0)
+	cave_spot = Vector2(560, 1820)
 	spawns = [
 		{"id": "phi_khamot", "count": 4, "rect": Rect2(560, 380, 380, 380)},
 		{"id": "phi_khamot", "count": 4, "rect": Rect2(560, 1250, 420, 420)},
@@ -59,9 +61,12 @@ func _init() -> void:
 		{"id": "mae_kha", "name": "แม่ค้าน้ำมนต์", "role": "shop", "pos": Vector2(330, 1110),
 			"look": {"robe": Color(0.78, 0.72, 0.98), "sash": Color(1.0, 0.7, 0.78), "hat": "bun"},
 			"stock": ["herb_potion", "ya_hom_thong", "nam_mon", "nam_mon_yai"]},
+		{"id": "pa_cha_warp", "name": "ร่างทรงนำทาง (วาร์ป)", "role": "warp", "pos": Vector2(470, 1010),
+			"look": {"robe": Color(0.98, 0.95, 1.0), "sash": Color(0.55, 0.8, 1.0), "hat": "topknot"}},
 	]
 	portals = [
 		{"pos": PORTAL_WEST, "to": "khlong_village", "to_pos": Vector2(3040, 1100), "name": "หมู่บ้านริมคลอง"},
+		{"pos": PORTAL_EAST, "to": "krung_kao", "to_pos": Vector2(260, 1000), "name": "กรุงเก่าร้าง (Lv 32+)"},
 	]
 
 
@@ -74,7 +79,9 @@ func _ready() -> void:
 func _blocked(pos: Vector2, radius: float) -> bool:
 	if CAMP.grow(radius).has_point(pos) or TEMPLE.grow(-40).has_point(pos):
 		return true
-	return pos.distance_to(PORTAL_WEST) < 90.0 or pos.distance_to(spawn_point) < 90.0
+	if pos.distance_to(cave_spot) < 110.0:
+		return true
+	return pos.distance_to(PORTAL_WEST) < 90.0 or pos.distance_to(PORTAL_EAST) < 90.0 or pos.distance_to(spawn_point) < 90.0
 
 
 func minimap_color(p: Vector2) -> Color:
@@ -95,7 +102,7 @@ func minimap_color(p: Vector2) -> Color:
 func build_props() -> Node3D:
 	super.build_props()
 	# แคมป์ทางเข้า: กองไฟ ตะเกียง ศาลาเก่า
-	_add("campfire", Vector2(420, 1000) + Vector2(0, -70))
+	_add("campfire", Vector2(420, 930))
 	_add("sala", Vector2(170, 830))
 	for p in [Vector2(150, 1140), Vector2(470, 860), Vector2(470, 1160), Vector2(200, 900)]:
 		_add("lantern", p)

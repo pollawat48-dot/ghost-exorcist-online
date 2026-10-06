@@ -85,7 +85,7 @@ func _quest_card(list: VBoxContainer, id: String) -> void:
 			need += " และทำเควส \"%s\" ก่อน" % Quests.QUESTS[q["requires"]]["name"]
 		goal = need
 	info.add_child(P.label("เป้าหมาย: " + goal, 13, P.PINK_DEEP if st == "ready" else P.TEXT))
-	info.add_child(P.label("รางวัล: " + Quests.reward_text(id), 12, Color(0.7, 0.5, 0.15)))
+	info.add_child(P.label("รางวัล: " + Quests.reward_text(id, player.class_info()["line"]), 12, Color(0.7, 0.5, 0.15)))
 	match st:
 		"available":
 			var b := P.button("รับเควส", P.MINT, 15)
