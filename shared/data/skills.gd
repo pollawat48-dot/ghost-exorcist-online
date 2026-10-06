@@ -1,6 +1,8 @@
 extends RefCounted
 ## สกิลทั้งหมด เรียน/อัปด้วยแต้มสกิล (ได้ +1 ทุก 3 เลเวล) สูงสุดเลเวล 5 ต่อสกิล
 ## kind: single = เป้าเดียว, aoe_self = รอบตัว, aoe_target = รอบเป้าหมาย, buff = เพิ่มพลังตัวเอง, heal = รักษาตัวเอง
+##       party_buff = บัฟตัวเองและเพื่อนในปาร์ตี้ที่อยู่ใกล้ (effect: atk/def/aspd/speed/sp_regen เพิ่มเป็นสัดส่วน power)
+##       party_heal = ฮีลตัวเองและเพื่อนในปาร์ตี้ที่อยู่ใกล้ (MATK x power)
 ## stat: atk = พลังโจมตีกายภาพ (STR หรือ DEX ตามสาย), matk = พลังเวท (INT)
 ## power/radius/sp เป็นค่าที่เลเวล 1 และเพิ่มตาม *_per_lv
 
@@ -36,6 +38,16 @@ const SKILLS := {
 		"sp": 40, "sp_per_lv": 4, "cooldown": 10.0, "range": 60.0,
 		"desc": "สุดยอดวิชา ฟาดดาบเรียกสายฟ้าศักดิ์สิทธิ์",
 	},
+	"plook_kamlang": {
+		"name": "ปลุกพลังกล้า", "class": "nak_rob", "icon": "sword_one", "kind": "party_buff", "effect": "atk", "stat": "atk",
+		"element": "neutral", "power": 0.1, "power_per_lv": 0.05, "duration": 60.0, "sp": 20, "sp_per_lv": 2, "cooldown": 30.0, "range": 0.0,
+		"desc": "ตะโกนปลุกใจ ตัวเองและเพื่อนในปาร์ตี้ตีแรงขึ้น (สูงสุด +30%)",
+	},
+	"kraw_yant": {
+		"name": "เกราะยันต์หมู่", "class": "nak_dab", "icon": "shield", "kind": "party_buff", "effect": "def", "stat": "atk",
+		"element": "neutral", "power": 0.15, "power_per_lv": 0.05, "duration": 60.0, "sp": 25, "sp_per_lv": 2, "cooldown": 35.0, "range": 0.0,
+		"desc": "ลงยันต์กันภัยให้ทั้งปาร์ตี้ พลังป้องกันเพิ่ม (สูงสุด +35%)",
+	},
 	# ---- สายระยะไกล ----
 	"ying_son": {
 		"name": "ยิงซ้อน", "class": "phran", "icon": "arrow", "kind": "single", "stat": "atk",
@@ -58,6 +70,16 @@ const SKILLS := {
 		"element": "holy", "power": 4.0, "power_per_lv": 0.6, "sp": 35, "sp_per_lv": 3, "cooldown": 8.0, "range": 270.0,
 		"desc": "ลูกธนูเงาที่ไม่เคยพลาดเป้า",
 	},
+	"ta_thip": {
+		"name": "ตาทิพย์", "class": "phran", "icon": "star", "kind": "party_buff", "effect": "aspd", "stat": "atk",
+		"element": "neutral", "power": 0.08, "power_per_lv": 0.04, "duration": 60.0, "sp": 18, "sp_per_lv": 2, "cooldown": 30.0, "range": 0.0,
+		"desc": "เปิดตาทิพย์ให้ทั้งปาร์ตี้ ตีเร็วขึ้น (สูงสุด +24%)",
+	},
+	"lom_phat": {
+		"name": "ลมพัดไว", "class": "phran_ratri", "icon": "storm", "kind": "party_buff", "effect": "speed", "stat": "atk",
+		"element": "neutral", "power": 0.15, "power_per_lv": 0.05, "duration": 60.0, "sp": 18, "sp_per_lv": 2, "cooldown": 30.0, "range": 0.0,
+		"desc": "เรียกลมหนุนส่ง ทั้งปาร์ตี้เดินเร็วขึ้น (สูงสุด +35%)",
+	},
 	# ---- สายเวท ----
 	"yant_ploeng": {
 		"name": "ยันต์เพลิง", "class": "mo_phi", "icon": "fire", "kind": "single", "stat": "matk",
@@ -74,6 +96,16 @@ const SKILLS := {
 		"name": "มนต์ฟื้นกาย", "class": "ajarn_yant", "icon": "heal", "kind": "heal", "stat": "matk",
 		"element": "holy", "power": 1.5, "power_per_lv": 0.4, "sp": 20, "sp_per_lv": 2, "cooldown": 6.0, "range": 0.0,
 		"desc": "เป่ามนต์รักษาบาดแผลตัวเอง",
+	},
+	"nam_mon_chalom": {
+		"name": "น้ำมนต์ชโลมหมู่", "class": "mo_phi", "icon": "heal", "kind": "party_heal", "stat": "matk",
+		"element": "holy", "power": 1.0, "power_per_lv": 0.3, "sp": 25, "sp_per_lv": 3, "cooldown": 8.0, "range": 0.0,
+		"desc": "พรมน้ำมนต์ฮีลตัวเองและทุกคนในปาร์ตี้ที่อยู่ใกล้",
+	},
+	"samathi": {
+		"name": "สมาธิแก่กล้า", "class": "ajarn_yant", "icon": "water", "kind": "party_buff", "effect": "sp_regen", "stat": "matk",
+		"element": "neutral", "power": 0.5, "power_per_lv": 0.25, "duration": 60.0, "sp": 20, "sp_per_lv": 2, "cooldown": 40.0, "range": 0.0,
+		"desc": "นำสวดภาวนา ทั้งปาร์ตี้ฟื้น SP เร็วขึ้น (สูงสุด x2.5)",
 	},
 	"maha_akkhi": {
 		"name": "มหาอัคคีเวทย์", "class": "jom_khamang", "icon": "fire", "kind": "aoe_target", "stat": "matk",
@@ -104,3 +136,8 @@ static func for_lineage(lineage: Array[String]) -> Array[String]:
 			if SKILLS[id]["class"] == cls:
 				result.append(id)
 	return result
+
+
+## บัฟ/ฮีลที่ส่งผลถึงเพื่อนในปาร์ตี้
+static func is_party(id: String) -> bool:
+	return SKILLS[id]["kind"] in ["party_buff", "party_heal"]

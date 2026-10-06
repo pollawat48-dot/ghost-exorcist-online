@@ -8,7 +8,7 @@ uniform int seg_count = 0;
 uniform float path_w = 30.0;
 uniform vec3 patches[10];  // x, y, รัศมี
 uniform int patch_count = 0;
-uniform vec3 ponds[10];
+uniform vec3 ponds[32];
 uniform int pond_count = 0;
 uniform vec4 plaza = vec4(-1.0, -1.0, 0.0, 0.0);
 uniform vec4 camp;

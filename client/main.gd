@@ -1,6 +1,8 @@
 extends Node3D
-## M1: ต้นแบบเล่นคนเดียว (3D) — ประเทศไทย: หมู่บ้าน → ป่าช้า → กรุงเก่า → ดอย → บึงนาคา → ยมโลก
+## เกมหลัก (3D) — ประเทศไทย: หมู่บ้าน → ป่าช้า → กรุงเก่า → ดอย → บึงนาคา → ยมโลก (+ ลำธารตกปลา)
 ## บางแผนที่ถูกสุ่มให้มีถ้ำ (เก็บใน state["caves"]) เข้าไปเจอผีพิเศษและขุดแร่ได้
+## ออนไลน์: เห็นผู้เล่นอื่นในแผนที่เดียวกัน แชท ปาร์ตี้ (แชร์ EXP + บัฟ) ผ่าน net (NetClient)
+## ถ้าไม่มี net หรือหลุด จะเล่นต่อแบบออฟไลน์ได้ (ผีและของดรอปยังคำนวณในเครื่อง)
 ## ทุกอย่างขับด้วย tick() เพื่อให้ย้ายไปรันบน zone server และทดสอบแบบ headless ได้
 ## ตรรกะเกมอยู่บนพื้นราบ 2D (pos) ส่วนสิ่งที่เห็นเป็น 3D
 
@@ -11,6 +13,7 @@ const MAPS := {
 	"doi_phi": preload("res://maps/thailand/doi_phi.gd"),
 	"nong_naga": preload("res://maps/thailand/nong_naga.gd"),
 	"yom_lok": preload("res://maps/thailand/yom_lok.gd"),
+	"lam_than": preload("res://maps/thailand/lam_than.gd"),
 }
 const CaveMap = preload("res://maps/cave.gd")
 const OreRock = preload("res://client/ore_rock.gd")
@@ -29,6 +32,17 @@ const Hud = preload("res://client/hud.gd")
 const CameraRig = preload("res://client/camera_rig.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const OcclusionFader = preload("res://client/occlusion_fader.gd")
+const RemotePlayer = preload("res://client/remote_player.gd")
+const Sound = preload("res://client/audio/sound.gd")
+const Skills = preload("res://shared/data/skills.gd")
+const Fishing = preload("res://shared/data/fishing.gd")
+
+signal logout_requested  ## กดออกจากเกม (กลับหน้าเมนู) — App เป็นคนจัดการ
+
+const POS_INTERVAL := 0.2  ## ส่งตำแหน่งให้เซิร์ฟเวอร์ทุกๆ
+const AUTOSAVE_INTERVAL := 20.0
+## เพลงตามแผนที่
+const MAP_MUSIC := {"khlong_village": "village", "lam_than": "stream", "pa_cha": "dark", "yom_lok": "dark"}
 
 const RESPAWN_DELAY := 8.0
 ## บอสประจำถิ่นเกิดไม่บ่อย: ครั้งแรกหลังเริ่มเกม 5–8 นาที หลังโดนปราบรอ 10–15 นาที
@@ -62,6 +76,14 @@ var fader: Node
 var auto: RefCounted
 var talk_target: Node3D = null  ## NPC ที่กำลังเดินไปคุย
 var portal_lock := 0.0  ## กันวาร์ปเด้งไปมาทันทีหลังเปลี่ยนแผนที่
+## ตัวละครที่เลือกจากหน้าเมนู {"name", "look", "data", "guest": bool} (ว่าง = เล่นทดสอบแบบเดิม)
+var session := {}
+var net: Node = null  ## NetClient (null = ออฟไลน์)
+var store: RefCounted = null  ## LocalStore สำหรับ guest (บันทึกในเครื่อง)
+var remotes: Node3D
+var pos_timer := 0.0
+var save_timer := 0.0
+var fish_pending := Vector2.INF  ## จุดน้ำที่กำลังเดินไปตกปลา
 
 
 func _ready() -> void:
@@ -85,8 +107,16 @@ func _ready() -> void:
 	rocks.name = "OreRocks"
 	world.add_child(rocks)
 
+	remotes = Node3D.new()
+	remotes.name = "Remotes"
+	world.add_child(remotes)
+
 	player = Player.new()
 	player.ghosts = ghosts
+	if not session.is_empty():
+		player.player_name = session["name"]
+		player.look = session.get("look", {})
+		player.apply_save(session.get("data", {}))
 	world.add_child(player)
 
 	camera_rig = CameraRig.new()
@@ -108,14 +138,28 @@ func _ready() -> void:
 	ambience.phase_changed.connect(hud.set_phase)
 	player.changed.connect(_refresh_npc_markers)
 	player.open_refine.connect(hud.open_refine)
+	player.sfx.connect(func(id: String): Sound.play(self, id))
+	player.party_cast.connect(_on_party_cast)
+	player.caught.connect(func(_id: String): hud.refresh_fishing())
+	hud.chat_sent.connect(_on_chat_sent)
+	hud.party_request.connect(_on_party_request)
+	hud.bind_net(net)
+	_bind_net()
 
 	# โลกใหม่: สุ่มว่าแผนที่ไหนมีถ้ำ (ทุกโลกไม่เหมือนกัน)
 	if player.state["caves"].is_empty():
 		var cave_rng := RandomNumberGenerator.new()
 		cave_rng.randomize()
 		player.state["caves"] = World.pick_caves(cave_rng)
-	load_map(START_MAP)
+	var data: Dictionary = session.get("data", {})
+	var start: String = data.get("map", START_MAP)
+	if not MAPS.has(start):
+		start = START_MAP
+	var at: Vector2 = Vector2(float(data.get("x", 0.0)), float(data.get("y", 0.0))) if data.has("x") else Vector2.INF
+	load_map(start, at)
 	hud.add_log("ยินดีต้อนรับสู่%s! คุยกับหลวงตาเพื่อรับเควส ซื้อยาที่ร้านยาย แล้วข้ามสะพานไปล่าผี" % map.map_name)
+	if is_online():
+		hud.add_log("เชื่อมต่อเซิร์ฟเวอร์แล้ว: กด Enter เพื่อแชท · ชวนเพื่อนเข้าปาร์ตี้ได้ที่เมนูปาร์ตี้")
 
 
 ## โหลดแผนที่ใหม่ (ตอนเริ่มเกมหรือเดินเข้าประตูวาร์ป) ตัวละครและของในกระเป๋าคงเดิม
@@ -127,9 +171,13 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 			for c in root.get_children():
 				root.remove_child(c)
 				c.queue_free()
+	for c in remotes.get_children():
+		remotes.remove_child(c)
+		c.queue_free()
 	respawn_queue.clear()
 	boss = null
 	talk_target = null
+	fish_pending = Vector2.INF
 	if World.is_cave(map_id):
 		var parent := World.cave_parent(map_id)
 		var probe: Node3D = MAPS[parent].new()
@@ -180,13 +228,18 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 	hud.set_map_id(map.map_id)
 	if World.is_cave(map.map_id):
 		hud.add_log("ในถ้ำมืดมีผีพิเศษ และมีหินแร่ให้ขุด (คลิกที่หิน) แร่ที่ได้เอาไปหลอมเป็นหินตี+ ได้")
-	hud.setup_minimap(map, npcs, portals)
+	hud.setup_minimap(map, npcs, portals, remotes)
 	hud.close_windows()
+	hud.set_fishing_map(map.fishing)
 	_refresh_npc_markers()
+	Sound.music(self, "cave" if World.is_cave(map.map_id) else MAP_MUSIC.get(map.map_id, "field"))
+	pos_timer = 0.0
+	if not session.is_empty():
+		save_now()
 
 
 func _process(delta: float) -> void:
-	player.stick = _stick_world()
+	player.stick = Vector2.ZERO if hud.typing() else _stick_world()
 	if player.stick != Vector2.ZERO:
 		auto.pause(1.5)
 	tick(delta)
@@ -227,6 +280,8 @@ func do_action(name: String) -> void:
 			if rock != null:
 				auto.pause()
 				player.command_mine(rock)
+			elif map.fishing:
+				start_fishing()
 			else:
 				hud.add_log("ไม่มีผีอยู่ใกล้ๆ")
 		"holy_water":
@@ -237,6 +292,11 @@ func do_action(name: String) -> void:
 			player.use_potion("sp")
 		"auto":
 			toggle_auto()
+		"fish":
+			start_fishing()
+		"logout":
+			save_now()
+			logout_requested.emit()
 		_:
 			if name.begins_with("warp:"):
 				warp_to(name.substr(5))
@@ -257,8 +317,201 @@ func warp_to(map_id: String) -> bool:
 	auto.set_enabled(false)
 	hud.refresh_auto()
 	load_map(map_id)
+	Sound.play(self, "warp")
 	hud.add_log("วาร์ปมาถึง%s" % map.map_name)
 	return true
+
+
+# ---------- ตกปลา ----------
+
+## ตกปลาตรงนี้ถ้ายืนริมน้ำ ไม่งั้นเดินไปริมน้ำที่ใกล้ที่สุดก่อน
+func start_fishing() -> void:
+	if not map.fishing:
+		hud.add_log("แผนที่นี้ตกปลาไม่ได้ ไปที่ลำธารใสเย็นทางใต้ของหมู่บ้าน")
+		return
+	if player.best_rod() == "":
+		hud.add_log("ต้องมีคันเบ็ดก่อน ซื้อได้ที่ร้านตาม่อง")
+		return
+	auto.set_enabled(false)
+	hud.refresh_auto()
+	var spot: Vector2 = map.water_near(player.pos, Fishing.REACH)
+	if spot != Vector2.INF:
+		player.command_fish(spot)
+		return
+	var far: Vector2 = map.water_near(player.pos, 900.0)
+	if far == Vector2.INF:
+		hud.add_log("ไม่มีน้ำอยู่ใกล้ๆ")
+		return
+	fish_toward(far)
+
+
+## เดินไปริมน้ำตรงจุดที่คลิก แล้วเริ่มตกปลาเมื่อถึง
+func fish_toward(water_point: Vector2) -> void:
+	var bank := water_point
+	var dir: Vector2 = (player.pos - water_point).normalized()
+	for i in 40:
+		if map.is_walkable(bank) and not map.is_water(bank):
+			break
+		bank += dir * 12.0
+	player.command_move(bank)
+	fish_pending = water_point
+
+
+func _tick_fish_pending() -> void:
+	if fish_pending == Vector2.INF or player.moving:
+		return
+	var spot: Vector2 = map.water_near(player.pos, Fishing.REACH)
+	fish_pending = Vector2.INF
+	if spot != Vector2.INF:
+		player.command_fish(spot)
+
+
+# ---------- ออนไลน์: ผู้เล่นอื่น แชท ปาร์ตี้ ----------
+
+func is_online() -> bool:
+	return net != null and net.is_online()
+
+
+func _bind_net() -> void:
+	if net == null:
+		return
+	net.players_updated.connect(_on_players)
+	net.chat_received.connect(hud.add_chat)
+	net.party_updated.connect(_on_party_updated)
+	net.party_invited.connect(hud.show_invite)
+	net.exp_shared.connect(_on_exp_shared)
+	net.buff_received.connect(_on_buff_received)
+	net.heal_received.connect(func(amount: int, from: String): player.receive_heal(amount, from))
+	net.notice.connect(func(text: String): hud.add_chat("system", "", "", text))
+	net.disconnected.connect(_on_disconnected)
+
+
+## บันทึกตัวละคร: ไอดีที่สมัคร = เซิร์ฟเวอร์, guest = ในเครื่อง
+func save_now() -> void:
+	if session.is_empty():
+		return
+	save_timer = 0.0
+	var data: Dictionary = player.save_data()
+	var where: String = map.map_id if not World.is_cave(map.map_id) else World.cave_parent(map.map_id)
+	data["map"] = where
+	if where == map.map_id:
+		data["x"] = player.pos.x
+		data["y"] = player.pos.y
+	if session.get("guest", false):
+		if store != null:
+			store.save(session.get("store_name", session["name"]), data)
+	elif is_online():
+		net.save(data)
+
+
+func _on_players(list: Array) -> void:
+	var seen := {}
+	for d in list:
+		if not d is Dictionary:
+			continue
+		var id := int(d.get("id", 0))
+		seen[id] = true
+		var r: Node3D = remotes.get_node_or_null(str(id))
+		if r == null:
+			r = RemotePlayer.new()
+			r.name = str(id)
+			remotes.add_child(r)
+			r.setup(d)
+		else:
+			r.apply(d)
+	for r in remotes.get_children():
+		if not seen.has(int(str(r.name))):
+			remotes.remove_child(r)
+			r.queue_free()
+
+
+func _on_party_updated(_leader: String, members: Array) -> void:
+	hud.refresh_party()
+	if members.size() >= 2:
+		Sound.play(self, "party")
+
+
+func _on_exp_shared(amount: int, ghost_id: String, from: String, members: int) -> void:
+	if members >= 2:
+		player.message.emit("EXP ปาร์ตี้ (%d คน โบนัส +%d%%) จาก%s" % [members, members * 5, GhostDB.GHOSTS.get(ghost_id, {}).get("name", "ผี")] if from == player.player_name else "%s ปราบ%s แชร์ EXP ให้ (%d คน)" % [from, GhostDB.GHOSTS.get(ghost_id, {}).get("name", "ผี"), members])
+	player.gain_exp(amount)
+
+
+func _on_buff_received(msg: Dictionary) -> void:
+	var id: String = str(msg.get("skill", ""))
+	var buff_name: String = Skills.SKILLS[id]["name"] if Skills.SKILLS.has(id) else "บัฟ"
+	player.apply_buff(str(msg.get("effect", "")), float(msg.get("power", 0.0)), float(msg.get("duration", 0.0)), buff_name, str(msg.get("from", "เพื่อน")))
+
+
+func _on_party_cast(fields: Dictionary) -> void:
+	if not is_online() or not net.in_party():
+		return
+	if fields["t"] == "heal":
+		net.send_heal(fields["amount"], Vector2(fields["x"], fields["y"]))
+	else:
+		net.send_buff(fields)
+
+
+func _on_chat_sent(ch: String, text: String, to: String) -> void:
+	if not is_online():
+		hud.add_chat("system", "", "", "ยังไม่ได้เชื่อมต่อเซิร์ฟเวอร์ (เล่นออฟไลน์) แชทได้เมื่อออนไลน์")
+		return
+	net.send_chat(ch, text, to)
+
+
+## คำสั่งปาร์ตี้จากหน้าต่าง/เมนูผู้เล่น: invite:<ชื่อ>, kick:<ชื่อ>, leave, accept:<ชื่อ>, decline:<ชื่อ>
+func _on_party_request(what: String) -> void:
+	if not is_online():
+		hud.add_chat("system", "", "", "ปาร์ตี้ใช้ได้เมื่อเชื่อมต่อเซิร์ฟเวอร์")
+		return
+	var i := what.find(":")
+	var cmd := what if i < 0 else what.substr(0, i)
+	var arg := "" if i < 0 else what.substr(i + 1)
+	match cmd:
+		"invite":
+			net.party_invite(arg)
+			hud.add_chat("system", "", "", "ส่งคำชวนเข้าปาร์ตี้ให้ %s แล้ว" % arg)
+		"kick":
+			net.party_kick(arg)
+		"leave":
+			net.party_leave()
+		"accept", "decline":
+			net.party_reply(arg, cmd == "accept")
+
+
+func _on_disconnected() -> void:
+	for c in remotes.get_children():
+		c.queue_free()
+	hud.show_disconnected()
+
+
+func _tick_net(delta: float) -> void:
+	if session.is_empty():
+		return
+	save_timer += delta
+	if save_timer >= AUTOSAVE_INTERVAL:
+		save_now()
+	if not is_online():
+		return
+	pos_timer -= delta
+	if pos_timer <= 0.0:
+		pos_timer = POS_INTERVAL
+		net.send_pos(map.map_id, player.pos, {"cls": player.state["class"], "lv": player.state["level"], "hp": player.hp, "mhp": player.stats["max_hp"], "equip": player.state["equipment"].duplicate()})
+
+
+func remote_at_screen(screen: Vector2) -> Node3D:
+	var cam: Camera3D = camera_rig.camera
+	var best: Node3D = null
+	var best_dist := CLICK_RADIUS_SCREEN
+	for r in remotes.get_children():
+		var wp: Vector3 = r.global_position + Vector3(0, 1.0, 0)
+		if cam.is_position_behind(wp):
+			continue
+		var d := screen.distance_to(cam.unproject_position(wp))
+		if d < best_dist:
+			best = r
+			best_dist = d
+	return best
 
 
 func nearest_rock(radius: float) -> Node3D:
@@ -360,6 +613,8 @@ func tick(delta: float) -> void:
 	for r in rocks.get_children():
 		r.tick(delta)
 	_tick_pickups()
+	_tick_fish_pending()
+	_tick_net(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -372,12 +627,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		talk_target = null
 		var ghost := ghost_at_screen(event.position)
 		var rock := rock_at_screen(event.position)
+		var other := remote_at_screen(event.position) if ghost == null else null
+		fish_pending = Vector2.INF
 		if ghost != null:
 			player.command_attack(ghost)
 		elif rock != null:
 			player.command_mine(rock)
+		elif other != null:
+			hud.show_player_menu(other.player_name, event.position)
 		else:
-			player.command_move(camera_rig.ground_point(event.position))
+			var ground: Vector2 = camera_rig.ground_point(event.position)
+			if map.fishing and map.is_water(ground):
+				fish_toward(ground)
+			else:
+				player.command_move(ground)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
 			hud.press_slot(event.keycode - KEY_1)
@@ -403,6 +666,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.toggle_window("bag")
 			KEY_J:
 				hud.toggle_window("questlog")
+			KEY_P:
+				hud.toggle_window("party")
+			KEY_G:
+				do_action("fish")
+			KEY_ENTER, KEY_KP_ENTER:
+				hud.focus_chat()
 			KEY_ESCAPE:
 				hud.close_windows()
 
@@ -470,7 +739,13 @@ func _spawn_ghost(spawn_index: int) -> void:
 
 
 func _on_ghost_died(g: Node3D) -> void:
-	player.reward_kill(g.ghost_id, g.data["exp"], g.data.get("coins", 0))
+	Sound.play(self, "ghost_die")
+	if is_online() and net.in_party():
+		# อยู่ในปาร์ตี้: EXP ส่งไปให้เซิร์ฟเวอร์แบ่งกับเพื่อนในแผนที่เดียวกัน (+5% ต่อคน)
+		player.reward_kill(g.ghost_id, 0, g.data.get("coins", 0))
+		net.report_kill(g.ghost_id, map.map_id)
+	else:
+		player.reward_kill(g.ghost_id, g.data["exp"], g.data.get("coins", 0))
 	var spread := 60.0 if g.is_boss() else 14.0
 	var dropped_equip := false
 	var equip_pool: Array[String] = []
@@ -526,6 +801,7 @@ func spawn_boss(place_index: int = -1) -> Node3D:
 	boss.died.connect(_on_ghost_died)
 	ghosts.add_child(boss)
 	boss_place = place["name"]
+	Sound.play(self, "boss")
 	hud.announce("%s ปรากฏตัวที่%s! ดูตำแหน่งบนแผนที่ย่อ" % [boss.data["name"], boss_place])
 	return boss
 
@@ -547,6 +823,7 @@ func _tick_pickups() -> void:
 			continue
 		if player.pos.distance_to(d.pos) < PICKUP_RADIUS:
 			player.add_item(d.item_id)
+			Sound.play(self, "pickup")
 			d.queue_free()
 
 
@@ -574,5 +851,6 @@ func _tick_portals(delta: float) -> void:
 			var to: String = w.data["to"]
 			var at: Vector2 = w.data["to_pos"]
 			load_map(to, at)
+			Sound.play(self, "warp")
 			hud.add_log("เดินทางมาถึง%s" % map.map_name)
 			return

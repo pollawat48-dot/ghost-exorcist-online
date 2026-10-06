@@ -10,8 +10,10 @@ const MAPS := {
 	"doi_phi": {"name": "ดอยผีปันน้ำ", "levels": "62–85", "boss": "phraya_phrai", "fee": 1500},
 	"nong_naga": {"name": "บึงนาคาบาดาล", "levels": "96–122", "boss": "phaya_nak", "fee": 3000},
 	"yom_lok": {"name": "ยมโลก", "levels": "132–148", "boss": "matchurat", "fee": 6000},
+	## แผนที่ปลอดภัย (ไม่มีผี): ตกปลาแบบ AFK ได้ปลาและพระเครื่อง ทางเข้าอยู่ทางใต้ของหมู่บ้าน
+	"lam_than": {"name": "ลำธารใสเย็น", "levels": "", "boss": "", "fee": 30, "safe": true},
 }
-const ORDER := ["khlong_village", "pa_cha", "krung_kao", "doi_phi", "nong_naga", "yom_lok"]
+const ORDER := ["khlong_village", "lam_than", "pa_cha", "krung_kao", "doi_phi", "nong_naga", "yom_lok"]
 
 ## ถ้ำ: สุ่มเลือกบางแผนที่ (ไม่รวมหมู่บ้าน) ตอนเริ่มโลกใหม่ เก็บไว้ใน state["caves"]
 const CAVE_CANDIDATES := ["pa_cha", "krung_kao", "doi_phi", "nong_naga", "yom_lok"]

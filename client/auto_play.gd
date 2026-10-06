@@ -210,6 +210,14 @@ func _cast(p: Node3D, target: Node3D) -> void:
 				if p.hp * 100 < p.stats["max_hp"] * 60:
 					p.use_skill(id)
 					return
+			"party_buff":
+				if not p.buffs.has(sk["effect"]):
+					p.use_skill(id)
+					return
+			"party_heal":
+				if p.hp * 100 < p.stats["max_hp"] * 60:
+					p.use_skill(id)
+					return
 			"aoe_self":
 				if _count_near(p.pos, Skills.radius(id, lv)) >= 2 or (target.is_boss() and dist < Skills.radius(id, lv)):
 					p.use_skill(id)

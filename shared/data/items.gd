@@ -2,6 +2,7 @@ extends RefCounted
 ## ข้อมูลไอเทม ใช้ร่วมกันทั้ง client และ zone server
 ## type: etc = วัตถุดิบ, consumable = ใช้ได้, soul = ดวงวิญญาณสำหรับผนึก (ระบบผนึกมาใน M5), equip = ของสวมใส่
 ##       ore = แร่จากการขุดในถ้ำ, refine = หินตี+ (กดใช้แล้วเปิดหน้าต่างตีบวก)
+##       tool = คันเบ็ด, fish = ปลาจากลำธาร, amulet = พระเครื่อง (ใช้ตอนตีบวก เพิ่มโอกาสสำเร็จ refine_bonus)
 ## ของสวมใส่ที่ตีบวกแล้วเก็บในกระเป๋าด้วยคีย์ "<id>+<ระดับ>" เช่น "mitmo+3" (ใช้ base_id/refine_of แยก)
 ## ของสวมใส่: slot (weapon/armor/head/accessory), line = สายที่ใช้ได้ (any = ทุกสาย), bonus = ค่าที่เพิ่ม, rarity
 ## ยา: heal = เพิ่ม HP, sp = เพิ่ม SP (บวกอีก 10% ของค่าสูงสุด), buy = ราคาซื้อจากร้าน
@@ -75,6 +76,17 @@ const ITEMS := {
 	"soul_phraya_phrai": {"name": "ดวงวิญญาณพญาพราย", "type": "soul", "price": 14000, "color": Color(0.5, 1.0, 0.6)},
 	"soul_phaya_nak": {"name": "ดวงวิญญาณพญานาค", "type": "soul", "price": 24000, "color": Color(0.4, 0.9, 1.0)},
 	"soul_matchurat": {"name": "ดวงวิญญาณพญามัจจุราช", "type": "soul", "price": 40000, "color": Color(1.0, 0.3, 0.35)},
+
+	# ---- ตกปลาที่ลำธาร: คันเบ็ด (ร้านตาม่อง) ปลา (ขายได้) พระเครื่อง (เพิ่ม % ตีบวก) ----
+	"bet_mai": {"name": "คันเบ็ดไม้ไผ่", "type": "tool", "buy": 300, "fish_time": 10.0, "luck": 1.0, "price": 75, "color": Color(0.82, 0.66, 0.4)},
+	"bet_thong": {"name": "คันเบ็ดทองเหลือง", "type": "tool", "buy": 6000, "fish_time": 7.0, "luck": 1.6, "price": 1500, "color": Color(1.0, 0.78, 0.3)},
+	"pla_siew": {"name": "ปลาซิว", "type": "fish", "price": 8, "color": Color(0.75, 0.82, 0.88)},
+	"pla_nil": {"name": "ปลานิล", "type": "fish", "price": 25, "color": Color(0.55, 0.62, 0.7)},
+	"pla_chon": {"name": "ปลาช่อน", "type": "fish", "price": 70, "color": Color(0.42, 0.45, 0.35)},
+	"pla_buek": {"name": "ปลาบึก", "type": "fish", "price": 450, "color": Color(0.6, 0.66, 0.78)},
+	"phra_din": {"name": "พระเครื่องดินเผา", "type": "amulet", "refine_bonus": 0.05, "price": 300, "color": Color(0.8, 0.5, 0.35)},
+	"phra_phong": {"name": "พระเครื่องเนื้อผง", "type": "amulet", "refine_bonus": 0.1, "price": 1200, "color": Color(0.95, 0.92, 0.82)},
+	"phra_thong": {"name": "พระเครื่องเนื้อทองคำ", "type": "amulet", "refine_bonus": 0.2, "price": 5000, "color": Color(1.0, 0.8, 0.25)},
 
 	# ---- อาวุธ ----
 	"maipai_staff": {"name": "ไม้เท้าไผ่สีสุก", "type": "equip", "slot": "weapon", "line": "any", "rarity": "common", "buy": 300, "bonus": {"atk": 6, "matk": 6}},

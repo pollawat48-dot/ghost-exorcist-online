@@ -26,13 +26,15 @@ const PATH_SEGS := [
 	[Vector2(2700, 1090), Vector2(3150, 1100)],
 	[Vector2(1700, 990), Vector2(1760, 790)],
 	[Vector2(2250, 1060), Vector2(2200, 1230)],
-	[Vector2(550, 1000), Vector2(550, 1550)],
+	[Vector2(550, 1000), Vector2(550, 1620)],
 	[Vector2(150, 1000), Vector2(150, 380)],
 	[Vector2(150, 380), Vector2(900, 330)],
 ]
 
 ## ประตูวาร์ปไปป่าช้าวัดร้าง อยู่สุดทางดินฝั่งตะวันออก
 const PORTAL_EAST := Vector2(3130, 1100)
+## ประตูไปลำธารใสเย็น (ตกปลา) สุดทางดินทางใต้ของหมู่บ้าน
+const PORTAL_SOUTH := Vector2(550, 1620)
 
 
 func _init() -> void:
@@ -74,6 +76,7 @@ func _init() -> void:
 	]
 	portals = [
 		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 12+)"},
+		{"pos": PORTAL_SOUTH, "to": "lam_than", "to_pos": Vector2(260, 1000), "name": "ลำธารใสเย็น (ตกปลา)"},
 	]
 
 
@@ -95,7 +98,7 @@ func is_water(p: Vector2) -> bool:
 
 func _blocked(pos: Vector2, radius: float) -> bool:
 	return absf(pos.x - canal_center(pos.y)) < CANAL_BANK + radius or COURTYARD.grow(20).has_point(pos) \
-		or PADDY.has_point(pos) or pos.distance_to(PORTAL_EAST) < 90.0
+		or PADDY.has_point(pos) or pos.distance_to(PORTAL_EAST) < 90.0 or pos.distance_to(PORTAL_SOUTH) < 90.0
 
 
 func minimap_color(p: Vector2) -> Color:
@@ -227,7 +230,7 @@ func _place(kind: String, pos: Vector2, radius: float, gap: float) -> bool:
 			return false
 	if pos.distance_to(GRAVE_CENTER) < GRAVE_R + radius:
 		return false
-	if pos.distance_to(spawn_point) < 80.0 or pos.distance_to(PORTAL_EAST) < 90.0:
+	if pos.distance_to(spawn_point) < 80.0 or pos.distance_to(PORTAL_EAST) < 90.0 or pos.distance_to(PORTAL_SOUTH) < 90.0:
 		return false
 	if not _clear_of_props(pos, gap):
 		return false

@@ -33,8 +33,11 @@ func _build() -> void:
 		var visited: bool = player.state["visited"].has(id)
 		var cave := "  · มีถ้ำ" if id in player.state["caves"] else ""
 		text.add_child(P.label(info["name"] + cave, 15, P.TEXT if visited else P.TEXT.lightened(0.4)))
-		var boss_name: String = GhostDB.GHOSTS[info["boss"]]["name"]
-		text.add_child(P.label("ผีเลเวล %s · บอส %s" % [info["levels"], boss_name], 12, P.TEXT.lightened(0.25)))
+		if info.get("safe", false):
+			text.add_child(P.label("ไม่มีผี · ตกปลาได้ปลาและพระเครื่อง", 12, P.TEXT.lightened(0.25)))
+		else:
+			var boss_name: String = GhostDB.GHOSTS[info["boss"]]["name"]
+			text.add_child(P.label("ผีเลเวล %s · บอส %s" % [info["levels"], boss_name], 12, P.TEXT.lightened(0.25)))
 		var b: Button
 		if id == current_map:
 			b = P.button("อยู่ที่นี่", P.LEMON, 13)

@@ -9,6 +9,12 @@ const Drop = preload("res://client/drop.gd")
 const Quests = preload("res://shared/data/quests.gd")
 const World = preload("res://shared/data/world.gd")
 const Crafting = preload("res://shared/data/crafting.gd")
+const Fishing = preload("res://shared/data/fishing.gd")
+const Skills = preload("res://shared/data/skills.gd")
+const Protocol = preload("res://shared/net/protocol.gd")
+const Server = preload("res://server/server.gd")
+const NetClient = preload("res://client/net/net_client.gd")
+const LocalStore = preload("res://client/net/local_store.gd")
 
 const STEP := 0.05
 
@@ -31,6 +37,12 @@ func _run_all() -> void:
 	print("== แผนที่ถึง Lv150 ถ้ำ หลอมแร่ ตีบวก วาร์ป ==")
 	_test_data()
 	await _test_expansion()
+	print("== ตกปลา พระเครื่อง บัฟปาร์ตี้ ==")
+	await _test_fishing_buffs()
+	print("== ออนไลน์: ผู้เล่นอื่น แชท ปาร์ตี้แชร์ EXP บัฟ ==")
+	await _test_online_game()
+	print("== หน้าเมนู: Guest ออฟไลน์ สร้างตัวละคร เข้าเกม บันทึก ==")
+	await _test_title_flow()
 	if failures == 0:
 		print("ผ่านทั้งหมด")
 	else:
@@ -438,6 +450,8 @@ func _test_data() -> void:
 	check(missing.is_empty(), "ของที่ผีดรอปมีอยู่ในฐานข้อมูลครบ %s" % str(missing))
 	check(max_level == 150, "มีผีถึงเลเวล 150")
 	for id in World.MAPS:
+		if World.MAPS[id].get("safe", false):
+			continue
 		var boss_id: String = World.MAPS[id]["boss"]
 		check(GhostDB.GHOSTS.has(boss_id) and GhostDB.GHOSTS[boss_id].get("boss", false), "%s มีบอส %s Lv %d" % [World.MAPS[id]["name"], GhostDB.GHOSTS[boss_id]["name"], GhostDB.GHOSTS[boss_id]["level"]])
 	var bad_quests: Array[String] = []
@@ -649,3 +663,250 @@ func _test_expansion() -> void:
 	await process_frame
 	check(main.map.map_id == "krung_kao", "ออกจากถ้ำกลับกรุงเก่า")
 	main.free()
+
+
+func _test_fishing_buffs() -> void:
+	var c := Fishing.chances(1.0)
+	var total := 0.0
+	for k in c:
+		total += c[k]
+	check(absf(total - 1.0) < 0.001 and c["pla_siew"] > c["pla_chon"] and c["phra_din"] > c["phra_phong"] and c["phra_phong"] > c["phra_thong"], "ตารางตกปลา: ปลาซิวง่ายสุด พระเครื่องเนื้อทองหายากสุด")
+	check(Fishing.chances(1.6)["phra_thong"] > c["phra_thong"], "คันเบ็ดทองเหลืองได้ของหายากบ่อยขึ้น")
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	main.load_map("lam_than")
+	await process_frame
+	check(main.map.fishing and main.alive_ghosts().is_empty() and main.map.boss_id == "", "ลำธารใสเย็นเป็นแผนที่ปลอดภัย ไม่มีผี ตกปลาได้")
+	check(hud.fish_button.visible, "ที่ลำธารมีปุ่มตกปลา")
+	var shop_ok := false
+	for n in main.npcs.get_children():
+		if n.data.get("stock", []).has("bet_mai"):
+			shop_ok = true
+	check(shop_ok, "ตาม่องขายคันเบ็ด")
+	var bank := Vector2(1000, main.map.stream_y(1000.0) + main.map.STREAM_R + 30.0)
+	player.pos = bank
+	main.start_fishing()
+	check(not player.fishing, "ไม่มีคันเบ็ดตกปลาไม่ได้")
+	player.state["coins"] += 1000
+	check(player.buy("bet_mai"), "ซื้อคันเบ็ดไม้ไผ่")
+	player.pos = Vector2(1000, 1300)
+	main.start_fishing()
+	_run(main, 12.0)
+	check(player.fishing and player.pos.distance_to(main.map.water_near(player.pos, Fishing.REACH)) <= Fishing.REACH, "กดตกปลาไกลน้ำ: เดินไปริมลำธารแล้วเริ่มตกเอง")
+	var before := _item_count(player)
+	_run(main, player.fish_time() * 6 + 0.5)
+	check(player.fishing and player.fish_count >= 6 and _item_count(player) - before >= 6, "AFK ตกปลาได้ของเรื่อยๆ (%d ครั้ง)" % player.fish_count)
+	player.stick = Vector2(1, 0)
+	player.tick(0.05)
+	player.stick = Vector2.ZERO
+	check(not player.fishing, "ขยับตัวแล้วเลิกตกปลา")
+	# ---- พระเครื่องเพิ่ม % ตีบวก ----
+	player.add_item("mitmo+8")
+	player.add_item("hin_ti_3", 3)
+	player.add_item("phra_thong", 1)
+	check(is_equal_approx(player.refine_chance(8, "phra_thong"), ItemDB.REFINE_CHANCE[8] + 0.2) and player.refine_chance(0, "phra_thong") == 1.0, "พระเครื่องเนื้อทองเพิ่มโอกาสตีบวก +20% (ไม่เกิน 100%)")
+	player.state["coins"] += 100000
+	player.refine("mitmo+8", "hin_ti_3", "", "phra_thong")
+	check(player.inventory.get("phra_thong", 0) == 0, "ใช้พระเครื่องตอนตีบวกแล้วหมดไป")
+	player.add_item("phra_din")
+	player.potion_cd = 0.0
+	player.use_item("phra_din")
+	check(hud.windows["refine"].visible, "กดใช้พระเครื่องในกระเป๋าแล้วเปิดหน้าต่างตีบวก")
+	hud.close_windows()
+	# ---- บัฟปาร์ตี้ ----
+	var casts: Array = []
+	player.party_cast.connect(func(f: Dictionary): casts.append(f))
+	player.state["class"] = "nak_rob"
+	player.state["skills"]["plook_kamlang"] = 5
+	player.recalc()
+	var atk: int = player.stats["atk"]
+	player.sp = player.stats["max_sp"]
+	check(player.use_skill("plook_kamlang") and player.buffs.has("atk") and player.stats["atk"] == int(atk * 1.3), "ปลุกพลังกล้า Lv5: ตีแรงขึ้น 30%")
+	check(casts.size() == 1 and casts[0]["effect"] == "atk" and is_equal_approx(casts[0]["power"], 0.3), "ใช้บัฟแล้วส่งต่อให้เพื่อนในปาร์ตี้")
+	check(hud.buff_label.text.contains("ปลุกพลังกล้า"), "แสดงบัฟที่ติดตัวบน HUD")
+	_run(main, 61.0)
+	check(not player.buffs.has("atk") and player.stats["atk"] == atk, "บัฟหมดเวลาแล้วพลังกลับเท่าเดิม")
+	var spd: float = player.speed()
+	player.apply_buff("speed", 0.35, 30.0, "ลมพัดไว", "เพื่อน")
+	check(player.speed() > spd * 1.3, "รับบัฟลมพัดไวจากเพื่อน เดินเร็วขึ้น")
+	player.apply_buff("sp_regen", 1.5, 30.0, "สมาธิแก่กล้า", "เพื่อน")
+	player.sp = 0
+	player.regen_timer = 0.0
+	_run(main, 3.05)
+	var boosted: int = player.sp
+	player.buffs.erase("sp_regen")
+	player.sp = 0
+	player.regen_timer = 0.0
+	_run(main, 3.05)
+	check(boosted > player.sp, "สมาธิแก่กล้า: SP ฟื้นเร็วขึ้น (%d > %d)" % [boosted, player.sp])
+	player.state["class"] = "mo_phi"
+	player.state["skills"]["nam_mon_chalom"] = 1
+	player.recalc()
+	player.hp = 10
+	player.sp = player.stats["max_sp"]
+	check(player.use_skill("nam_mon_chalom") and player.hp > 10 and casts[-1]["t"] == "heal", "น้ำมนต์ชโลมหมู่: ฮีลตัวเองและส่งฮีลให้เพื่อน")
+	var per_line := {}
+	for id in Skills.SKILLS:
+		if Skills.is_party(id):
+			var line: String = load("res://shared/data/classes.gd").CLASSES[Skills.SKILLS[id]["class"]]["line"]
+			per_line[line] = per_line.get(line, 0) + 1
+	check(per_line.get("melee", 0) == 2 and per_line.get("ranged", 0) == 2 and per_line.get("magic", 0) == 2, "สกิลบัฟปาร์ตี้สายละ 2 สกิล")
+	main.free()
+
+
+## ปั๊ม frame จน cond() เป็นจริง หรือหมดเวลา
+func _wait(cond: Callable, seconds: float = 5.0) -> bool:
+	var end := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < end:
+		if cond.call():
+			return true
+		await process_frame
+	return cond.call()
+
+
+func _test_online_game() -> void:
+	var dir := "user://test_online_%d" % randi()
+	var server: Node = Server.new()
+	root.add_child(server)
+	var port := 20000 + randi() % 20000
+	check(server.start(port, dir) == OK, "เปิดเซิร์ฟเวอร์ทดสอบ")
+	var a: Node = NetClient.new()
+	var b: Node = NetClient.new()
+	root.add_child(a)
+	root.add_child(b)
+	var ev := {"a_enter": {}, "b_enter": {}, "b_chat": [], "b_exp": [], "b_buff": [], "b_heal": [], "b_party": 0}
+	a.entered.connect(func(n: String, l: Dictionary, d: Dictionary): ev["a_enter"] = {"name": n, "data": d})
+	b.entered.connect(func(n: String, l: Dictionary, d: Dictionary): ev["b_enter"] = {"name": n})
+	b.chat_received.connect(func(ch: String, from: String, to: String, text: String): ev["b_chat"].append([ch, from, text]))
+	b.exp_shared.connect(func(amount: int, gid: String, from: String, members: int): ev["b_exp"].append([amount, members]))
+	b.buff_received.connect(func(m: Dictionary): ev["b_buff"].append(m))
+	b.heal_received.connect(func(amount: int, from: String): ev["b_heal"].append(amount))
+	b.party_invited.connect(func(from: String): b.party_reply(from, true))
+	for c in [a, b]:
+		c.connect_to("127.0.0.1", port)
+	check(await _wait(func(): return a.ready_ok and b.ready_ok), "ผู้เล่นสองคนต่อเซิร์ฟเวอร์ได้")
+	a.register("alice01", "secret1")
+	b.register("bobby02", "secret2")
+	await _wait(func(): return false, 0.3)
+	a.login("alice01", "secret1")
+	b.login("bobby02", "secret2")
+	await _wait(func(): return a.user != "" and b.user != "")
+	a.create_char("อลิซ", {"gender": "f", "hair": 3, "skin": 0})
+	b.create_char("บ๊อบ", {"gender": "m", "hair": 1, "skin": 1})
+	await _wait(func(): return a.chars.size() == 1 and b.chars.size() == 1)
+	a.enter("อลิซ")
+	b.enter("บ๊อบ")
+	check(await _wait(func(): return not ev["a_enter"].is_empty() and not ev["b_enter"].is_empty()), "เข้าสู่โลกด้วยตัวละครที่สร้าง")
+	var main: Node3D = load("res://main.tscn").instantiate()
+	main.session = {"name": "อลิซ", "look": {"gender": "f", "hair": 3, "skin": 0}, "data": ev["a_enter"]["data"], "guest": false}
+	main.net = a
+	root.add_child(main)
+	await process_frame
+	var player: Node3D = main.player
+	check(player.player_name == "อลิซ" and main.is_online(), "เข้าเกมออนไลน์ด้วยชื่อตัวละคร")
+	# บ็อบยืนอยู่ในหมู่บ้านใกล้ๆ
+	b.send_pos("khlong_village", player.pos + Vector2(60, 0), {"cls": "novice", "lv": 3, "hp": 100, "mhp": 100, "equip": {"weapon": "mitmo+7"}})
+	check(await _wait(func(): return main.remotes.get_child_count() == 1), "เห็นผู้เล่นอื่นในแผนที่เดียวกัน")
+	var other: Node3D = main.remotes.get_child(0) if main.remotes.get_child_count() > 0 else null
+	check(other != null and other.player_name == "บ๊อบ" and other.equip.get("weapon", "") == "mitmo+7", "ผู้เล่นอื่นแสดงชื่อและของที่สวมใส่")
+	# แชท
+	main.hud.chat.input.text = "สวัสดีทุกคน"
+	main.hud.chat._submit(main.hud.chat.input.text)
+	check(await _wait(func(): return ev["b_chat"].size() >= 1), "แชทโลกส่งถึงผู้เล่นอื่น")
+	check(ev["b_chat"].size() >= 1 and ev["b_chat"][0][0] == "world" and ev["b_chat"][0][2] == "สวัสดีทุกคน", "ข้อความแชทโลกถูกต้อง")
+	b.send_chat("whisper", "แอบกระซิบ", "อลิซ")
+	check(await _wait(func(): return main.hud.chat.last_text().contains("แอบกระซิบ")), "รับกระซิบในกล่องแชท")
+	# ปาร์ตี้
+	main.hud.party_request.emit("invite:บ๊อบ")
+	check(await _wait(func(): return a.in_party() and b.in_party()), "ชวนเข้าปาร์ตี้แล้วเพื่อนตอบรับ")
+	check(main.hud.party_frame.size.y > 0, "แสดงกรอบสมาชิกปาร์ตี้บนจอ")
+	b.send_chat("party", "ไปตีผีกัน", "")
+	check(await _wait(func(): return main.hud.chat.last_text().contains("ไปตีผีกัน")), "แชทปาร์ตี้")
+	# แชร์ EXP: ฆ่าผีในปาร์ตี้ 2 คนแผนที่เดียวกัน = (exp x 1.10) / 2 ต่อคน
+	main.set_process(false)
+	var g: Node3D = main.alive_ghosts()[0]
+	var gexp: int = g.data["exp"]
+	var exp_before: int = player.state["exp"]
+	var level_before: int = player.state["level"]
+	g.take_damage(999999, player)
+	check(await _wait(func(): return ev["b_exp"].size() >= 1), "ฆ่าผีแล้วเพื่อนได้ EXP ร่วม")
+	check(ev["b_exp"].size() >= 1 and ev["b_exp"][0][0] == Protocol.party_share(gexp, 2) and ev["b_exp"][0][1] == 2, "เพื่อนได้ EXP = (%d + 10%%) / 2 = %d" % [gexp, Protocol.party_share(gexp, 2)])
+	check(await _wait(func(): return player.state["exp"] != exp_before or player.state["level"] != level_before), "ตัวเองได้ EXP ส่วนแบ่งจากเซิร์ฟเวอร์")
+	# บัฟ/ฮีลถึงเพื่อน
+	player.state["class"] = "nak_rob"
+	player.state["skills"]["plook_kamlang"] = 3
+	player.recalc()
+	player.sp = player.stats["max_sp"]
+	player.use_skill("plook_kamlang")
+	check(await _wait(func(): return ev["b_buff"].size() >= 1) and ev["b_buff"][0].get("effect", "") == "atk", "บัฟปาร์ตี้ส่งถึงเพื่อนที่อยู่ใกล้")
+	b.send_buff({"t": "buff", "skill": "lom_phat", "lv": 2, "power": 0.2, "duration": 30.0, "effect": "speed", "x": player.pos.x, "y": player.pos.y})
+	check(await _wait(func(): return player.buffs.has("speed")), "รับบัฟจากเพื่อนผ่านเซิร์ฟเวอร์")
+	# เซฟแล้วโหลดกลับมาได้
+	player.state["coins"] = 7777
+	main.save_now()
+	await _wait(func(): return false, 0.5)
+	main.free()
+	a.close()
+	b.close()
+	server.stop()
+	var store_check: Dictionary = server.store.load_char("alice01", "อลิซ")
+	check(store_check.get("data", {}).get("state", {}).get("coins", 0) == 7777 and store_check["data"].get("map", "") == "khlong_village", "บันทึกตัวละครลงเซิร์ฟเวอร์ (เหรียญ แผนที่ ตำแหน่ง)")
+	server.free()
+	a.free()
+	b.free()
+	_rm_dir(dir)
+
+
+func _rm_dir(path: String) -> void:
+	var d := DirAccess.open(path)
+	if d == null:
+		return
+	for f in d.get_files():
+		d.remove(f)
+	for sub in d.get_directories():
+		_rm_dir(path + "/" + sub)
+	DirAccess.remove_absolute(path)
+
+
+func _test_title_flow() -> void:
+	var path := "user://test_guest_%d.dat" % randi()
+	var app: Node = load("res://app.tscn").instantiate()
+	root.add_child(app)
+	await process_frame
+	app.store = LocalStore.new(path)
+	app.host = "127.0.0.1"
+	app.port = 1  # ไม่มีเซิร์ฟเวอร์: Guest ต้องเล่นออฟไลน์ได้
+	var title: Control = app.title
+	check(title != null and title.page == "login", "เปิดเกมมาเจอหน้าเข้าสู่ระบบ")
+	title.show_register()
+	check(title.page == "register" and title._pw2 != null, "มีหน้าสมัครไอดี")
+	title._user.text = "ab"
+	title._do_register()
+	check(title.status_label.text.contains("ไอดี"), "สมัครไอดีสั้นเกินไปมีคำเตือน")
+	title.show_login()
+	title.guest_requested.emit()
+	check(await _wait(func(): return app.title != null and app.title.page == "chars", 8.0), "เล่นแบบ Guest: ต่อเซิร์ฟเวอร์ไม่ได้ก็เข้าหน้าเลือกตัวละครแบบออฟไลน์")
+	title.show_create()
+	title.char_create_requested.emit("ทดสอบ", {"gender": "f", "hair": 2, "skin": 1})
+	check(app.store.list().size() == 1 and title.page == "chars", "สร้างตัวละคร Guest เก็บในเครื่อง")
+	title.char_create_requested.emit("ทดสอบ", {"gender": "m", "hair": 0, "skin": 0})
+	check(app.store.list().size() == 1 and title.status_label.text != "", "ชื่อซ้ำสร้างไม่ได้")
+	title.char_selected.emit("ทดสอบ")
+	await process_frame
+	await process_frame
+	var game: Node3D = app.game
+	check(game != null and game.player.player_name == "ทดสอบ" and game.player.look.get("gender", "") == "f" and app.title == null, "เลือกตัวละครแล้วเข้าเกม")
+	game.set_process(false)
+	game.player.state["coins"] = 4321
+	game.do_action("logout")
+	await process_frame
+	await process_frame
+	check(app.game == null and app.title != null and app.title.page == "login", "ออกจากเกมกลับหน้าเมนู")
+	var saved: Dictionary = LocalStore.new(path).load_char("ทดสอบ")
+	check(saved.get("data", {}).get("state", {}).get("coins", 0) == 4321, "ตัวละคร Guest บันทึกในเครื่อง")
+	app.free()
+	DirAccess.remove_absolute(path)

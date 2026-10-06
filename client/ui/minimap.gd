@@ -9,10 +9,12 @@ var player: Node3D
 var ghosts: Node
 var npcs: Node
 var portals: Node
+var remotes: Node  ## ผู้เล่นอื่น (ฟ้า) และเพื่อนในปาร์ตี้ (ชมพู)
 var tex: ImageTexture
 
 
-func setup(m: Node3D, p: Node3D, g: Node, npc_root: Node = null, portal_root: Node = null) -> void:
+func setup(m: Node3D, p: Node3D, g: Node, npc_root: Node = null, portal_root: Node = null, remote_root: Node = null) -> void:
+	remotes = remote_root
 	map = m
 	player = p
 	ghosts = g
@@ -72,6 +74,11 @@ func _draw() -> void:
 		draw_circle(bp, 8.0, Color(1.0, 0.45, 0.6))
 		draw_arc(bp, 8.0, 0, TAU, 24, Color.WHITE, 2.0, true)
 		P.draw_icon(self, "crown", bp + Vector2(0, -1), 12.0)
+	if remotes != null:
+		for r in remotes.get_children():
+			var rp: Vector2 = to_map.call(r.pos)
+			draw_circle(rp, 4.5, Color.WHITE)
+			draw_circle(rp, 3.4, Color(1.0, 0.55, 0.75) if r.in_party else Color(0.4, 0.7, 1.0))
 	if player != null:
 		var pp: Vector2 = to_map.call(player.pos)
 		draw_circle(pp, 6.0, Color.WHITE)
