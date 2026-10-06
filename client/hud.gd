@@ -252,7 +252,7 @@ func press_slot(i: int) -> void:
 ## เปิดหน้าต่างของ NPC ที่คุยด้วย (ร้านค้า หรือรายการเควส)
 func open_npc(npc: Dictionary) -> void:
 	close_windows()
-	var w: Control = windows["shop" if npc["role"] == "shop" else "quest"]
+	var w: Control = windows[{"shop": "shop", "class": "class"}.get(npc["role"], "quest")]
 	w.open_for(npc)
 
 

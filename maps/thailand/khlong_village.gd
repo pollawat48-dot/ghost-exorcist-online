@@ -62,6 +62,8 @@ func _init() -> void:
 			"stock": ["herb_potion", "nam_mon", "ya_hom_thong", "nam_mon_yai"]},
 		{"id": "luang_ta", "name": "หลวงตาเมือง", "role": "quest", "pos": Vector2(460, 925),
 			"look": {"robe": Color(1.0, 0.66, 0.3), "sash": Color(0.95, 0.55, 0.25), "hat": "bald"}},
+		{"id": "khru_yai", "name": "ครูใหญ่สำนัก (เปลี่ยนอาชีพ)", "role": "class", "pos": Vector2(760, 1045),
+			"look": {"robe": Color(0.55, 0.5, 0.82), "sash": Color(1.0, 0.82, 0.35), "hat": "topknot"}},
 	]
 	portals = [
 		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 12+)"},

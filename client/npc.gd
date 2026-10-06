@@ -35,7 +35,7 @@ func _ready() -> void:
 	var robe := K.mat(look["robe"], 0.0, 0.8)
 	var sash := K.mat(look["sash"])
 	var skin := K.mat(Color(1.0, 0.86, 0.74), 0.0, 0.7)
-	var hair := K.mat(Color(0.86, 0.86, 0.9) if look["hat"] in ["bun", "bald"] else Color(0.36, 0.25, 0.24), 0.0, 0.6)
+	var hair := K.mat(Color(0.86, 0.86, 0.9) if look["hat"] in ["bun", "bald", "topknot"] else Color(0.36, 0.25, 0.24), 0.0, 0.6)
 	var eye := K.mat(Color(0.2, 0.13, 0.16), 0.0, 0.3, 0.0, false)
 	var blush := K.mat(Color(1.0, 0.6, 0.65), 0.3, 0.8, 0.0, false)
 	# ตัว: ชุดยาวทรงระฆัง (คนแก่ใจดี ตัวเตี้ยกว่าผู้เล่นนิดหน่อย)
@@ -60,6 +60,12 @@ func _ready() -> void:
 			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
 			K.sphere(head, 0.15, Vector3(0, 0.36, -0.28), hair, 10)
 			K.cyl(head, 0.015, 0.015, 0.4, Vector3(0, 0.38, -0.28), K.gold(), 4, Vector3(0, 0, PI / 2.5))
+		"topknot":
+			# ครูใหญ่: มวยผมจุก ปักปิ่นทอง หนวดขาว
+			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
+			K.sphere(head, 0.14, Vector3(0, 0.48, -0.1), hair, 10)
+			K.cyl(head, 0.015, 0.015, 0.42, Vector3(0, 0.52, -0.1), K.gold(), 4, Vector3(0, 0, PI / 2.0))
+			K.sphere(head, 0.1, Vector3(0, -0.28, 0.28), K.mat(Color(0.96, 0.96, 0.96)), 8, Vector3(1.0, 1.4, 0.6))
 		"farmer":
 			# งอบสาน
 			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
@@ -107,6 +113,10 @@ func set_marker(state: String) -> void:
 		"available":
 			marker.text = "!"
 			marker.modulate = Color(1.0, 0.85, 0.3)
+		"class":
+			marker.text = "เปลี่ยนอาชีพ"
+			marker.font_size = 40
+			marker.modulate = Color(0.85, 0.75, 1.0)
 		"shop":
 			marker.text = "ร้านค้า"
 			marker.font_size = 40

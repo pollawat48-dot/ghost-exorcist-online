@@ -4,6 +4,14 @@ extends RefCounted
 ## look = หน้าตาตัวละคร (สีจีวร อาวุธ หมวก ผ้าคลุม ออร่า)
 
 const CLASS_CHANGE_LEVELS := [10, 50, 100]
+## เงื่อนไขเปลี่ยนอาชีพที่ NPC ครูใหญ่สำนัก (ต่อขั้น): ผ่านเควสบททดสอบ + จ่ายค่าครู
+## ขั้น 1 ปราบผีตะเกียง (เลเวล 10 ยังสู้บอสไม่ไหว), ขั้น 2 ปราบนางพญากระสือ, ขั้น 3 ปราบพญาเปรต
+const CLASS_TRIALS := [
+	{"quest": "q_trial_1", "fee": 300},
+	{"quest": "q_trial_2", "fee": 5000},
+	{"quest": "q_trial_3", "fee": 30000},
+]
+const MASTER_NPC := "khru_yai"
 
 const CLASSES := {
 	"novice": {
@@ -85,6 +93,12 @@ static func next_classes(class_id: String) -> Array[String]:
 static func change_level(class_id: String) -> int:
 	var tier: int = CLASSES[class_id]["tier"]
 	return CLASS_CHANGE_LEVELS[tier] if tier < CLASS_CHANGE_LEVELS.size() else -1
+
+
+## เงื่อนไขเลื่อนขั้นถัดไปของคลาสนี้ ({} = ขั้นสุดท้ายแล้ว)
+static func trial_for(class_id: String) -> Dictionary:
+	var tier: int = CLASSES[class_id]["tier"]
+	return CLASS_TRIALS[tier] if tier < CLASS_TRIALS.size() else {}
 
 
 ## สายคลาสตั้งแต่ศิษย์วัดจนถึงคลาสนี้ (ใช้ดูว่าเรียนสกิลอะไรได้บ้าง)

@@ -181,11 +181,19 @@ func _test_character(main: Node3D) -> void:
 	var hud: CanvasLayer = main.hud
 	player.command_move(player.pos)
 	player.gain_exp(9000)
-	check(player.state["level"] >= 10 and player.can_change_class(), "ถึงเลเวล 10 แล้วเลื่อนขั้นคลาสได้ (Lv %d)" % player.state["level"])
+	check(player.state["level"] >= 10 and player.class_level_reached() and not player.can_change_class(), "ถึงเลเวล 10 แล้ว แต่ยังเปลี่ยนอาชีพไม่ได้จนกว่าผ่านบททดสอบ (Lv %d)" % player.state["level"])
+	check(not player.change_class("nak_rob"), "ยังไม่ผ่านบททดสอบ เปลี่ยนอาชีพไม่ได้")
+	check(player.accept_quest("q_trial_1"), "รับบททดสอบจากครูใหญ่สำนัก")
+	for i in 15:
+		player.reward_kill("phi_takiang", 0, 0)
+	check(player.complete_quest("q_trial_1"), "ปราบผีตะเกียงครบ ส่งบททดสอบได้")
+	player.state["coins"] = 100
+	check(not player.can_change_class(), "เงินไม่พอค่าครู เปลี่ยนอาชีพไม่ได้")
+	player.state["coins"] = 1000
 	var atk_before: int = player.stats["atk"]
 	check(player.add_stat("str") and player.stats["atk"] == atk_before + 2, "อัป STR แล้วพลังโจมตีเพิ่ม")
 	check(not player.change_class("nak_dab"), "ข้ามขั้นคลาสไม่ได้")
-	check(player.change_class("nak_rob") and player.class_info()["name"] == "นักรบเวทย์", "เปลี่ยนคลาสเป็นนักรบเวทย์")
+	check(player.change_class("nak_rob") and player.class_info()["name"] == "นักรบเวทย์" and player.coins() == 700, "จ่ายค่าครู 300 แล้วเปลี่ยนเป็นนักรบเวทย์")
 	check(not player.can_change_class(), "เลื่อนขั้นต่อไม่ได้จนกว่าจะถึงเลเวล 50")
 	check("fan_khatha" in player.available_skills() and not "ying_son" in player.available_skills(), "เรียนได้เฉพาะสกิลของสายตัวเอง")
 	check(player.learn_skill("fan_khatha") and player.skill_level("fan_khatha") == 1, "ใช้แต้มสกิลเรียนฟันคาถา")
@@ -213,7 +221,15 @@ func _test_character(main: Node3D) -> void:
 
 	player.gain_exp(50000000)
 	check(player.state["level"] == 150, "เลเวลตันที่ 150")
-	check(player.change_class("nak_dab") and player.change_class("khun_phaen"), "เลื่อนขั้นคลาสครบ 3 ครั้ง")
+	check(not player.change_class("nak_dab"), "ขั้น 2 ต้องปราบนางพญากระสือก่อน")
+	player.state["coins"] = 100000
+	for pair in [["q_trial_2", "krasue_queen"], ["q_trial_3", "pret_king"]]:
+		player.accept_quest(pair[0])
+		player.reward_kill(pair[1], 0, 0)
+		player.complete_quest(pair[0])
+		if pair[0] == "q_trial_2":
+			check(player.change_class("nak_dab"), "ปราบนางพญากระสือ + จ่ายค่าครู แล้วเลื่อนขั้น 2")
+	check(player.change_class("khun_phaen") and player.coins() == 100000 - 5000 - 30000, "ปราบพญาเปรต + จ่ายค่าครู แล้วเลื่อนขั้น 3 ครบ")
 	check(not player.can_change_class(), "ขั้นสุดท้ายแล้วเลื่อนต่อไม่ได้")
 
 	# บอสประจำถิ่น
@@ -251,7 +267,14 @@ func _test_world() -> void:
 	var hud: CanvasLayer = main.hud
 
 	# ---- ร้านค้า ----
-	check(main.npcs.get_child_count() == 2, "หมู่บ้านมี NPC ร้านยาและหลวงตา")
+	check(main.npcs.get_child_count() == 3, "หมู่บ้านมี NPC ร้านยา หลวงตา และครูใหญ่สำนัก")
+	for n in main.npcs.get_children():
+		if n.role() == "class":
+			player.pos = n.pos + Vector2(0, 40)
+			main.talk_to(n)
+			check(hud.windows["class"].visible and n.marker_state == "class", "คุยกับครูใหญ่สำนักแล้วเปิดหน้าต่างเปลี่ยนอาชีพ")
+			hud.close_windows()
+			player.pos = main.map.spawn_point
 	var coins: int = player.coins()
 	var sp_before: int = player.inventory.get("nam_mon", 0)
 	check(player.buy("nam_mon", 2) and player.coins() == coins - 60 and player.inventory["nam_mon"] == sp_before + 2, "ซื้อน้ำมนต์ 2 ขวด เหรียญลดลง")

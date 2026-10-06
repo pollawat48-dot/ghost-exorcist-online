@@ -235,14 +235,18 @@ func _refresh_npc_markers() -> void:
 		if n.role() == "shop":
 			n.set_marker("shop")
 			continue
-		var mark := ""
+		var mark := "ready" if n.role() == "class" and player.can_change_class() else ""
 		for id in Quests.for_giver(n.npc_id()):
+			if mark == "ready":
+				break
 			var st: String = player.quest_status(id)
 			if st == "ready":
 				mark = "ready"
 				break
 			if st == "available":
 				mark = "available"
+		if mark == "" and n.role() == "class":
+			mark = "class"
 		n.set_marker(mark)
 
 

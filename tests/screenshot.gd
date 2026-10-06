@@ -64,6 +64,8 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 		var chain: Array[String] = load("res://shared/data/classes.gd").lineage(target)
 		player.gain_exp(50000000)
 		for id in chain.slice(1):
+			player.state["quests_done"][player.class_change_status()["quest"]] = 1
+			player.state["coins"] += player.class_change_status()["fee"]
 			player.change_class(id)
 		for id in player.available_skills():
 			while player.state["skill_points"] > 0 and player.learn_skill(id):
@@ -101,9 +103,9 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 			player.equip(id)
 	elif mode in ["char", "skills", "bag", "class", "questlog", "auto"]:
 		main.hud.toggle_window(mode)
-	elif mode in ["shop", "quest"]:
+	elif mode in ["shop", "quest", "master"]:
 		for n in main.npcs.get_children():
-			if n.role() == mode:
+			if n.role() == ("class" if mode == "master" else mode):
 				main.hud.open_npc(n.data)
 	elif mode == "autoon":
 		main.toggle_auto()

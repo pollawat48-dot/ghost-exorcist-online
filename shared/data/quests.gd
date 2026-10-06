@@ -8,6 +8,25 @@ const GhostDB = preload("res://shared/data/ghosts.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 
 const QUESTS := {
+	# ---- ครูใหญ่สำนัก: บททดสอบเปลี่ยนอาชีพ (ส่งแล้วจ่ายค่าครูเพื่อเลื่อนขั้นได้) ----
+	"q_trial_1": {
+		"giver": "khru_yai", "name": "บททดสอบศิษย์วัด", "type": "kill", "target": "phi_takiang", "count": 15,
+		"min_level": 10, "requires": "", "repeatable": false, "trial": 1,
+		"desc": "พิสูจน์ว่าเจ้าพร้อมเป็นผู้ปราบผีเต็มตัว ไปปราบผีตะเกียงในป่ากล้วยให้ได้ 15 ตัว",
+		"reward": {"exp": 300, "coins": 0, "items": {}},
+	},
+	"q_trial_2": {
+		"giver": "khru_yai", "name": "บททดสอบผู้กล้า: นางพญากระสือ", "type": "kill", "target": "krasue_queen", "count": 1,
+		"min_level": 50, "requires": "q_trial_1", "repeatable": false, "trial": 2,
+		"desc": "ผู้ที่จะเลื่อนขั้นต้องปราบบอสประจำถิ่นได้ด้วยตัวเอง จงปราบนางพญากระสือที่หมู่บ้านริมคลอง",
+		"reward": {"exp": 5000, "coins": 0, "items": {}},
+	},
+	"q_trial_3": {
+		"giver": "khru_yai", "name": "บททดสอบปรมาจารย์: พญาเปรต", "type": "kill", "target": "pret_king", "count": 1,
+		"min_level": 100, "requires": "q_trial_2", "repeatable": false, "trial": 3,
+		"desc": "บททดสอบสุดท้าย ปราบพญาเปรตแห่งป่าช้าวัดร้าง แล้วกลับมารับตำแหน่งขั้นสูงสุด",
+		"reward": {"exp": 30000, "coins": 0, "items": {}},
+	},
 	# ---- หลวงตาเมือง (หมู่บ้านริมคลอง) ----
 	"q_krasue": {
 		"giver": "luang_ta", "name": "กระสือกวนทุ่งนา", "type": "kill", "target": "krasue_noi", "count": 8,
@@ -124,7 +143,11 @@ static func goal_text(state: Dictionary, inventory: Dictionary, id: String) -> S
 
 static func reward_text(id: String) -> String:
 	var r: Dictionary = QUESTS[id]["reward"]
-	var parts: Array[String] = ["EXP %d" % r["exp"], "%d เหรียญ" % r["coins"]]
+	var parts: Array[String] = ["EXP %d" % r["exp"]]
+	if r["coins"] > 0:
+		parts.append("%d เหรียญ" % r["coins"])
+	if QUESTS[id].has("trial"):
+		parts.append("สิทธิ์เปลี่ยนอาชีพขั้น %d" % QUESTS[id]["trial"])
 	for item in r["items"]:
 		parts.append("%s x%d" % [ItemDB.ITEMS[item]["name"], r["items"][item]])
 	return " · ".join(parts)

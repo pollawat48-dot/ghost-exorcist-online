@@ -532,14 +532,35 @@ func add_stat(key: String) -> bool:
 	return true
 
 
-func can_change_class() -> bool:
+## เงื่อนไขเปลี่ยนอาชีพขั้นถัดไป: เลเวลถึง, ผ่านเควสบททดสอบของครูใหญ่, มีเงินค่าครูพอ
+func class_change_status() -> Dictionary:
 	var need := Classes.change_level(state["class"])
-	return need > 0 and state["level"] >= need
+	if need < 0:
+		return {}
+	var trial := Classes.trial_for(state["class"])
+	return {
+		"level": need, "level_ok": state["level"] >= need,
+		"quest": trial["quest"], "quest_ok": state["quests_done"].has(trial["quest"]),
+		"fee": trial["fee"], "fee_ok": state["coins"] >= trial["fee"],
+	}
+
+
+func class_level_reached() -> bool:
+	var st := class_change_status()
+	return not st.is_empty() and st["level_ok"]
+
+
+func can_change_class() -> bool:
+	var st := class_change_status()
+	return not st.is_empty() and st["level_ok"] and st["quest_ok"] and st["fee_ok"]
 
 
 func change_class(class_id: String) -> bool:
 	if not can_change_class() or not class_id in Classes.next_classes(state["class"]):
 		return false
+	var fee: int = class_change_status()["fee"]
+	state["coins"] -= fee
+	message.emit("จ่ายค่าครู %d เหรียญ" % fee)
 	state["class"] = class_id
 	# ของที่สายใหม่ใช้ไม่ได้ให้ถอดเก็บเข้ากระเป๋า
 	for slot in state["equipment"].keys():
@@ -759,8 +780,8 @@ func gain_exp(amount: int, coin_amount: int = 0) -> void:
 		sp = stats["max_sp"]
 		levelup_fx = 1.2
 		message.emit("เลเวลอัป! ตอนนี้เลเวล %d (แต้มสเตตัส %d)" % [state["level"], state["stat_points"]])
-		if can_change_class():
-			message.emit("ถึงเลเวลเปลี่ยนคลาสแล้ว! เปิดหน้าต่างตัวละครเพื่อเลื่อนขั้น")
+		if class_level_reached() and state["level"] - ups < class_change_status()["level"]:
+			message.emit("ถึงเลเวลเปลี่ยนอาชีพแล้ว! ไปคุยกับครูใหญ่สำนักหน้าโบสถ์เพื่อรับบททดสอบ")
 	changed.emit()
 
 
