@@ -218,7 +218,45 @@ func _test_character(main: Node3D) -> void:
 	check("fan_khatha" in player.available_skills() and not "ying_son" in player.available_skills(), "เรียนได้เฉพาะสกิลของสายตัวเอง")
 	check(player.learn_skill("fan_khatha") and player.skill_level("fan_khatha") == 1, "ใช้แต้มสกิลเรียนฟันคาถา")
 	hud.refresh()
-	check(hud.slot_actions[1] == "skill:fan_khatha", "สกิลที่เรียนแล้วขึ้นแถบสกิลเอง")
+	check(hud.slot_actions[1] == "skill:fan_khatha", "เรียนสกิลใหม่แล้วใส่ช่องว่างรอบปุ่มโจมตีให้เอง")
+	check(hud.slots.size() == 9 and hud.slots[8].kind == "" and hud.chat.get_parent() != hud, "ช่องสกิล 9 ช่องล้อมปุ่มโจมตี (ช่องที่เหลือว่าง) แชทย้ายไปล่างกลาง")
+	var ac: Vector2 = hud.attack_button.get_global_rect().get_center()
+	var ring_ok := true
+	for b in hud.slots:
+		var dist: float = b.get_global_rect().get_center().distance_to(ac)
+		ring_ok = ring_ok and dist > 100.0 and dist < 210.0
+	check(ring_ok, "ช่องสกิลอยู่เป็นวงรอบปุ่มโจมตี")
+	check(player.set_skill_slot(5, "fan_khatha") and hud.slot_actions[5] == "skill:fan_khatha" and hud.slot_actions[1] == "", "ลากสกิลจากหน้าต่างสกิลใส่ช่องอื่น: ย้ายไปช่องใหม่")
+	check(not player.set_skill_slot(2, "ying_son"), "สกิลที่ยังไม่ได้เรียนใส่ช่องไม่ได้")
+	hud._slot_dragged(hud.slots[0].get_global_rect().get_center(), 5)
+	check(hud.slot_actions[0] == "skill:fan_khatha" and hud.slot_actions[5] == "skill:holy_water", "ลากช่องไปปล่อยบนอีกช่อง: สลับกัน")
+	hud._slot_dragged(Vector2(300, 300), 5)
+	check(hud.slot_actions[5] == "" and player.skill_slots()[5] == "", "ลากช่องออกนอกวง: เอาสกิลออก")
+	var hits := [0]
+	hud.slots[0].pressed.connect(func(): hits[0] += 1)
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = hud.slots[0].get_global_rect().get_center()
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.position = down.position
+	hud.slots[0]._input(down)
+	check(hits[0] == 0, "ช่องสกิลยังไม่ทำงานตอนกดลง (รอดูว่าจะลากไหม)")
+	hud.slots[0]._input(up)
+	check(hits[0] == 1, "แตะแล้วปล่อยที่เดิม = ใช้สกิล")
+	var saved: Dictionary = player.save_data()
+	var Player2 = load("res://client/player.gd")
+	var p2: Node3D = Player2.new()
+	p2.apply_save(saved)
+	check(p2.skill_slots()[0] == "fan_khatha", "ช่องสกิลบันทึกไปกับตัวละคร")
+	saved["state"].erase("skill_slots")
+	var p3: Node3D = Player2.new()
+	p3.apply_save(saved)
+	check("fan_khatha" in p3.skill_slots() and "holy_water" in p3.skill_slots(), "เซฟเก่าที่ยังไม่มีช่องสกิล: ใส่สกิลที่เรียนไว้ให้")
+	p2.free()
+	p3.free()
+	player.set_skill_slot(1, "fan_khatha")
 
 	var ghost := _nearest(main, player.pos)
 	player.pos = ghost.pos + Vector2(30, 0)

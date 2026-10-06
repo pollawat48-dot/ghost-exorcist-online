@@ -1,8 +1,8 @@
 extends CanvasLayer
 ## หน้าจอข้อมูลผู้เล่นแบบพาสเทลน่ารัก ใช้ได้ทั้ง PC และมือถือ
 ## ซ้ายบน: ชื่อ/เลเวล/HP/SP  กลางบน: ชื่อแผนที่+เวลา+ประกาศ+หลอดบอส  ขวาบน: แผนที่ย่อ+ปุ่มเมนู
-## ล่างซ้าย: จอย  ล่างกลาง: แถบสกิล 1–8 + ยามานา (9) + ยาเลือด (0)  ล่างขวา: ปุ่มโจมตี+สกิล+ยา+ออโต้
-## ซ้าย: ข้อความเกม + รายการเควสที่กำลังทำ
+## ล่างซ้าย: จอย  ล่างกลาง: แชท  ล่างขวา: ปุ่มโจมตี + ช่องสกิล 2 วงล้อมรอบ (1–9, ลากสกิลมาใส่) + ยา/ออโต้
+## ซ้าย: รายการเควสที่กำลังทำ (กดเพื่อเดินไปเอง)
 ## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เควส (J), ออโต้, เลื่อนขั้นคลาส, ร้านค้า, เควสจาก NPC
 
 const ItemDB = preload("res://shared/data/items.gd")
@@ -35,7 +35,12 @@ signal party_request(what: String)  ## invite:<ชื่อ> / kick:<ชื่�
 
 const MAX_LOG_LINES := 5
 const ANNOUNCE_TIME := 7.0
-const SLOT_COLORS := [P.PINK, P.MINT, P.SKY, P.LEMON, P.MINT, P.SKY, P.PINK, P.PINK, P.LEMON, P.SKY]
+const SLOT_COLORS := [P.PINK, P.MINT, P.SKY, P.LEMON, P.MINT, P.SKY, P.PINK, P.LEMON, P.MINT]
+const SLOT_EMPTY := Color(1, 1, 1, 0.5)
+## จุดกลางปุ่มโจมตี (นับจากมุมขวาล่าง) และช่องสกิล 2 วงล้อมรอบ: [รัศมี, ขนาดช่อง, มุมแต่ละช่อง (องศา)]
+const ATTACK_CENTER := Vector2(-100, -104)
+const SLOT_RINGS := [[120.0, 62.0, [180.0, 210.0, 240.0, 270.0]], [196.0, 58.0, [180.0, 202.5, 225.0, 247.5, 270.0]]]
+const SIDE_X := -372.0  ## แถวปุ่มยา/ออโต้/ตกปลา ทางซ้ายของวงสกิล
 
 var player: Node3D
 var camera: Camera3D
@@ -56,8 +61,6 @@ var phase_label: Label
 var stick: Control
 var minimap: Control
 var slots: Array[Control] = []
-var bubble_a: Control
-var bubble_b: Control
 var skill_herb: Control
 var skill_sp: Control
 var auto_button: Control
@@ -176,15 +179,13 @@ func _ready() -> void:
 
 	# ---- แชท + ข้อความเกม ----
 	chat = ChatBox.new()
-	chat.position = Vector2(14, 214)
-	add_child(chat)
 	chat.sent.connect(func(ch: String, text: String, to: String): chat_sent.emit(ch, text, to))
 	log_label = Label.new()  # ข้อความเกมล่าสุด (ไว้ทดสอบ/โค้ดเก่า) ไม่ได้แสดง
 
 	# ---- เควสที่กำลังทำ ----
 	quest_panel = PanelContainer.new()
 	quest_panel.add_theme_stylebox_override("panel", P.panel_style(14, Color(0.94, 1.0, 0.96, 0.78), Color(P.MINT.darkened(0.2), 0.8)))
-	quest_panel.position = Vector2(14, 418)
+	quest_panel.position = Vector2(14, 214)
 	add_child(quest_panel)
 	quest_panel.add_to_group(P.UI_BLOCK)
 	var quest_box := VBoxContainer.new()
@@ -203,44 +204,35 @@ func _ready() -> void:
 	stick.size = Vector2(172, 172)
 	bottom_left.add_child(stick)
 
-	# ---- แถบสกิล 1–0 ----
-	var slot_size := 54.0
-	var gap := 6.0
-	var bar_w := slot_size * 10 + gap * 9
-	var bar_bg := Panel.new()
-	var bar_style := P.panel_style(18)
-	bar_bg.add_theme_stylebox_override("panel", bar_style)
-	bar_bg.position = Vector2(-bar_w / 2.0 - 10, -slot_size - 26)
-	bar_bg.size = Vector2(bar_w + 20, slot_size + 18)
-	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bottom_center.add_child(bar_bg)
-	for i in 10:
-		var b := TouchButton.new()
-		b.round = false
-		b.fill = SLOT_COLORS[i]
-		b.hotkey = str((i + 1) % 10)
-		b.position = Vector2(-bar_w / 2.0 + i * (slot_size + gap), -slot_size - 17)
-		b.size = Vector2(slot_size, slot_size)
-		b.pressed.connect(press_slot.bind(i))
-		bottom_center.add_child(b)
-		slots.append(b)
-		slot_actions.append("")
-	var help := _label(bottom_center, "คลิก: เดิน/ตี/คุย NPC · WASD: เดิน · 1–8 สกิล · 0/Q ยาเลือด · 9/E ยามานา · V ออโต้ · F คุย · C K I J หน้าต่าง", 12, P.TEXT)
-	help.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.9))
-	help.add_theme_constant_override("outline_size", 5)
-	help.position = Vector2(-bar_w / 2.0, -slot_size - 50)
+	# ---- แชท (ล่างกลาง) ----
+	bottom_center.add_child(chat)
+	chat.resized.connect(func(): chat.position = Vector2(-chat.size.x / 2.0, -chat.size.y - 10))
 
-	# ---- ปุ่มโจมตี + สกิล (มุมขวาล่าง) ----
-	attack_button = _round_button(bottom_right, "sword", P.PINK, Vector2(-156, -168), 132, "attack")
-	bubble_a = _round_button(bottom_right, "", P.SKY, Vector2(-262, -104), 80, "")
-	bubble_a.pressed.connect(press_slot.bind(0))
-	bubble_b = _round_button(bottom_right, "", P.LEMON, Vector2(-232, -238), 80, "")
-	bubble_b.pressed.connect(press_slot.bind(1))
-	skill_herb = _round_button(bottom_right, "herb", P.MINT, Vector2(-120, -262), 70, "potion_hp")
-	skill_sp = _round_button(bottom_right, "water", P.SKY, Vector2(-104, -338), 62, "potion_sp")
-	auto_button = _round_button(bottom_right, "auto", P.LAVENDER.lightened(0.35), Vector2(-216, -336), 74, "auto")
+	# ---- ปุ่มโจมตี + ช่องสกิล 2 วงล้อมรอบ (มุมขวาล่าง) ลากสกิลจากหน้าต่างสกิลมาใส่ได้ ----
+	attack_button = _round_button(bottom_right, "sword", P.PINK, ATTACK_CENTER - Vector2(64, 64), 128, "attack")
+	for ring in SLOT_RINGS:
+		var d: float = ring[1]
+		for deg in ring[2]:
+			var i := slots.size()
+			var c: Vector2 = ATTACK_CENTER + Vector2.from_angle(deg_to_rad(deg)) * ring[0]
+			var b := TouchButton.new()
+			b.position = c - Vector2(d, d) / 2.0
+			b.size = Vector2(d, d)
+			b.hotkey = str(i + 1)
+			b.drag_enabled = true
+			b.pressed.connect(press_slot.bind(i))
+			b.dragged.connect(_slot_dragged.bind(i))
+			bottom_right.add_child(b)
+			slots.append(b)
+			slot_actions.append("")
+	# ยา ออโต้ ตกปลา: เรียงเป็นแถวตั้งทางซ้ายของวงสกิล
+	skill_herb = _round_button(bottom_right, "herb", P.MINT, Vector2(SIDE_X - 28, -84), 56, "potion_hp")
+	skill_herb.hotkey = "Q"
+	skill_sp = _round_button(bottom_right, "water", P.SKY, Vector2(SIDE_X - 28, -154), 56, "potion_sp")
+	skill_sp.hotkey = "E"
+	auto_button = _round_button(bottom_right, "auto", P.LAVENDER.lightened(0.35), Vector2(SIDE_X - 31, -236), 62, "auto")
 	auto_button.caption = "ออโต้"
-	fish_button = _round_button(bottom_right, "fish", P.SKY.lightened(0.2), Vector2(-330, -200), 70, "fish")
+	fish_button = _round_button(bottom_right, "fish", P.SKY.lightened(0.2), Vector2(SIDE_X - 30, -316), 60, "fish")
 	fish_button.caption = "ตกปลา"
 	fish_button.visible = false
 
@@ -341,6 +333,42 @@ func press_slot(i: int) -> void:
 		action.emit(slot_actions[i])
 
 
+## ลากสกิลจากช่องหนึ่งไปปล่อย: บนช่องอื่น = สลับกัน, นอกวงสกิล = เอาออกจากช่อง
+func _slot_dragged(to: Vector2, from: int) -> void:
+	var j := slot_at(to)
+	if j == from:
+		return
+	if j >= 0:
+		player.swap_skill_slots(from, j)
+	else:
+		player.set_skill_slot(from, "")
+	Sound.play(self, "click")
+
+
+## ช่องสกิลที่ตำแหน่งบนจอนี้ (-1 = ไม่ใช่ช่อง)
+func slot_at(p: Vector2) -> int:
+	for i in slots.size():
+		var r: Rect2 = slots[i].get_global_rect()
+		if p.distance_to(r.get_center()) <= r.size.x * 0.5 + 6.0:
+			return i
+	return -1
+
+
+## ลากสกิลจากหน้าต่างสกิล (ระบบลากของ Godot) มาปล่อยบนช่อง: จับตอนปล่อยเมาส์ก่อน GUI
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed):
+		return
+	if not get_viewport().gui_is_dragging():
+		return
+	var data = get_viewport().gui_get_drag_data()
+	if not (data is Dictionary and data.has("skill")):
+		return
+	var i := slot_at(event.position)
+	if i >= 0 and player.set_skill_slot(i, data["skill"]):
+		Sound.play(self, "click")
+		add_log("ใส่%sไว้ช่อง %d" % [Skills.SKILLS[data["skill"]]["name"], i + 1])
+
+
 ## เปิดหน้าต่างของ NPC ที่คุยด้วย (ร้านค้า หรือรายการเควส)
 func open_npc(npc: Dictionary) -> void:
 	close_windows()
@@ -408,33 +436,16 @@ func announce(text: String) -> void:
 
 ## จัดสกิลที่เรียนแล้วลงแถบ 1–8 ช่อง 9 เป็นยามานา ช่อง 0 เป็นยาเลือดเสมอ
 func _refresh_hotbar() -> void:
-	var learned: Array[String] = player.learned_skills()
-	for i in 10:
+	var ids: Array = player.skill_slots()
+	for i in slots.size():
 		var b: Control = slots[i]
-		if i == 9:
-			slot_actions[i] = "potion_hp"
-			b.kind = "herb"
-			b.count = player.potion_count("hp")
-		elif i == 8:
-			slot_actions[i] = "potion_sp"
-			b.kind = "water"
-			b.count = player.potion_count("sp")
-		elif i < learned.size():
-			slot_actions[i] = "skill:" + learned[i]
-			b.kind = Skills.SKILLS[learned[i]]["icon"]
-			b.count = -1
-		else:
-			slot_actions[i] = ""
-			b.kind = ""
-			b.count = -1
+		var id: String = ids[i]
+		slot_actions[i] = "skill:" + id if id != "" else ""
+		b.kind = Skills.SKILLS[id]["icon"] if id != "" else ""
+		b.fill = SLOT_COLORS[i] if id != "" else SLOT_EMPTY
+		if id == "":
+			b.cooldown = 0.0
 		b.queue_redraw()
-	for pair in [[bubble_a, 0], [bubble_b, 1]]:
-		var bubble: Control = pair[0]
-		var idx: int = pair[1]
-		bubble.visible = idx < learned.size()
-		if bubble.visible:
-			bubble.kind = Skills.SKILLS[learned[idx]]["icon"]
-			bubble.queue_redraw()
 	skill_herb.count = player.potion_count("hp")
 	skill_herb.queue_redraw()
 	skill_sp.count = player.potion_count("sp")
@@ -481,13 +492,12 @@ func _process(delta: float) -> void:
 			announce_panel.visible = false
 	if player == null:
 		return
-	for i in 9:
+	for i in slots.size():
 		if slot_actions[i].begins_with("skill:"):
 			var cd: float = player.skill_cooldown_ratio(slot_actions[i].substr(6))
-			for b in ([slots[i], bubble_a] if i == 0 else ([slots[i], bubble_b] if i == 1 else [slots[i]])):
-				if not is_equal_approx(b.cooldown, cd):
-					b.cooldown = cd
-					b.queue_redraw()
+			if not is_equal_approx(slots[i].cooldown, cd):
+				slots[i].cooldown = cd
+				slots[i].queue_redraw()
 
 
 ## หลอด HP ใต้เท้าผู้เล่น (สีเขียวแบบ RO) และใต้ผีที่โดนตี

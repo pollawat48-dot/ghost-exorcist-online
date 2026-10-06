@@ -5,6 +5,7 @@ extends Control
 const P = preload("res://client/ui/palette.gd")
 
 signal pressed
+signal dragged(to: Vector2)  ## drag_enabled: กดค้างแล้วลากออกไปปล่อยที่จุดอื่น (ตำแหน่งบนจอ)
 
 var kind := ""  ## ไอคอน: sword / water / herb / "" (ช่องว่าง)
 var round := true
@@ -15,7 +16,13 @@ var cooldown := 0.0  ## 0..1 ส่วนที่ยังติดคูลด
 var badge := false  ## จุดแดงมุมขวาบน (มีแต้มให้ใช้ ฯลฯ)
 var caption := ""  ## ข้อความใต้ปุ่ม
 var lit := false  ## เปิดใช้งานอยู่ (เช่น ออโต้) วาดวงแสงรอบปุ่ม
+var drag_enabled := false  ## ช่องสกิล: ทำงานตอนปล่อยนิ้ว ถ้าลากไปไกลจะส่ง dragged แทน
 var _touch := -2  ## -2 = ไม่ได้กด, -1 = เมาส์, อื่นๆ = index นิ้ว
+var _press_pos := Vector2.ZERO
+var _drag_pos := Vector2.ZERO
+var _dragging := false
+
+const DRAG_START := 18.0
 
 
 func _ready() -> void:
@@ -32,29 +39,53 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and _hit(event.position):
-			_press(event.index)
+			_press(event.index, event.position)
 		elif not event.pressed and event.index == _touch:
-			_release()
+			_release(event.position)
+	elif event is InputEventScreenDrag and event.index == _touch:
+		_move(event.position)
+	elif event is InputEventMouseMotion and _touch == -1 and event.device != InputEvent.DEVICE_ID_EMULATION:
+		_move(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.device == InputEvent.DEVICE_ID_EMULATION:
 			# เมาส์จำลองจากการแตะ: แตะจริงจัดการไปแล้ว แค่กันไม่ให้ไปสั่งเดินในฉาก
 			if _hit(event.position):
 				get_viewport().set_input_as_handled()
 		elif event.pressed and _hit(event.position):
-			_press(-1)
+			_press(-1, event.position)
 		elif not event.pressed and _touch == -1:
-			_release()
+			_release(event.position)
 
 
-func _press(index: int) -> void:
+func _press(index: int, at: Vector2) -> void:
 	_touch = index
+	_press_pos = at
+	_drag_pos = at
+	_dragging = false
 	get_viewport().set_input_as_handled()
-	pressed.emit()
+	if not drag_enabled:
+		pressed.emit()
 	queue_redraw()
 
 
-func _release() -> void:
+func _move(at: Vector2) -> void:
+	if not drag_enabled:
+		return
+	_drag_pos = at
+	if at.distance_to(_press_pos) > DRAG_START:
+		_dragging = true
+	queue_redraw()
+
+
+func _release(at: Vector2) -> void:
 	_touch = -2
+	if drag_enabled:
+		if _dragging or at.distance_to(_press_pos) > DRAG_START:
+			if kind != "":
+				dragged.emit(at)
+		else:
+			pressed.emit()
+	_dragging = false
 	queue_redraw()
 
 
@@ -107,6 +138,11 @@ func _draw() -> void:
 		var bp := off + Vector2(sz.x * 0.86, sz.y * 0.14)
 		draw_circle(bp, 8.0, Color.WHITE)
 		draw_circle(bp, 6.0, P.PINK_DEEP)
+	if _dragging and kind != "":
+		# ไอคอนที่กำลังลากตามนิ้ว/เมาส์
+		var at := _drag_pos - global_position
+		draw_circle(at, sz.x * 0.42, Color(fill, 0.85))
+		P.draw_icon(self, kind, at, sz.x * 0.6)
 	if caption != "":
 		var cw := font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 		var cp := Vector2((size.x - cw) / 2.0, size.y + 13)
