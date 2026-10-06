@@ -45,6 +45,12 @@ func _init() -> void:
 	]
 	border_kinds = ["pine", "bamboo", "bush"]
 	border_weights = [0.6, 0.15, 0.25]
+	decor = [
+		["mushrooms", Rect2(520, 120, 2200, 1780), 18], ["stump", Rect2(520, 120, 2200, 1780), 12],
+		["boulder", Rect2(520, 120, 2200, 1780), 8], ["flowers", Rect2(520, 120, 2200, 1780), 14],
+		["grass_plant", Rect2(40, 120, 2700, 1780), 18],
+	]
+	critters = [["parrot", Vector2(1300, 900), 400.0, 3], ["bunny", Vector2(900, 1300), 250.0, 3], ["bunny", Vector2(2000, 700), 250.0, 2]]
 	grass_base = Color(0.38, 0.56, 0.44)
 	grass_tip = Color(0.66, 0.8, 0.62)
 	grass_count = 3200

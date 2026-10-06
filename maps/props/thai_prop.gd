@@ -3,6 +3,7 @@ extends Node3D
 ## ภายหลังเปลี่ยนเป็นโมเดลจริง (.glb) ทีละชนิดได้โดยใช้ kind เดิม
 
 const K = preload("res://maps/props/mesh_kit.gd")
+const M = preload("res://maps/props/model_lib.gd")
 
 ## โทนพาสเทลแบบการ์ตูน
 const WHITE := Color(1.0, 0.96, 0.9)
@@ -42,6 +43,33 @@ const FOOTPRINTS := {
 	"ngiw_tree": Rect2(-14, -14, 28, 28),
 	"stalagmite": Rect2(-18, -18, 36, 36),
 	"crystal": Rect2(-16, -16, 32, 32),
+	"stall": Rect2(-36, -36, 72, 72),
+	"cart": Rect2(-22, -30, 44, 60),
+	"barrel": Rect2(-14, -14, 28, 28),
+	"crate": Rect2(-14, -14, 28, 28),
+	"hay": Rect2(-18, -14, 36, 28),
+	"boulder": Rect2(-40, -36, 80, 72),
+}
+
+## ของตกแต่งจากโมเดลสำเร็จรูป CC0 (Kenney): kind -> [[ไฟล์ที่สุ่มตาม variant], ขนาด]
+const MODEL_KINDS := {
+	"flowers": [["platformer/flowers-tall", "platformer/flowers"], 2.0],
+	"mushrooms": [["platformer/mushrooms"], 2.0],
+	"grass_plant": [["pirate/grass-plant", "pirate/grass-patch", "pirate/grass"], 1.5],
+	"stump": [["graveyard/trunk", "graveyard/trunk-long"], 1.8],
+	"hay": [["graveyard/hay-bale", "graveyard/hay-bale-bundled"], 2.2],
+	"barrel": [["survival/barrel"], 2.6],
+	"crate": [["survival/box"], 3.2],
+	"stall": [["fantasy-town/stall-red", "fantasy-town/stall-green"], 2.2],
+	"cart": [["fantasy-town/cart-high", "fantasy-town/cart"], 2.0],
+	"candles": [["graveyard/candle-multiple", "graveyard/candle"], 1.8],
+	"urn": [["graveyard/urn-round", "graveyard/urn-square"], 2.4],
+	"coffin": [["graveyard/coffin-old"], 2.2],
+	"debris": [["graveyard/debris"], 2.2],
+	"stones": [["platformer/rocks", "mini-forest/stones", "graveyard/rocks"], 1.6],
+	"boulder": [["fantasy-town/rock-large", "fantasy-town/rock-wide", "fantasy-town/rock-small"], 1.5],
+	"bucket": [["survival/bucket"], 3.0],
+	"signpost": [["survival/signpost"], 3.2],
 }
 const SWAYING := ["palm", "banana", "bamboo", "laundry", "haunted_house", "campfire", "meru", "cauldron", "crystal", "cave_mouth"]
 
@@ -111,6 +139,9 @@ func _ready() -> void:
 		"cave_mouth": _cave_mouth()
 		"stalagmite": _stalagmite()
 		"crystal": _crystal()
+		_:
+			if MODEL_KINDS.has(kind):
+				_model_kind()
 	set_process(kind in SWAYING)
 
 
@@ -308,34 +339,12 @@ func _bodhi() -> void:
 
 
 func _palm() -> void:
-	var lean := Vector3((variant % 5 - 2) * 0.35, 0, (variant % 3 - 1) * 0.3)
-	var height := 6.5 + (variant % 4) * 0.6
-	var bark := K.mat(Color(0.74, 0.58, 0.44), 0.0, 0.95)
-	var prev := Vector3.ZERO
-	for i in range(1, 8):
-		var f := i / 7.0
-		var p := lean * f * f * 3.0 + Vector3(0, height * f, 0)
-		K.beam(self, prev, p, 0.28 - f * 0.08, bark)
-		prev = p
-	var crown := Node3D.new()
-	crown.position = prev
-	add_child(crown)
-	_sway_nodes.append(crown)
-	for i in 10:
-		var a := i * TAU / 10.0 + variant
-		var frond := Node3D.new()
-		frond.rotation = Vector3(0, a, 0)
-		crown.add_child(frond)
-		var length := 2.8 + (i % 3) * 0.4
-		# ทางมะพร้าวโค้งลง สร้างเป็นสามท่อน
-		var pts := [Vector3.ZERO, Vector3(0, 0.3, length * 0.4), Vector3(0, 0.0, length * 0.75), Vector3(0, -0.8, length)]
-		for k in 3:
-			K.beam(frond, pts[k], pts[k + 1], 0.06, K.mat(LEAF.darkened(0.2)))
-			var w := 0.9 - k * 0.25
-			K.box(frond, Vector3(w, 0.03, pts[k].distance_to(pts[k + 1])), (pts[k] + pts[k + 1]) / 2.0,
-				K.mat(LEAF if i % 2 == 0 else LEAF_LIGHT), Vector3(-atan2(pts[k + 1].y - pts[k].y, pts[k + 1].z - pts[k].z), 0, 0))
-	for i in 3:
-		K.sphere(crown, 0.18, Vector3(cos(i * 2.1) * 0.25, -0.25, sin(i * 2.1) * 0.25), K.mat(Color(0.62, 0.45, 0.3)), 8)
+	# มะพร้าวจากโมเดลสำเร็จรูป: ลำต้นโค้ง/ตรงสลับกัน ไหวทั้งต้นตามลม
+	var files := ["pirate/palm-detailed-bend", "pirate/palm-detailed-straight", "pirate/palm-bend", "pirate/palm-straight"]
+	var sway := Node3D.new()
+	add_child(sway)
+	_sway_nodes.append(sway)
+	M.spawn(sway, files[variant % files.size()], Vector3.ZERO, 1.1 + (variant % 4) * 0.08, variant * 0.9)
 
 
 func _banana() -> void:
@@ -372,15 +381,15 @@ func _bush() -> void:
 # ---------- ของในป่าช้า/ทุ่ง ----------
 
 func _tomb() -> void:
-	var stone := K.mat(Color(0.8, 0.78, 0.82).darkened(0.08 * (variant % 3)), 0.0, 0.95)
+	# เนินดินหลุมศพแบบไทย + ป้ายหลุมศพ (โมเดลสำเร็จรูป) + ธูปแดงหรือเทียนบางหลุม
+	var stones := ["graveyard/gravestone-round", "graveyard/gravestone-bevel", "graveyard/gravestone-roof", "graveyard/gravestone-wide", "graveyard/gravestone-broken", "graveyard/gravestone-decorative"]
 	K.sphere(self, 0.8, Vector3(0, 0, -0.3), K.mat(Color(0.72, 0.62, 0.5)), 10, Vector3(1, 0.45, 1.2))
-	K.box(self, Vector3(0.6, 0.85, 0.15), Vector3(0, 0.43, 0.55), stone)
-	K.cyl(self, 0.3, 0.3, 0.15, Vector3(0, 0.86, 0.55), stone, 10, Vector3(PI / 2.0, 0, 0))
-	if variant % 2 == 0:
-		K.box(self, Vector3(0.08, 0.6, 0.02), Vector3(0, 0.45, 0.64), K.mat(Color(0.65, 0.1, 0.08)))
+	M.spawn(self, stones[variant % stones.size()], Vector3(0, 0, 0.55), 1.9)
 	if variant % 4 == 1:
 		for i in 3:
-			K.cyl(self, 0.01, 0.01, 0.35, Vector3(-0.1 + i * 0.1, 0.18, 0.85), K.mat(Color(0.8, 0.3, 0.2)), 4)
+			K.cyl(self, 0.01, 0.01, 0.35, Vector3(-0.1 + i * 0.1, 0.18, 0.95), K.mat(Color(0.8, 0.3, 0.2)), 4)
+	elif variant % 4 == 2:
+		M.spawn(self, "graveyard/candle-multiple", Vector3(0.45, 0, 0.9), 1.8)
 
 
 func _lantern() -> void:
@@ -494,14 +503,10 @@ func _flower_bed() -> void:
 
 ## เรือพายจอดในคลอง (ฐานอยู่ที่ระดับน้ำ)
 func _boat() -> void:
-	K.sphere(self, 1.0, Vector3(0, -0.45, 0), K.mat(Color(0.7, 0.48, 0.36)), 12, Vector3(0.55, 0.3, 2.0))
-	K.sphere(self, 0.95, Vector3(0, -0.38, 0), K.mat(Color(0.5, 0.34, 0.28), 0.0, 0.9, 0.0, false), 12, Vector3(0.48, 0.2, 1.9))
-	K.box(self, Vector3(1.0, 0.06, 0.25), Vector3(0, -0.25, 0.5), K.mat(WOOD))
-	K.cyl(self, 0.01, 0.42, 0.25, Vector3(0, -0.12, -0.6), K.mat(Color(1.0, 0.86, 0.55)), 12)
-	K.beam(self, Vector3(0.3, -0.2, 0.9), Vector3(0.9, -0.5, 2.0), 0.06, K.mat(WOOD_DARK))
+	M.spawn(self, "watercraft/boat-row-large" if variant % 3 == 0 else "watercraft/boat-row-small", Vector3(0, -0.42, 0), 1.45)
 	if variant % 2 == 0:
 		for i in 3:
-			K.sphere(self, 0.12, Vector3(-0.15 + i * 0.15, -0.2, -1.1), K.mat(Color(1, 0.7, 0.4)), 6)
+			K.sphere(self, 0.12, Vector3(-0.15 + i * 0.15, -0.05, -0.9), K.mat(Color(1, 0.7, 0.4)), 6)
 
 
 ## ท่าน้ำไม้ยื่นลงคลอง ยาวไปทาง +x
@@ -518,19 +523,11 @@ func _pier() -> void:
 
 ## รั้วไม้ระแนงยาว 3 เมตรตามแกน x (แบบพังก็มีเสาเอียงและไม้หาย)
 func _fence(broken: bool) -> void:
-	var wood := K.mat(HAUNT_WOOD if broken else Color(0.95, 0.9, 0.82))
-	for i in 7:
-		if broken and (i + variant) % 3 == 0:
-			continue
-		var x := -1.5 + i * 0.5
-		var tilt := ((i * 7 + variant) % 5 - 2) * 0.12 if broken else 0.0
-		var h := 0.9 - (0.3 if broken and i % 2 == 1 else 0.0)
-		K.box(self, Vector3(0.14, h, 0.06), Vector3(x, h / 2.0, 0), wood, Vector3(0, 0, tilt))
-		if not broken:
-			K.box(self, Vector3(0.1, 0.1, 0.06), Vector3(x, h + 0.02, 0), wood, Vector3(0, 0, PI / 4.0))
-	K.box(self, Vector3(3.1 if not broken else 1.6, 0.08, 0.05), Vector3(0 if not broken else -0.7, 0.55, -0.05), wood, Vector3(0, 0, 0.0 if not broken else 0.15))
-	if not broken:
-		K.box(self, Vector3(3.1, 0.08, 0.05), Vector3(0, 0.25, -0.05), wood)
+	# รั้วไม้ 2 ช่วง ช่วงละ 1.5 เมตร (แบบพังใช้ไม้หัก สีซีดหม่น)
+	var tint := Color(0.78, 0.72, 0.86) if broken else Color.WHITE
+	for i in 2:
+		var file := "platformer/fence-broken" if broken and (i + variant) % 2 == 0 else "platformer/fence-straight"
+		M.spawn(self, file, Vector3(-0.75 + i * 1.5, 0, -0.55), 1.5, 0.0, tint).scale.y = 2.0
 
 
 # ---------- บ้านร้าง ----------
@@ -779,15 +776,10 @@ func _meru() -> void:
 
 ## กองไฟที่แคมป์สัปเหร่อ
 func _campfire() -> void:
-	var rock := K.mat(Color(0.66, 0.62, 0.66))
-	for i in 8:
-		var a := i * TAU / 8.0
-		K.sphere(self, 0.16, Vector3(cos(a) * 0.55, 0.08, sin(a) * 0.55), rock, 6, Vector3(1.2, 0.7, 1.0))
-	for i in 3:
-		K.cyl(self, 0.07, 0.07, 0.9, Vector3(0, 0.12, 0), K.mat(Color(0.55, 0.38, 0.3)), 6, Vector3(PI / 2.0, i * PI / 3.0, 0))
+	M.spawn(self, "survival/campfire-pit", Vector3.ZERO, 4.2)
 	for i in 3:
 		var f := Node3D.new()
-		f.position = Vector3((i - 1) * 0.12, 0.15, (i % 2) * 0.1)
+		f.position = Vector3((i - 1) * 0.12, 0.2, (i % 2) * 0.1)
 		add_child(f)
 		var c: Color = [Color(1.0, 0.55, 0.3), Color(1.0, 0.8, 0.35), Color(1.0, 0.45, 0.4)][i]
 		K.cyl(f, 0.0, 0.18 - i * 0.03, 0.55 - i * 0.1, Vector3(0, 0.27, 0), K.mat(c, 2.5, 0.5, 0.0, false), 8)
@@ -802,17 +794,18 @@ func _campfire() -> void:
 
 ## กำแพงวัดเก่าที่พังเป็นช่วงๆ
 func _ruin_wall() -> void:
-	var brick := K.mat(Color(0.84, 0.66, 0.6), 0.0, 0.95)
-	var plaster := K.mat(Color(0.9, 0.87, 0.86), 0.0, 0.95)
-	var x := -2.3
+	# แนวกำแพงอิฐแดงแบบอยุธยา (โมเดลสำเร็จรูป) พังเป็นช่วงๆ
+	var x := -2.1
 	var i := 0
 	while x < 2.4:
-		var h := 1.4 - float((i * 7 + variant) % 5) * 0.2
-		K.box(self, Vector3(0.9, h, 0.5), Vector3(x + 0.45, h / 2.0, 0), plaster if (i + variant) % 3 else brick)
-		x += 0.95
+		var file := "graveyard/brick-wall" if (i + variant) % 3 else "graveyard/stone-wall-damaged"
+		var seg := M.spawn(self, file, Vector3(x, 0, 0.2), 1.0)
+		seg.scale = Vector3(1.0, 1.9 - float((i * 7 + variant) % 4) * 0.25, 1.6)
+		x += 1.0
 		i += 1
-	K.box(self, Vector3(0.5, 0.25, 0.4), Vector3(0.6, 0.12, 0.7), brick, Vector3(0, 0.5, 0.2))
-	K.sphere(self, 0.3, Vector3(-1.5, 1.0, 0.2), K.mat(Color(0.5, 0.7, 0.46)), 8)
+	M.spawn(self, "graveyard/brick-wall-end", Vector3(-2.6, 0, 0.2), 1.0).scale = Vector3(1.0, 1.8, 1.4)
+	M.spawn(self, "graveyard/debris", Vector3(0.6, 0, 0.8), 2.4, 0.5)
+	K.sphere(self, 0.3, Vector3(-1.5, 1.2, 0.2), K.mat(Color(0.5, 0.7, 0.46)), 8)
 
 
 ## กระถางธูปกับเทียนหน้าหลุมศพ
@@ -865,21 +858,17 @@ func _brick_pillar() -> void:
 
 ## ต้นสนบนดอย ทรงกรวยซ้อนสามชั้น
 func _pine() -> void:
-	K.cyl(self, 0.14, 0.22, 1.2, Vector3(0, 0.6, 0), K.mat(Color(0.55, 0.4, 0.34)), 8)
-	var tones := [Color(0.32, 0.58, 0.48), Color(0.38, 0.66, 0.52), Color(0.45, 0.72, 0.56)]
-	var s := 0.85 + float(variant % 4) * 0.12
-	for i in 3:
-		K.cyl(self, 0.05, (1.25 - i * 0.3) * s, 1.3 * s, Vector3(0, (1.3 + i * 0.85) * s, 0), K.mat(tones[i]), 10)
+	var files := ["fantasy-town/tree-high", "fantasy-town/tree", "platformer/tree-pine", "mini-forest/tree-high"]
+	var f: String = files[variant % files.size()]
+	var s := 1.6 if f.begins_with("platformer") else 1.35
+	M.spawn(self, f, Vector3.ZERO, s * (0.9 + float(variant % 3) * 0.1), variant * 0.7)
 
 
 ## ก้อนหินมนๆ กลุ่มเล็ก มีตะไคร่
 func _rock() -> void:
-	var stone := K.mat(Color(0.7, 0.68, 0.74), 0.0, 0.95)
-	K.sphere(self, 0.75, Vector3(0, 0.35, 0), stone, 7, Vector3(1.3, 0.75, 1.0))
-	K.sphere(self, 0.45, Vector3(0.75, 0.2, 0.25), stone, 6)
-	if variant % 2 == 0:
-		K.sphere(self, 0.35, Vector3(-0.6, 0.15, 0.4), K.mat(Color(0.64, 0.62, 0.7), 0.0, 0.95), 6)
-	K.sphere(self, 0.3, Vector3(0.1, 0.78, 0.2), K.mat(Color(0.5, 0.72, 0.5)), 6, Vector3(1.4, 0.4, 1.2))
+	var files := ["pirate/rocks-c", "pirate/rocks-a", "fantasy-town/rock-large"]
+	var f: String = files[variant % files.size()]
+	M.spawn(self, f, Vector3.ZERO, 1.25 if f.begins_with("fantasy") else 0.42, variant * 1.3)
 
 
 ## ใบบัวลอยน้ำกับดอกบัวชมพู
@@ -980,12 +969,10 @@ func _cave_mouth() -> void:
 
 ## หินงอกในถ้ำ
 func _stalagmite() -> void:
-	var stone := K.mat(Color(0.5, 0.46, 0.56), 0.0, 0.95)
-	var h := 1.4 + float(variant % 4) * 0.5
-	K.cyl(self, 0.02, 0.5, h, Vector3(0, h / 2.0, 0), stone, 7)
-	K.cyl(self, 0.02, 0.3, h * 0.6, Vector3(0.45, h * 0.3, 0.2), stone, 6)
-	if variant % 2 == 0:
-		K.cyl(self, 0.02, 0.25, h * 0.5, Vector3(-0.35, h * 0.25, -0.2), K.mat(Color(0.56, 0.52, 0.62), 0.0, 0.95), 6)
+	var h := 1.6 + float(variant % 4) * 0.45
+	var tint := Color(0.62, 0.58, 0.72)
+	M.spawn(self, "mini-forest/rocks-high", Vector3(0, h * 0.5, 0), 1.0, variant * 0.8, tint).scale = Vector3(1.1, h, 1.1)
+	M.spawn(self, "mini-forest/rocks-low", Vector3(0.55, 0, 0.25), 0.9, variant * 1.7, tint)
 
 
 ## ผลึกเรืองแสงในถ้ำ (ให้แสงสว่างในถ้ำมืด)
@@ -1006,3 +993,10 @@ func _crystal() -> void:
 	light.omni_range = 5.5
 	light.light_energy = 1.3
 	add_child(light)
+
+
+## ของตกแต่งจากโมเดลสำเร็จรูป (ดอกไม้ เห็ด ตอไม้ ฟาง ถัง ลัง แผงร้าน เทียน โกศ ฯลฯ)
+func _model_kind() -> void:
+	var entry: Array = MODEL_KINDS[kind]
+	var files: Array = entry[0]
+	M.spawn(self, files[variant % files.size()], Vector3.ZERO, entry[1] * (0.9 + float(variant % 3) * 0.1), variant * 0.83)

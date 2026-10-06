@@ -54,6 +54,12 @@ func _init() -> void:
 	]
 	border_kinds = ["rain_tree", "mango", "bush"]
 	border_weights = [0.35, 0.3, 0.35]
+	decor = [
+		["debris", Rect2(1050, 260, 820, 600), 5], ["stones", Rect2(520, 120, 2200, 1780), 14],
+		["urn", PLAZA, 6], ["flowers", Rect2(520, 900, 2200, 1000), 12], ["grass_plant", Rect2(520, 120, 2200, 1780), 16],
+	]
+	# ลิงแห่งเมืองเก่า (แบบลพบุรี) วิ่งเล่นในลานวิหาร
+	critters = [["monkey", Vector2(1460, 640), 300.0, 5], ["dog", Vector2(300, 1000), 140.0, 1]]
 	grass_base = Color(0.45, 0.6, 0.4)
 	grass_tip = Color(0.72, 0.8, 0.56)
 	mist_color = Color(0.95, 0.85, 0.8, 0.1)

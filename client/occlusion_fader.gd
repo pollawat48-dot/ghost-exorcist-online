@@ -27,6 +27,8 @@ func _process(delta: float) -> void:
 	var player_depth := camera.global_position.distance_to(target)
 	var step := delta * 5.0
 	for prop in props.get_children():
+		if prop.is_in_group("no_fade"):
+			continue
 		var near := Vector2(prop.global_position.x - target.x, prop.global_position.z - target.z).length() < CHECK_RADIUS
 		var entry: Dictionary = _cache.get(prop, {})
 		if not near and entry.is_empty():

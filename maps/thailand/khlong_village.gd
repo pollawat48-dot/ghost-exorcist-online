@@ -162,7 +162,46 @@ func build_props() -> Node3D:
 	_build_rice()
 	_build_grass()
 	_build_lotus()
+	_build_life()
 	return props_root
+
+
+## ของตกแต่งชิ้นเล็ก (โมเดลสำเร็จรูป CC0) กับสัตว์เลี้ยงและชาวบ้านเดินเล่น ให้หมู่บ้านดูมีชีวิต
+## วางท้ายสุดเพื่อไม่ให้ตำแหน่งของเดิมเปลี่ยน
+func _build_life() -> void:
+	var village := Rect2(40, 80, 1050, 1850)
+	_scatter("flowers", village, 22, true)
+	_scatter("grass_plant", village, 16, true)
+	_scatter("stones", village, 8, true)
+	_scatter("flowers", Rect2(1350, 820, 1800, 300), 10, true)
+	_scatter("grass_plant", field_rect, 18, true)
+	_scatter("hay", Rect2(PADDY.position.x, PADDY.end.y + 10, PADDY.size.x, 110), 9, true)
+	_scatter("stump", field_rect, 6, true)
+	_scatter("mushrooms", GROVE, 10, true)
+	# ของใช้หน้าบ้าน: ถังน้ำ ลังไม้ ถังไม้
+	for h in [Vector2(330, 300), Vector2(620, 270), Vector2(880, 250), Vector2(300, 1330), Vector2(780, 1300), Vector2(330, 1720), Vector2(800, 1700)]:
+		_try_add(["barrel", "crate", "bucket"][_rng.randi() % 3], h + Vector2(80, 70), false)
+		_try_add(["crate", "bucket", "barrel"][_rng.randi() % 3], h + Vector2(-80, 72), false)
+	# แผงขายของกับเกวียนริมทางเข้าสะพาน
+	_try_add("stall", Vector2(1080, 1110), false)
+	_try_add("cart", Vector2(1160, 900), false)
+	_try_add("stall", Vector2(330, 1080), false)
+	# ป่าช้าเก่า: เทียนกับโกศเล็กๆ
+	_scatter("candles", Rect2(GRAVE_CENTER - Vector2(260, 220), Vector2(520, 440)), 8, true)
+	_scatter("urn", Rect2(GRAVE_CENTER - Vector2(260, 220), Vector2(520, 440)), 5, true)
+	_scatter("debris", Rect2(2450, 1600, 700, 380), 4, true)
+	# สัตว์เลี้ยงกับชาวบ้าน
+	_add_critters("villager", Vector2(600, 1000), 340.0, 5)
+	_add_critters("villager", Vector2(500, 300), 260.0, 2)
+	_add_critters("villager", Vector2(1800, 950), 260.0, 2)
+	_add_critters("dog", Vector2(560, 1080), 320.0, 3)
+	_add_critters("cat", Vector2(330, 1300), 160.0, 1)
+	_add_critters("cat", Vector2(780, 300), 160.0, 1)
+	_add_critters("chick", Vector2(320, 1420), 120.0, 4)
+	_add_critters("chick", Vector2(1700, 560), 120.0, 3)
+	_add_critters("pig", Vector2(800, 1620), 120.0, 2)
+	_add_critters("cow", Vector2(1900, 820), 220.0, 2)
+	_add_critters("elephant", Vector2(980, 560), 150.0, 1)
 
 
 ## บ้านคน ต้นไม้ และของใช้ในหมู่บ้านฝั่งวัด + บ้านชาวนาฝั่งทุ่ง

@@ -22,6 +22,9 @@ var plaza := Rect2()
 ## สิ่งก่อสร้างหลัก [[kind, pos]] และของที่โรยทั่วแผนที่ [[kind, rect, จำนวน]]
 var landmarks := []
 var scatters := []
+## ของตกแต่งชิ้นเล็กจากโมเดลสำเร็จรูป [[kind, rect, จำนวน]] และสัตว์เดินเล่น [[kind, ศูนย์กลาง, รัศมี, จำนวน]]
+var decor := []
+var critters := []
 var border_kinds := ["dead_tree", "bush"]
 var border_weights := [0.5, 0.5]
 var grass_base := Color(0.42, 0.55, 0.42)
@@ -107,7 +110,20 @@ func build_props() -> Node3D:
 	_border_ring(border_kinds, border_weights)
 	_build_grass()
 	_build_mist()
+	_build_life()
 	return props_root
+
+
+## ของตกแต่งชิ้นเล็ก (โมเดลสำเร็จรูป CC0) กับสัตว์ที่เดินเล่น วางท้ายสุดเพื่อไม่ให้ตำแหน่งของเดิมเปลี่ยน
+func _build_life() -> void:
+	# ของใช้ในแคมป์: ลังเสบียง ถังไม้ ป้ายบอกทาง
+	_add("crate", Vector2(250, 1185))
+	_add("barrel", Vector2(212, 1165))
+	_add("signpost", Vector2(530, 940))
+	for d in decor:
+		_scatter(d[0], d[1], d[2], true)
+	for c in critters:
+		_add_critters(c[0], c[1], c[2], c[3])
 
 
 func _build_ground() -> void:

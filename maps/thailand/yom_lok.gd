@@ -50,6 +50,10 @@ func _init() -> void:
 	]
 	border_kinds = ["ngiw_tree", "dead_tree", "rock"]
 	border_weights = [0.4, 0.4, 0.2]
+	decor = [
+		["debris", Rect2(520, 120, 2200, 1780), 14], ["candles", COURT, 10], ["coffin", Rect2(520, 120, 2200, 1780), 6],
+		["urn", Rect2(520, 120, 2200, 1780), 8],
+	]
 	grass_base = Color(0.5, 0.36, 0.46)
 	grass_tip = Color(0.85, 0.55, 0.62)
 	grass_count = 2200

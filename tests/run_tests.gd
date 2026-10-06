@@ -297,14 +297,21 @@ func _test_character(main: Node3D) -> void:
 	var boss: Node3D = main.spawn_boss(0)
 	check(boss != null and boss.is_boss() and boss in main.alive_ghosts(), "บอสประจำถิ่นเกิด")
 	check(hud.announce_panel.visible and hud.announce_label.text.contains(boss.data["name"]), "มีประกาศเมื่อบอสเกิด")
-	var drops_before: int = main.drops.get_child_count()
+	# นับเฉพาะของที่บอสดรอป (ของเก่าบนพื้นอาจถูกผู้เล่นเก็บไปในเฟรมเดียวกัน)
+	# และสุ่มจากค่าตั้งต้นเดิมทุกครั้ง (จำนวนเฟรมก่อนถึงตรงนี้ไม่เท่ากันในแต่ละเครื่อง)
+	var drops_before: Array = main.drops.get_children()
+	main.rng.seed = 12345
 	boss.take_damage(999999, player)
 	await process_frame
 	var equips := 0
+	var boss_drops := 0
 	for d in main.drops.get_children():
+		if d in drops_before:
+			continue
+		boss_drops += 1
 		if ItemDB.ITEMS[d.item_id]["type"] == "equip":
 			equips += 1
-	check(main.drops.get_child_count() - drops_before >= 3 and equips >= 1, "ปราบบอสแล้วของตกเยอะ (ของสวมใส่ %d ชิ้น)" % equips)
+	check(boss_drops >= 3 and equips >= 1, "ปราบบอสแล้วของตกเยอะ (%d ชิ้น ของสวมใส่ %d ชิ้น)" % [boss_drops, equips])
 	check(main.boss == null and main.boss_timer >= main.BOSS_RESPAWN_DELAY.x, "บอสเกิดใหม่อีกครั้งหลังรอนาน")
 
 	# ผีทั่วไปดรอปของสวมใส่ยาก

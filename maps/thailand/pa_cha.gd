@@ -154,7 +154,26 @@ func build_props() -> Node3D:
 	_border_ring(["dead_tree", "bamboo", "bush"], [0.35, 0.35, 0.3])
 	_build_grass()
 	_build_mist()
+	_build_life()
 	return props_root
+
+
+## ของตกแต่งชิ้นเล็ก (โมเดลสำเร็จรูป CC0): เทียน โกศ โลงเก่า ตอไม้ เศษซาก + หมาวัดกับแมวดำ
+## วางท้ายสุดเพื่อไม่ให้ตำแหน่งของเดิมเปลี่ยน
+func _build_life() -> void:
+	_add("crate", Vector2(250, 1185))
+	_add("barrel", Vector2(212, 1165))
+	_add("signpost", Vector2(530, 940))
+	for g in GRAVES:
+		var area := Rect2(g[0] - Vector2(g[1], g[1]) * 0.8, Vector2(g[1], g[1]) * 1.6)
+		_scatter("candles", area, 3, true)
+		_scatter("urn", area, 2, true)
+	_scatter("coffin", Rect2(980, 200, 760, 520), 3, true)
+	_scatter("debris", Rect2(520, 120, 2200, 1780), 12, true)
+	_scatter("stump", Rect2(520, 120, 2200, 1780), 10, true)
+	_scatter("mushrooms", Rect2(520, 120, 2200, 1780), 8, true)
+	_add_critters("dog", Vector2(300, 1000), 160.0, 2)
+	_add_critters("cat", Vector2(1360, 800), 220.0, 1)
 
 
 func _build_ground() -> void:
