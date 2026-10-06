@@ -1,7 +1,8 @@
 extends CanvasLayer
 ## หน้าจอข้อมูลผู้เล่นแบบพาสเทลน่ารัก ใช้ได้ทั้ง PC และมือถือ
-## ซ้ายบน: ชื่อ/เลเวล/HP/SP  กลางบน: ชื่อแผนที่+เวลา  ขวาบน: แผนที่ย่อ+กระเป๋า
-## ล่างซ้าย: จอย  ล่างกลาง: แถบสกิล 1–0  ล่างขวา: ปุ่มโจมตี+สกิล
+## ซ้ายบน: ชื่อ/เลเวล/HP/SP  กลางบน: ชื่อแผนที่+เวลา+ประกาศ+หลอดบอส  ขวาบน: แผนที่ย่อ+ปุ่มเมนู
+## ล่างซ้าย: จอย  ล่างกลาง: แถบสกิล 1–9 + ยา (0)  ล่างขวา: ปุ่มโจมตี+สกิล+ยา
+## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เลื่อนขั้นคลาส
 
 const ItemDB = preload("res://shared/data/items.gd")
 const Progression = preload("res://shared/combat/progression.gd")
@@ -9,12 +10,16 @@ const P = preload("res://client/ui/palette.gd")
 const TouchButton = preload("res://client/ui/touch_button.gd")
 const VirtualStick = preload("res://client/ui/virtual_stick.gd")
 const Minimap = preload("res://client/ui/minimap.gd")
+const Skills = preload("res://shared/data/skills.gd")
+const CharWindow = preload("res://client/ui/char_window.gd")
+const SkillWindow = preload("res://client/ui/skill_window.gd")
+const BagWindow = preload("res://client/ui/bag_window.gd")
+const ClassWindow = preload("res://client/ui/class_window.gd")
 
-signal action(name: String)  ## "attack", "holy_water", "herb"
+signal action(name: String)  ## "attack", "herb", "skill:<id>"
 
 const MAX_LOG_LINES := 5
-const SLOT_ACTIONS := ["holy_water", "herb", "", "", "", "", "", "", "", ""]
-const SLOT_KINDS := ["water", "herb", "", "", "", "", "", "", "", ""]
+const ANNOUNCE_TIME := 7.0
 const SLOT_COLORS := [P.PINK, P.MINT, P.SKY, P.LEMON, P.MINT, P.SKY, P.PINK, P.PINK, P.LEMON, P.SKY]
 
 var player: Node3D
@@ -24,14 +29,20 @@ var overlay: Control
 var title_label: Label
 var info_label: Label
 var bars: Control
-var inv_label: Label
+var menu_buttons := {}
+var windows := {}
+var announce_panel: PanelContainer
+var announce_label: Label
+var announce_timer := 0.0
+var slot_actions: Array[String] = []
 var log_label: Label
 var location_label: Label
 var phase_label: Label
 var stick: Control
 var minimap: Control
 var slots: Array[Control] = []
-var skill_water: Control
+var bubble_a: Control
+var bubble_b: Control
 var skill_herb: Control
 var attack_button: Control
 var lines: Array[String] = []
@@ -90,8 +101,37 @@ func _ready() -> void:
 	minimap.position = Vector2(-234, 14)
 	minimap.size = Vector2(220, 142)
 	top_right.add_child(minimap)
-	var inv := _panel(Vector2(-234, 166), Vector2(220, 0), 14, top_right)
-	inv_label = _label(inv, "", 13, P.TEXT)
+	var menus := [["char", "user", "ตัวละคร", P.PINK], ["skills", "book", "สกิล", P.SKY], ["bag", "bag", "กระเป๋า", P.LEMON]]
+	for i in menus.size():
+		var m: Array = menus[i]
+		var b := TouchButton.new()
+		b.kind = m[1]
+		b.fill = m[3]
+		b.caption = m[2]
+		b.position = Vector2(-226 + i * 74, 166)
+		b.size = Vector2(56, 56)
+		var key: String = m[0]
+		b.pressed.connect(func(): toggle_window(key))
+		top_right.add_child(b)
+		menu_buttons[key] = b
+
+	# ---- ประกาศ (บอสเกิด ฯลฯ) ----
+	announce_panel = PanelContainer.new()
+	var ann_style := P.panel_style(20, Color(1.0, 0.93, 0.95, 0.96), P.PINK_DEEP)
+	ann_style.content_margin_left = 18
+	ann_style.content_margin_right = 18
+	announce_panel.add_theme_stylebox_override("panel", ann_style)
+	announce_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ann_row := HBoxContainer.new()
+	announce_panel.add_child(ann_row)
+	var crown := Control.new()
+	crown.custom_minimum_size = Vector2(30, 30)
+	crown.draw.connect(func(): P.draw_icon(crown, "crown", crown.size / 2.0, 30))
+	ann_row.add_child(crown)
+	announce_label = _label(ann_row, "", 17, P.TEXT)
+	announce_panel.visible = false
+	top_center.add_child(announce_panel)
+	announce_panel.resized.connect(func(): announce_panel.position = Vector2(-announce_panel.size.x / 2.0, 72))
 
 	# ---- ข้อความเกม ----
 	var log_panel := PanelContainer.new()
@@ -123,25 +163,33 @@ func _ready() -> void:
 	for i in 10:
 		var b := TouchButton.new()
 		b.round = false
-		b.kind = SLOT_KINDS[i]
 		b.fill = SLOT_COLORS[i]
 		b.hotkey = str((i + 1) % 10)
 		b.position = Vector2(-bar_w / 2.0 + i * (slot_size + gap), -slot_size - 17)
 		b.size = Vector2(slot_size, slot_size)
-		var act: String = SLOT_ACTIONS[i]
-		if act != "":
-			b.pressed.connect(func(): action.emit(act))
+		b.pressed.connect(press_slot.bind(i))
 		bottom_center.add_child(b)
 		slots.append(b)
-	var help := _label(bottom_center, "คลิก/แตะ: เดิน · คลิกผี: ตี · ลากเมาส์ขวา: หมุนกล้อง · WASD/จอย: เดิน · 1–2/Q: สกิล", 12, P.TEXT)
+		slot_actions.append("")
+	var help := _label(bottom_center, "คลิก/แตะ: เดิน · คลิกผี: ตี · WASD/จอย: เดิน · 1–9: สกิล · 0/Q: ยา · C ตัวละคร · K สกิล · I กระเป๋า", 12, P.TEXT)
 	help.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.9))
 	help.add_theme_constant_override("outline_size", 5)
 	help.position = Vector2(-bar_w / 2.0, -slot_size - 50)
 
 	# ---- ปุ่มโจมตี + สกิล (มุมขวาล่าง) ----
 	attack_button = _round_button(bottom_right, "sword", P.PINK, Vector2(-156, -168), 132, "attack")
-	skill_water = _round_button(bottom_right, "water", P.SKY, Vector2(-262, -104), 80, "holy_water")
-	skill_herb = _round_button(bottom_right, "herb", P.MINT, Vector2(-222, -250), 80, "herb")
+	bubble_a = _round_button(bottom_right, "", P.SKY, Vector2(-262, -104), 80, "")
+	bubble_a.pressed.connect(press_slot.bind(0))
+	bubble_b = _round_button(bottom_right, "", P.LEMON, Vector2(-232, -238), 80, "")
+	bubble_b.pressed.connect(press_slot.bind(1))
+	skill_herb = _round_button(bottom_right, "herb", P.MINT, Vector2(-120, -262), 70, "herb")
+
+	# ---- หน้าต่างเมนู ----
+	for key in ["char", "skills", "bag", "class"]:
+		var w: Control = {"char": CharWindow, "skills": SkillWindow, "bag": BagWindow, "class": ClassWindow}[key].new()
+		add_child(w)
+		windows[key] = w
+	windows["char"].open_class_change.connect(func(): toggle_window("class"))
 
 
 func _anchor(ax: float, ay: float) -> Control:
@@ -161,9 +209,86 @@ func _round_button(parent: Control, kind: String, fill: Color, pos: Vector2, d: 
 	b.fill = fill
 	b.position = pos
 	b.size = Vector2(d, d)
-	b.pressed.connect(func(): action.emit(act))
+	if act != "":
+		b.pressed.connect(func(): action.emit(act))
 	parent.add_child(b)
 	return b
+
+
+## กดช่องแถบสกิล (คีย์ 1–9/0, แตะช่อง หรือแตะปุ่มกลมสกิล)
+func press_slot(i: int) -> void:
+	if i < slot_actions.size() and slot_actions[i] != "":
+		action.emit(slot_actions[i])
+
+
+func toggle_window(key: String) -> void:
+	var w: Control = windows[key]
+	if w.visible:
+		w.hide_window()
+	else:
+		close_windows()
+		w.show_window()
+
+
+func close_windows() -> void:
+	for w in windows.values():
+		if w.visible:
+			w.hide_window()
+
+
+func any_window_open() -> bool:
+	for w in windows.values():
+		if w.visible:
+			return true
+	return false
+
+
+## ประกาศตัวใหญ่กลางจอด้านบน (บอสเกิด/ถูกปราบ) และลงบันทึกด้วย
+func announce(text: String) -> void:
+	announce_label.text = text
+	announce_panel.visible = true
+	announce_panel.reset_size()
+	announce_timer = ANNOUNCE_TIME
+	add_log("[ประกาศ] " + text)
+
+
+## จัดสกิลที่เรียนแล้วลงแถบ 1–9 ส่วนช่อง 0 เป็นยาหอมเสมอ
+func _refresh_hotbar() -> void:
+	var learned: Array[String] = player.learned_skills()
+	for i in 10:
+		var b: Control = slots[i]
+		if i == 9:
+			slot_actions[i] = "herb"
+			b.kind = "herb"
+			b.count = player.inventory.get(player.HERB_ITEM, 0)
+		elif i < learned.size():
+			slot_actions[i] = "skill:" + learned[i]
+			b.kind = Skills.SKILLS[learned[i]]["icon"]
+			b.count = -1
+		else:
+			slot_actions[i] = ""
+			b.kind = ""
+			b.count = -1
+		b.queue_redraw()
+	for pair in [[bubble_a, 0], [bubble_b, 1]]:
+		var bubble: Control = pair[0]
+		var idx: int = pair[1]
+		bubble.visible = idx < learned.size()
+		if bubble.visible:
+			bubble.kind = Skills.SKILLS[learned[idx]]["icon"]
+			bubble.queue_redraw()
+	skill_herb.count = player.inventory.get(player.HERB_ITEM, 0)
+	skill_herb.queue_redraw()
+	var st: Dictionary = player.state
+	_set_badge("char", st["stat_points"] > 0 or player.can_change_class())
+	_set_badge("skills", st["skill_points"] > 0)
+
+
+func _set_badge(key: String, on: bool) -> void:
+	var b: Control = menu_buttons[key]
+	if b.badge != on:
+		b.badge = on
+		b.queue_redraw()
 
 
 func track(cam: Camera3D, ghost_root: Node) -> void:
@@ -175,15 +300,22 @@ func setup_minimap(map: Node3D) -> void:
 	minimap.setup(map, player, ghosts)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	overlay.queue_redraw()
+	if announce_timer > 0.0:
+		announce_timer -= delta
+		announce_panel.modulate.a = clampf(announce_timer, 0.0, 1.0)
+		if announce_timer <= 0.0:
+			announce_panel.visible = false
 	if player == null:
 		return
-	var cd: float = player.skill_cooldown / player.SKILL_COOLDOWN
-	for b in [slots[0], skill_water]:
-		if not is_equal_approx(b.cooldown, cd):
-			b.cooldown = cd
-			b.queue_redraw()
+	for i in 9:
+		if slot_actions[i].begins_with("skill:"):
+			var cd: float = player.skill_cooldown_ratio(slot_actions[i].substr(6))
+			for b in ([slots[i], bubble_a] if i == 0 else ([slots[i], bubble_b] if i == 1 else [slots[i]])):
+				if not is_equal_approx(b.cooldown, cd):
+					b.cooldown = cd
+					b.queue_redraw()
 
 
 ## หลอด HP ใต้เท้าผู้เล่น (สีเขียวแบบ RO) และใต้ผีที่โดนตี
@@ -192,9 +324,28 @@ func _draw_overhead() -> void:
 		return
 	_foot_bar(player.global_position, float(player.hp) / player.stats["max_hp"], 60.0, P.HP if player.hp * 3 > player.stats["max_hp"] else P.HP_LOW)
 	for g in ghosts.get_children():
-		if not g.has_method("take_damage") or not g.alive or g.hp >= g.data["hp"]:
+		if not g.has_method("take_damage") or not g.alive:
 			continue
-		_foot_bar(g.global_position + Vector3(0, 0.45, 0), float(g.hp) / g.data["hp"], 50.0, P.HP_LOW)
+		if g.is_boss():
+			_draw_boss_bar(g)
+		if g.hp >= g.data["hp"]:
+			continue
+		_foot_bar(g.global_position + Vector3(0, 0.45, 0), float(g.hp) / g.data["hp"], 90.0 if g.is_boss() else 50.0, P.HP_LOW)
+
+
+## หลอดเลือดบอสใหญ่ด้านบนจอ เมื่อผู้เล่นอยู่ใกล้บอส
+func _draw_boss_bar(g: Node3D) -> void:
+	if player.pos.distance_to(g.pos) > 700.0:
+		return
+	var w := 420.0
+	var x := (overlay.size.x - w) / 2.0
+	var y := 92.0 if not announce_panel.visible else 150.0
+	var font := overlay.get_theme_default_font()
+	var title := "%s  %d / %d" % [g.data["name"], maxi(0, g.hp), g.data["hp"]]
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	overlay.draw_string_outline(font, Vector2((overlay.size.x - tw) / 2.0, y), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 5, Color.WHITE)
+	overlay.draw_string(font, Vector2((overlay.size.x - tw) / 2.0, y), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, P.PINK_DEEP)
+	P.draw_round_bar(overlay, Rect2(x, y + 6, w, 16), float(g.hp) / g.data["hp"], P.HP_LOW)
 
 
 func _foot_bar(p3: Vector3, ratio: float, w: float, color: Color) -> void:
@@ -229,6 +380,8 @@ func bind(p: Node3D) -> void:
 	player = p
 	player.changed.connect(refresh)
 	player.message.connect(add_log)
+	for w in windows.values():
+		w.bind(p)
 	refresh()
 
 
@@ -236,16 +389,9 @@ func refresh() -> void:
 	var level: int = player.state["level"]
 	var need := Progression.exp_to_next(level)
 	title_label.text = player.player_name
-	info_label.text = "Lv %d  ·  สำนัก: ศิษย์วัด  ·  Exp %.1f%%" % [level, 100.0 * player.state["exp"] / need]
+	info_label.text = "Lv %d  ·  %s  ·  Exp %.1f%%" % [level, player.class_info()["name"], 100.0 * player.state["exp"] / need]
 	bars.queue_redraw()
-	var herbs: int = player.inventory.get(player.HERB_ITEM, 0)
-	for b in [slots[1], skill_herb]:
-		b.count = herbs
-		b.queue_redraw()
-	var text := "กระเป๋า"
-	for item_id in player.inventory:
-		text += "\n· %s x%d" % [ItemDB.ITEMS[item_id]["name"], player.inventory[item_id]]
-	inv_label.text = text
+	_refresh_hotbar()
 
 
 func set_location(country: String, map_name: String) -> void:

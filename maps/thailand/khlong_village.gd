@@ -46,6 +46,13 @@ var spawns := [
 	{"id": "phi_takiang", "count": 3, "rect": GROVE.grow(-40)},
 	{"id": "phi_takiang", "count": 2, "rect": Rect2(2650, 720, 450, 280)},
 ]
+## จุดที่บอสประจำถิ่น (นางพญากระสือ) สุ่มเกิด
+var boss_id := "krasue_queen"
+var boss_spawns := [
+	{"name": "ป่าช้าเก่า", "pos": GRAVE_CENTER + Vector2(-60, 40)},
+	{"name": "บ้านร้างหลังป่าช้า", "pos": Vector2(2900, 1840)},
+	{"name": "ป่ากล้วย", "pos": GROVE.get_center()},
+]
 var lanterns: Array[Vector2] = []
 var astar := AStarGrid2D.new()
 var props_root: Node3D

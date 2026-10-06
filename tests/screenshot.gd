@@ -35,6 +35,10 @@ func _shoot() -> void:
 		main.camera_rig.yaw = deg_to_rad(float(args[5]))
 	if args.size() > 6:
 		main.camera_rig.distance = float(args[6])
+	# โหมดพิเศษ: job:<คลาส>, boss, char, skills, bag, class, showcase
+	var mode := args[7] if args.size() > 7 else ""
+	for part in mode.split(",", false):
+		_apply_mode(main, part)
 	# ให้ตัวละครหันหน้าเข้ากล้องเพื่อดูหน้าตา
 	player.attack_target = null
 	player.moving = false
@@ -46,3 +50,49 @@ func _shoot() -> void:
 	root.get_texture().get_image().save_png(out)
 	print("saved ", out)
 	quit()
+
+
+func _apply_mode(main: Node3D, mode: String) -> void:
+	var player: Node3D = main.player
+	if mode.begins_with("job:"):
+		var target := mode.substr(4)
+		var chain: Array[String] = load("res://shared/data/classes.gd").lineage(target)
+		player.gain_exp(50000000)
+		for id in chain.slice(1):
+			player.change_class(id)
+		for id in player.available_skills():
+			while player.state["skill_points"] > 0 and player.learn_skill(id):
+				if player.skill_level(id) >= 3:
+					break
+		for i in 40:
+			player.add_stat(["str", "agi", "vit", "int", "dex", "luk"][i % 6])
+	elif mode.begins_with("lv:"):
+		player.gain_exp(int(mode.substr(3)))
+	elif mode == "boss":
+		var boss: Node3D = main.spawn_boss(0)
+		boss.pos = player.pos + Vector2(0, -150)
+		boss.home = boss.pos
+		boss.take_damage(700, player)
+	elif mode == "showcase":
+		# เรียงตัวละครทุกคลาสไว้ข้างผู้เล่น
+		var Classes = load("res://shared/data/classes.gd")
+		var Player = load("res://client/player.gd")
+		var i := 0
+		for id in Classes.CLASSES:
+			if id == "novice":
+				continue
+			var p: Node3D = Player.new()
+			p.state["class"] = id
+			p.player_name = Classes.CLASSES[id]["name"]
+			p.pos = player.pos + Vector2(-260 + (i % 3) * 130 + (i / 3) * 0, -120 + (i / 3) * 110)
+			p.ghosts = main.ghosts
+			main.world.add_child(p)
+			i += 1
+		player.pos += Vector2(-130, 150)
+	elif mode == "gear":
+		for id in ["suea_kraphan", "mongkhon", "takrut", "mitmo", "khan_thanu", "khamphi_queen", "phra_khrueang"]:
+			player.add_item(id)
+		for id in ["suea_kraphan", "mongkhon", "takrut", "mitmo"]:
+			player.equip(id)
+	elif mode in ["char", "skills", "bag", "class"]:
+		main.hud.toggle_window(mode)

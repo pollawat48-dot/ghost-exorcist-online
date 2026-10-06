@@ -12,6 +12,8 @@ var fill := P.PINK
 var hotkey := ""
 var count := -1  ## -1 = ไม่แสดงจำนวน
 var cooldown := 0.0  ## 0..1 ส่วนที่ยังติดคูลดาวน์
+var badge := false  ## จุดแดงมุมขวาบน (มีแต้มให้ใช้ ฯลฯ)
+var caption := ""  ## ข้อความใต้ปุ่ม
 var _touch := -2  ## -2 = ไม่ได้กด, -1 = เมาส์, อื่นๆ = index นิ้ว
 
 
@@ -90,3 +92,12 @@ func _draw() -> void:
 		var pos := off + Vector2(sz.x - inset - font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x, sz.y - inset * 0.6)
 		draw_string_outline(font, pos, t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 5, Color.WHITE)
 		draw_string(font, pos, t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, P.TEXT)
+	if badge:
+		var bp := off + Vector2(sz.x * 0.86, sz.y * 0.14)
+		draw_circle(bp, 8.0, Color.WHITE)
+		draw_circle(bp, 6.0, P.PINK_DEEP)
+	if caption != "":
+		var cw := font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		var cp := Vector2((size.x - cw) / 2.0, size.y + 13)
+		draw_string_outline(font, cp, caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color.WHITE)
+		draw_string(font, cp, caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, P.TEXT)

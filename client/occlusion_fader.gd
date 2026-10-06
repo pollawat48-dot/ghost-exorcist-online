@@ -59,6 +59,8 @@ func _covers(box: AABB, screen: Vector2, player_depth: float) -> bool:
 		else:
 			rect = rect.expand(p)
 	# ต้องอยู่ระหว่างกล้องกับผู้เล่น และคลุมตำแหน่งผู้เล่นบนจอ
+	if rect.size.x < SCREEN_MARGIN * 2.0 or rect.size.y < SCREEN_MARGIN * 2.0:
+		return false
 	return closest < player_depth - 0.5 and rect.grow(-SCREEN_MARGIN).has_point(screen)
 
 
