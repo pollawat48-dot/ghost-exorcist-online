@@ -3,6 +3,8 @@ extends SceneTree
 
 const Combat = preload("res://shared/combat/combat.gd")
 const Progression = preload("res://shared/combat/progression.gd")
+const ItemDB = preload("res://shared/data/items.gd")
+const GhostDB = preload("res://shared/data/ghosts.gd")
 
 const STEP := 0.05
 
@@ -52,6 +54,20 @@ func _test_progression() -> void:
 	check(Progression.add_exp(state, 19) == 0 and state["level"] == 1, "EXP ไม่พอยังไม่อัป")
 	check(Progression.add_exp(state, 1) == 1 and state["level"] == 2 and state["exp"] == 0, "EXP ครบแล้วอัปเลเวล")
 	check(Progression.add_exp(state, 1000) >= 2, "EXP เยอะอัปหลายเลเวลในครั้งเดียว")
+
+	var full := Progression.new_state()
+	Progression.add_exp(full, 50000000)
+	check(full["level"] == Progression.MAX_LEVEL, "เลเวลตันที่ %d" % Progression.MAX_LEVEL)
+	check(full["stat_points"] == Progression.MAX_LEVEL - 1, "ได้แต้มสเตตัส +1 ทุกเลเวล (รวม %d)" % full["stat_points"])
+	check(full["skill_points"] == Progression.MAX_LEVEL / 3, "ได้แต้มสกิล +1 ทุก 3 เลเวล (รวม %d)" % full["skill_points"])
+	check(Progression.add_exp(full, 1000) == 0 and full["level"] == Progression.MAX_LEVEL, "เลเวลตันแล้วไม่อัปต่อ")
+	var mage := Progression.new_state()
+	mage["class"] = "mo_phi"
+	var archer := Progression.new_state()
+	archer["class"] = "phran"
+	archer["base"]["dex"] += 10
+	check(Progression.derive(mage)["max_sp"] > Progression.derive(Progression.new_state())["max_sp"], "สายเวท SP มากกว่าศิษย์วัด")
+	check(Progression.derive(archer)["range"] > 200.0 and Progression.derive(archer)["atk"] == Progression.derive(Progression.new_state())["atk"] + 20, "สายระยะไกลตีไกล และพลังโจมตีมาจาก DEX")
 
 
 func _test_gameplay() -> void:
@@ -151,7 +167,75 @@ func _test_gameplay() -> void:
 	player.pos = near_ghost.pos + Vector2(60, 0)
 	main.do_action("attack")
 	check(player.attack_target == near_ghost, "กดปุ่มโจมตีแล้วล็อกผีตัวที่ใกล้ที่สุด")
+
+	await _test_character(main)
 	main.free()
+
+
+## สเตตัส สกิล คลาส ของสวมใส่ และบอสประจำถิ่น
+func _test_character(main: Node3D) -> void:
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	player.command_move(player.pos)
+	player.gain_exp(9000)
+	check(player.state["level"] >= 10 and player.can_change_class(), "ถึงเลเวล 10 แล้วเลื่อนขั้นคลาสได้ (Lv %d)" % player.state["level"])
+	var atk_before: int = player.stats["atk"]
+	check(player.add_stat("str") and player.stats["atk"] == atk_before + 2, "อัป STR แล้วพลังโจมตีเพิ่ม")
+	check(not player.change_class("nak_dab"), "ข้ามขั้นคลาสไม่ได้")
+	check(player.change_class("nak_rob") and player.class_info()["name"] == "นักรบเวทย์", "เปลี่ยนคลาสเป็นนักรบเวทย์")
+	check(not player.can_change_class(), "เลื่อนขั้นต่อไม่ได้จนกว่าจะถึงเลเวล 50")
+	check("fan_khatha" in player.available_skills() and not "ying_son" in player.available_skills(), "เรียนได้เฉพาะสกิลของสายตัวเอง")
+	check(player.learn_skill("fan_khatha") and player.skill_level("fan_khatha") == 1, "ใช้แต้มสกิลเรียนฟันคาถา")
+	hud.refresh()
+	check(hud.slot_actions[1] == "skill:fan_khatha", "สกิลที่เรียนแล้วขึ้นแถบสกิลเอง")
+
+	var ghost := _nearest(main, player.pos)
+	player.pos = ghost.pos + Vector2(30, 0)
+	var hp_before: int = ghost.hp
+	player.sp = player.stats["max_sp"]
+	check(player.use_skill("fan_khatha", ghost) and (ghost.hp < hp_before or not ghost.alive), "ใช้สกิลฟันคาถาใส่ผี")
+	player.sp = player.stats["max_sp"]
+	var far_ghost := _nearest(main, Vector2(2700, 850))
+	player.pos = far_ghost.pos + Vector2(250, 0)
+	player.use_skill("fan_khatha", far_ghost)
+	_run(main, 4.0)
+	check(far_ghost.hp < far_ghost.data["hp"] or not far_ghost.alive, "ผีอยู่ไกล ตัวละครเดินเข้าไปแล้วร่ายสกิลเอง")
+
+	player.add_item("mitmo")
+	var atk_plain: int = player.stats["atk"]
+	check(player.equip("mitmo") and player.stats["atk"] == atk_plain + 18 + 2 * 2, "สวมมีดหมอแล้ว ATK เพิ่ม")
+	player.add_item("khan_thanu")
+	check(not player.equip("khan_thanu"), "สายประชิดสวมธนูไม่ได้")
+	check(player.unequip("weapon") and player.inventory.get("mitmo", 0) == 1, "ถอดอาวุธกลับเข้ากระเป๋า")
+
+	player.gain_exp(50000000)
+	check(player.state["level"] == 150, "เลเวลตันที่ 150")
+	check(player.change_class("nak_dab") and player.change_class("khun_phaen"), "เลื่อนขั้นคลาสครบ 3 ครั้ง")
+	check(not player.can_change_class(), "ขั้นสุดท้ายแล้วเลื่อนต่อไม่ได้")
+
+	# บอสประจำถิ่น
+	var boss: Node3D = main.spawn_boss(0)
+	check(boss != null and boss.is_boss() and boss in main.alive_ghosts(), "บอสประจำถิ่นเกิด")
+	check(hud.announce_panel.visible and hud.announce_label.text.contains(boss.data["name"]), "มีประกาศเมื่อบอสเกิด")
+	var drops_before: int = main.drops.get_child_count()
+	boss.take_damage(999999, player)
+	await process_frame
+	var equips := 0
+	for d in main.drops.get_children():
+		if ItemDB.ITEMS[d.item_id]["type"] == "equip":
+			equips += 1
+	check(main.drops.get_child_count() - drops_before >= 3 and equips >= 1, "ปราบบอสแล้วของตกเยอะ (ของสวมใส่ %d ชิ้น)" % equips)
+	check(main.boss == null and main.boss_timer >= main.BOSS_RESPAWN_DELAY.x, "บอสเกิดใหม่อีกครั้งหลังรอนาน")
+
+	# ผีทั่วไปดรอปของสวมใส่ยาก
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var total := 0
+	for d in GhostDB.GHOSTS["krasue_noi"]["drops"]:
+		if ItemDB.ITEMS[d["item"]]["type"] == "equip":
+			total += 1
+			check(d["chance"] <= 0.02, "ของสวมใส่จากผีทั่วไปดรอปยาก (%s %.1f%%)" % [d["item"], d["chance"] * 100.0])
+			break
 
 
 func _run(main: Node3D, seconds: float) -> void:

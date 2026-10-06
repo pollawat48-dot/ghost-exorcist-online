@@ -7,6 +7,7 @@ const K = preload("res://maps/props/mesh_kit.gd")
 const Combat = preload("res://shared/combat/combat.gd")
 const GhostDB = preload("res://shared/data/ghosts.gd")
 const DamageText = preload("res://client/damage_text.gd")
+const Effect = preload("res://client/effect.gd")
 
 signal died(ghost: Node3D)
 
@@ -30,6 +31,8 @@ var bob := 0.0
 var rng := RandomNumberGenerator.new()
 var model: Node3D
 var dangles: Array[Node3D] = []
+var base_scale := 1.0
+var aoe_timer := 0.0
 
 
 func setup(id: String, at: Vector2, player_ref: Node3D, seed_value: int) -> void:
@@ -54,23 +57,11 @@ func _ready() -> void:
 	var blush := K.mat(Color(1.0, 0.55, 0.65), 0.4, 0.8, 0.0, false)
 	match ghost_id:
 		"krasue_noi":
-			# กระสือน้อยแบบน่ารัก: หัวกลมผมบ๊อบ ตาโตสีชมพูเรือง ไส้ห้อยเป็นริบบิ้นพาสเทล
-			K.sphere(model, 0.34, Vector3.ZERO, K.mat(Color(1.0, 0.93, 0.9), 0.15, 0.6), 18)
-			K.sphere(model, 0.37, Vector3(0, 0.13, -0.12), K.mat(Color(0.33, 0.24, 0.38), 0.0, 0.5), 18, Vector3(1.05, 0.8, 1.0))
-			K.box(model, Vector3(0.62, 0.36, 0.1), Vector3(0, -0.12, -0.24), K.mat(Color(0.33, 0.24, 0.38)))
-			for x in [-0.13, 0.13]:
-				K.sphere(model, 0.085, Vector3(x, -0.03, 0.29), K.mat(Color(0.95, 0.35, 0.55), 1.2, 0.3, 0.0, false), 10, Vector3(0.85, 1.15, 0.5))
-				K.sphere(model, 0.03, Vector3(x + 0.03, 0.03, 0.34), shine, 6)
-				K.sphere(model, 0.06, Vector3(x * 1.6, -0.13, 0.26), blush, 8, Vector3(1.2, 0.6, 0.4))
-			K.sphere(model, 0.035, Vector3(0, -0.16, 0.32), eye, 6, Vector3(1.2, 0.8, 0.6))
-			var ribbon := [Color(1.0, 0.62, 0.72), Color(0.98, 0.78, 0.55), Color(0.86, 0.62, 0.92), Color(1.0, 0.62, 0.72)]
-			for i in 4:
-				var d := Node3D.new()
-				d.position = Vector3(-0.12 + i * 0.08, -0.3, 0.02)
-				model.add_child(d)
-				K.cyl(d, 0.03, 0.04, 0.35 + (i % 2) * 0.12, Vector3(0, -0.18, 0), K.mat(ribbon[i], 0.6, 0.5), 6)
-				K.sphere(d, 0.07, Vector3(0, -0.4 - (i % 2) * 0.1, 0), K.mat(ribbon[i], 0.9, 0.5), 8)
-				dangles.append(d)
+			_build_krasue(eye, shine, blush)
+		"krasue_queen":
+			_build_krasue(eye, shine, blush)
+			_build_queen_crown()
+			model.scale = Vector3.ONE * 2.2
 		"phi_takiang":
 			# ผีตะเกียงตัวกลม หน้าตาง่วงๆ แก้มแดง
 			K.cyl(model, 0.32, 0.36, 0.58, Vector3.ZERO, K.mat(Color(1.0, 0.82, 0.5), 1.4, 0.5), 14)
@@ -95,30 +86,79 @@ func _ready() -> void:
 	light.set_meta("base_energy", 1.6)
 	light.add_to_group("night_light")
 	model.add_child(light)
-	K.label(self, data["name"], Vector3(0, 2.15, 0), Color(1, 0.88, 0.88), 34)
+	if is_boss():
+		base_scale = 2.2
+		# บอสเรืองแสงตลอดเวลา ไม่ต้องรอกลางคืน
+		var glow := OmniLight3D.new()
+		glow.light_color = c
+		glow.omni_range = 7.0
+		glow.light_energy = 1.5
+		glow.position.y = 1.0
+		add_child(glow)
+		K.label(self, "★ %s Lv.%d ★" % [data["name"], data["level"]], Vector3(0, 4.2, 0), Color(1, 0.85, 0.4), 44)
+	else:
+		K.label(self, data["name"], Vector3(0, 2.15, 0), Color(1, 0.88, 0.88), 34)
 	_sync()
+
+
+func is_boss() -> bool:
+	return data.get("boss", false)
+
+
+func _build_krasue(eye: Material, shine: Material, blush: Material) -> void:
+	# กระสือแบบน่ารัก: หัวกลมผมบ๊อบ ตาโตสีชมพูเรือง ไส้ห้อยเป็นริบบิ้นพาสเทล
+	K.sphere(model, 0.34, Vector3.ZERO, K.mat(Color(1.0, 0.93, 0.9), 0.15, 0.6), 18)
+	K.sphere(model, 0.37, Vector3(0, 0.13, -0.12), K.mat(Color(0.33, 0.24, 0.38), 0.0, 0.5), 18, Vector3(1.05, 0.8, 1.0))
+	K.box(model, Vector3(0.62, 0.36, 0.1), Vector3(0, -0.12, -0.24), K.mat(Color(0.33, 0.24, 0.38)))
+	for x in [-0.13, 0.13]:
+		K.sphere(model, 0.085, Vector3(x, -0.03, 0.29), K.mat(Color(0.95, 0.35, 0.55), 1.2, 0.3, 0.0, false), 10, Vector3(0.85, 1.15, 0.5))
+		K.sphere(model, 0.03, Vector3(x + 0.03, 0.03, 0.34), shine, 6)
+		K.sphere(model, 0.06, Vector3(x * 1.6, -0.13, 0.26), blush, 8, Vector3(1.2, 0.6, 0.4))
+	K.sphere(model, 0.035, Vector3(0, -0.16, 0.32), eye, 6, Vector3(1.2, 0.8, 0.6))
+	var ribbon := [Color(1.0, 0.62, 0.72), Color(0.98, 0.78, 0.55), Color(0.86, 0.62, 0.92), Color(1.0, 0.62, 0.72)]
+	for i in 4:
+		var d := Node3D.new()
+		d.position = Vector3(-0.12 + i * 0.08, -0.3, 0.02)
+		model.add_child(d)
+		K.cyl(d, 0.03, 0.04, 0.35 + (i % 2) * 0.12, Vector3(0, -0.18, 0), K.mat(ribbon[i], 0.6, 0.5), 6)
+		K.sphere(d, 0.07, Vector3(0, -0.4 - (i % 2) * 0.1, 0), K.mat(ribbon[i], 0.9, 0.5), 8)
+		dangles.append(d)
+
+
+## ชฎาทองของนางพญากระสือ + ต่างหูอัญมณี
+func _build_queen_crown() -> void:
+	K.cyl(model, 0.26, 0.3, 0.1, Vector3(0, 0.36, -0.04), K.gold(), 16)
+	K.cyl(model, 0.13, 0.22, 0.18, Vector3(0, 0.5, -0.04), K.gold(), 14)
+	K.cyl(model, 0.015, 0.12, 0.34, Vector3(0, 0.76, -0.04), K.gold(), 12)
+	K.sphere(model, 0.05, Vector3(0, 0.38, 0.24), K.mat(Color(1.0, 0.3, 0.5), 2.0, 0.3, 0.0, false), 8)
+	for x in [-0.33, 0.33]:
+		K.sphere(model, 0.05, Vector3(x, -0.12, 0.05), K.mat(Color(0.5, 1.0, 0.8), 2.0, 0.3, 0.0, false), 8)
 
 
 func _sync() -> void:
 	position = K.to3d(pos)
-	model.position.y = 1.25 + sin(bob) * 0.12
+	model.position.y = (1.25 + sin(bob) * 0.12) * (1.6 if is_boss() else 1.0)
 	for i in dangles.size():
 		dangles[i].rotation.x = sin(bob * 1.3 + i) * 0.25
-	model.scale = Vector3.ONE * (1.15 if flash > 0.0 else 1.0)
+	model.scale = Vector3.ONE * base_scale * (1.15 if flash > 0.0 else 1.0)
 	if target != null and is_instance_valid(target):
 		var d: Vector2 = target.pos - pos
 		if d.length() > 1.0:
 			model.rotation.y = lerp_angle(model.rotation.y, atan2(d.x, d.y), 0.2)
 
 
-func take_damage(amount: int, attacker: Node3D) -> void:
+func take_damage(amount: int, attacker: Node3D, crit: bool = false) -> void:
 	if not alive:
 		return
 	hp -= amount
 	flash = 0.15
 	target = attacker
 	returning = false
-	DamageText.spawn(get_parent(), position + Vector3(0, 2.0, 0), str(amount), Color.WHITE)
+	var text_y := 4.5 if is_boss() else 2.0
+	if crit:
+		DamageText.spawn(get_parent(), position + Vector3(0, text_y, 0), "%d!" % amount, Color(1, 0.85, 0.3))
+	else:
+		DamageText.spawn(get_parent(), position + Vector3(0, text_y, 0), str(amount), Color.WHITE)
 	if hp <= 0:
 		alive = false
 		died.emit(self)
@@ -143,6 +183,13 @@ func tick(delta: float) -> void:
 		returning = true
 		wander_target = home
 
+	if target != null and is_boss():
+		# บอสปล่อยคลื่นวิญญาณเป็นวงกว้างเป็นระยะ
+		aoe_timer -= delta
+		if aoe_timer <= 0.0 and pos.distance_to(target.pos) < data["aoe_radius"]:
+			aoe_timer = data["aoe_interval"]
+			Effect.ring(get_parent(), position, data["aoe_radius"] / 32.0, Color(1.0, 0.4, 0.7))
+			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng, data["aoe_power"]))
 	if target != null:
 		if pos.distance_to(target.pos) > data["attack_range"]:
 			pos = pos.move_toward(target.pos, data["speed"] * 1.3 * delta)

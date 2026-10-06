@@ -55,9 +55,21 @@ func _draw() -> void:
 	draw_rect(inner, Color(P.LAVENDER, 0.6), false, 2.0)
 	var to_map := func(wp: Vector2) -> Vector2:
 		return inner.position + (wp - map.world_rect.position) / map.world_rect.size * inner.size
+	var boss: Node3D = null
 	for g in ghosts.get_children():
 		if g.has_method("take_damage") and g.alive:
-			draw_circle(to_map.call(g.pos), 3.0, Color(0.62, 0.42, 0.85))
+			if g.is_boss():
+				boss = g
+			else:
+				draw_circle(to_map.call(g.pos), 3.0, Color(0.62, 0.42, 0.85))
+	if boss != null:
+		# บอส: วงกระพริบสีชมพู + มงกุฎ
+		var bp: Vector2 = to_map.call(boss.pos)
+		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 180.0)
+		draw_circle(bp, 9.0 + pulse * 5.0, Color(1.0, 0.35, 0.55, 0.35))
+		draw_circle(bp, 8.0, Color(1.0, 0.45, 0.6))
+		draw_arc(bp, 8.0, 0, TAU, 24, Color.WHITE, 2.0, true)
+		P.draw_icon(self, "crown", bp + Vector2(0, -1), 12.0)
 	if player != null:
 		var pp: Vector2 = to_map.call(player.pos)
 		draw_circle(pp, 6.0, Color.WHITE)

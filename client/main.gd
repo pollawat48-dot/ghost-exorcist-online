@@ -10,9 +10,13 @@ const Ghost = preload("res://client/ghost.gd")
 const Drop = preload("res://client/drop.gd")
 const Hud = preload("res://client/hud.gd")
 const CameraRig = preload("res://client/camera_rig.gd")
+const ItemDB = preload("res://shared/data/items.gd")
 const OcclusionFader = preload("res://client/occlusion_fader.gd")
 
 const RESPAWN_DELAY := 8.0
+## บอสประจำถิ่นเกิดไม่บ่อย: ครั้งแรกหลังเริ่มเกม 5–8 นาที หลังโดนปราบรอ 10–15 นาที
+const BOSS_FIRST_DELAY := Vector2(300, 480)
+const BOSS_RESPAWN_DELAY := Vector2(600, 900)
 const PICKUP_RADIUS := 20.0
 const CLICK_RADIUS := 24.0
 const CLICK_RADIUS_SCREEN := 45.0
@@ -29,6 +33,9 @@ var hud: CanvasLayer
 var respawn_queue: Array[Dictionary] = []  # {"spawn": index ใน map.spawns, "time": วินาทีที่เหลือ}
 var rng := RandomNumberGenerator.new()
 var next_ghost_seed := 1
+var boss: Node3D = null
+var boss_timer := 0.0
+var boss_place := ""
 
 
 func _ready() -> void:
@@ -76,6 +83,7 @@ func _ready() -> void:
 	hud.action.connect(do_action)
 	ambience.phase_changed.connect(hud.set_phase)
 
+	boss_timer = rng.randf_range(BOSS_FIRST_DELAY.x, BOSS_FIRST_DELAY.y)
 	for i in map.spawns.size():
 		for n in map.spawns[i]["count"]:
 			_spawn_ghost(i)
@@ -119,6 +127,9 @@ func do_action(name: String) -> void:
 			player.cast_holy_water()
 		"herb":
 			player.use_herb()
+		_:
+			if name.begins_with("skill:"):
+				player.use_skill(name.substr(6))
 
 
 func nearest_ghost(radius: float) -> Node3D:
@@ -140,6 +151,7 @@ func tick(delta: float) -> void:
 		if g.has_method("tick"):
 			g.tick(delta)
 	_tick_respawns(delta)
+	_tick_boss(delta)
 	_tick_pickups()
 
 
@@ -151,13 +163,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			player.command_move(camera_rig.ground_point(event.position))
 	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			hud.press_slot(event.keycode - KEY_1)
+			return
 		match event.keycode:
-			KEY_1:
-				do_action("holy_water")
-			KEY_2, KEY_Q:
+			KEY_0, KEY_Q:
 				do_action("herb")
 			KEY_SPACE:
 				do_action("attack")
+			KEY_C:
+				hud.toggle_window("char")
+			KEY_K:
+				hud.toggle_window("skills")
+			KEY_I, KEY_B:
+				hud.toggle_window("bag")
+			KEY_ESCAPE:
+				hud.close_windows()
 
 
 ## ผีที่อยู่ใต้เมาส์บนหน้าจอ (เทียบกับตัวผีที่ลอยอยู่ ไม่ใช่เงาบนพื้น)
@@ -209,13 +230,59 @@ func _spawn_ghost(spawn_index: int) -> void:
 
 func _on_ghost_died(g: Node3D) -> void:
 	player.gain_exp(g.data["exp"])
+	var spread := 60.0 if g.is_boss() else 14.0
+	var dropped_equip := false
+	var equip_pool: Array[String] = []
 	for d in g.data["drops"]:
+		var is_equip: bool = ItemDB.ITEMS[d["item"]]["type"] == "equip"
+		if is_equip:
+			equip_pool.append(d["item"])
 		if rng.randf() < d["chance"]:
-			var drop := Drop.new()
-			drop.item_id = d["item"]
-			drop.pos = g.pos + Vector2(rng.randf_range(-14, 14), rng.randf_range(-10, 10))
-			drops.add_child(drop)
+			_drop(d["item"], g.pos, spread)
+			dropped_equip = dropped_equip or is_equip
+	if g.is_boss():
+		# บอสรับประกันของสวมใส่อย่างน้อย 1 ชิ้น
+		if not dropped_equip and not equip_pool.is_empty():
+			_drop(equip_pool[rng.randi() % equip_pool.size()], g.pos, spread)
+		boss = null
+		boss_timer = rng.randf_range(BOSS_RESPAWN_DELAY.x, BOSS_RESPAWN_DELAY.y)
+		hud.announce("ปราบ%sสำเร็จ! ของรางวัลตกอยู่เต็มพื้น" % g.data["name"])
+		return
 	respawn_queue.append({"spawn": g.get_meta("spawn_index"), "time": RESPAWN_DELAY})
+
+
+func _drop(item_id: String, at: Vector2, spread: float) -> void:
+	var drop := Drop.new()
+	drop.item_id = item_id
+	drop.pos = at + Vector2(rng.randf_range(-spread, spread), rng.randf_range(-spread, spread) * 0.7)
+	drops.add_child(drop)
+
+
+## นับถอยหลังแล้วเรียกบอสประจำถิ่น
+func _tick_boss(delta: float) -> void:
+	if boss != null:
+		if not is_instance_valid(boss) or not boss.alive:
+			boss = null
+		return
+	boss_timer -= delta
+	if boss_timer <= 0.0:
+		spawn_boss()
+
+
+func spawn_boss(place_index: int = -1) -> Node3D:
+	if boss != null and is_instance_valid(boss) and boss.alive:
+		return boss
+	if place_index < 0:
+		place_index = rng.randi() % map.boss_spawns.size()
+	var place: Dictionary = map.boss_spawns[place_index]
+	boss = Ghost.new()
+	boss.setup(map.boss_id, place["pos"], player, next_ghost_seed)
+	next_ghost_seed += 1
+	boss.died.connect(_on_ghost_died)
+	ghosts.add_child(boss)
+	boss_place = place["name"]
+	hud.announce("%s ปรากฏตัวที่%s! ดูตำแหน่งบนแผนที่ย่อ" % [boss.data["name"], boss_place])
+	return boss
 
 
 func _tick_respawns(delta: float) -> void:
