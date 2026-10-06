@@ -35,6 +35,7 @@ static func new_state() -> Dictionary:
 		"skills": {"holy_water": 1}, "equipment": {},
 		"coins": START_COINS, "quests": {}, "quests_done": {},
 		"visited": {}, "caves": [],
+		"skill_slots": ["holy_water", "", "", "", "", "", "", "", ""],
 	}
 
 

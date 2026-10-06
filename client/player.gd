@@ -315,9 +315,58 @@ func learn_skill(id: String) -> bool:
 		return false
 	state["skill_points"] -= 1
 	state["skills"][id] = skill_level(id) + 1
+	if skill_level(id) == 1:
+		_auto_slot(id)
 	message.emit("%s เลเวล %d" % [Skills.SKILLS[id]["name"], skill_level(id)])
 	changed.emit()
 	return true
+
+
+# ---------- ช่องสกิลรอบปุ่มโจมตี ----------
+## state["skill_slots"]: ช่องละ "" (ว่าง) หรือ id สกิล ผู้เล่นลากสกิลจากหน้าต่างสกิลมาใส่/สลับ/ลากออกได้
+const SKILL_SLOTS := 9
+
+
+func skill_slots() -> Array:
+	var slots: Array = state.get("skill_slots", [])
+	while slots.size() < SKILL_SLOTS:
+		slots.append("")
+	state["skill_slots"] = slots
+	return slots
+
+
+## ใส่สกิลลงช่อง (สกิลเดิมที่อยู่ช่องอื่นย้ายมาแทน) id ว่าง = ล้างช่อง
+func set_skill_slot(i: int, id: String) -> bool:
+	var slots := skill_slots()
+	if i < 0 or i >= SKILL_SLOTS or (id != "" and skill_level(id) <= 0):
+		return false
+	var old := slots.find(id) if id != "" else -1
+	if old >= 0:
+		slots[old] = slots[i]
+	slots[i] = id
+	changed.emit()
+	return true
+
+
+## สลับของสองช่อง (ลากจากช่องหนึ่งไปอีกช่อง)
+func swap_skill_slots(a: int, b: int) -> void:
+	var slots := skill_slots()
+	if a < 0 or b < 0 or a >= SKILL_SLOTS or b >= SKILL_SLOTS:
+		return
+	var t: String = slots[a]
+	slots[a] = slots[b]
+	slots[b] = t
+	changed.emit()
+
+
+## เรียนสกิลใหม่: ใส่ช่องว่างช่องแรกให้ก่อน (ลากย้ายทีหลังได้)
+func _auto_slot(id: String) -> void:
+	var slots := skill_slots()
+	if id in slots:
+		return
+	var empty := slots.find("")
+	if empty >= 0:
+		slots[empty] = id
 
 
 func skill_cooldown_ratio(id: String) -> float:
@@ -968,6 +1017,7 @@ func save_data() -> Dictionary:
 func apply_save(data: Dictionary) -> void:
 	if data.get("state") is Dictionary:
 		loaded = true
+		var had_slots: bool = data["state"].has("skill_slots")
 		var fresh := Progression.new_state()
 		for key in fresh:
 			if not data["state"].has(key):
@@ -975,6 +1025,10 @@ func apply_save(data: Dictionary) -> void:
 		state = data["state"]
 		if not Classes.CLASSES.has(state["class"]):
 			state["class"] = "novice"
+		if not had_slots:
+			# เซฟเก่าก่อนมีช่องสกิล: ใส่สกิลที่เรียนไว้ให้ตามลำดับ
+			for id in learned_skills():
+				_auto_slot(id)
 	if data.get("inventory") is Dictionary:
 		inventory = data["inventory"]
 	for key in inventory.keys():

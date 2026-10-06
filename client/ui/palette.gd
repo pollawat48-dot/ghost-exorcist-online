@@ -236,6 +236,16 @@ static func draw_icon(ci: CanvasItem, kind: String, c: Vector2, s: float) -> voi
 			ci.draw_arc(c + Vector2(-s * 0.22, s * 0.24), s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
 			ci.draw_circle(c + Vector2(s * 0.16, s * 0.14), s * 0.12, SKY)
 			ci.draw_arc(c + Vector2(s * 0.16, s * 0.14), s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
+		"menu":
+			# สามขีด = กางแถบเมนู
+			for k in 3:
+				var y := (k - 1) * s * 0.24
+				ci.draw_line(c + Vector2(-s * 0.3, y), c + Vector2(s * 0.3, y), OUTLINE, 4.0, true)
+		"fold":
+			# ลูกศรคู่ชี้ขวา = ย่อแถบเมนูเก็บ
+			for k in 2:
+				var x := (k - 0.5) * s * 0.26
+				ci.draw_polyline(PackedVector2Array([c + Vector2(x - s * 0.12, -s * 0.26), c + Vector2(x + s * 0.12, 0), c + Vector2(x - s * 0.12, s * 0.26)]), OUTLINE, 3.5, true)
 		_:
 			pass
 
@@ -269,6 +279,19 @@ static func button(text: String, fill: Color = PINK, font_size: int = 15) -> But
 		b.add_theme_color_override(key, TEXT)
 	b.add_theme_color_override("font_disabled_color", Color(0.6, 0.55, 0.6))
 	return b
+
+
+## กลุ่มของหน้าต่าง/ป๊อปอัป: จุดที่ถูกบังด้วยของในกลุ่มนี้ ปุ่มบนจอ (TouchButton/จอย) ด้านหลังจะไม่รับการกด
+const UI_BLOCK := "ui_block"
+
+
+## จุดบนจอนี้ถูกหน้าต่างที่เปิดอยู่บังไว้หรือไม่ (ไม่นับหน้าต่างที่ node อยู่ข้างในเอง)
+static func covered(node: Control, p: Vector2) -> bool:
+	for c in node.get_tree().get_nodes_in_group(UI_BLOCK):
+		var w := c as Control
+		if w != null and w.is_visible_in_tree() and not w.is_ancestor_of(node) and w.get_global_rect().has_point(p):
+			return true
+	return false
 
 
 static func label(text: String, font_size: int = 15, color: Color = TEXT) -> Label:

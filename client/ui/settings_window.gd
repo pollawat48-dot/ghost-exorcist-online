@@ -1,7 +1,8 @@
 extends "res://client/ui/game_window.gd"
-## หน้าต่างตั้งค่า: ความดังเพลง/เสียงเอฟเฟกต์ ปิดเสียง และออกไปหน้าเมนู (บันทึกตัวละครก่อน)
+## หน้าต่างตั้งค่า: ความดังเพลง/เสียงเอฟเฟกต์ ปิดเสียง คุณภาพภาพ และออกไปหน้าเมนู (บันทึกตัวละครก่อน)
 
 const Sound = preload("res://client/audio/sound.gd")
+const Graphics = preload("res://client/graphics.gd")
 
 signal logout_requested
 
@@ -34,6 +35,17 @@ func _build() -> void:
 	mute.button_pressed = Sound.is_muted(self)
 	mute.toggled.connect(func(on: bool): Sound.set_muted(self, on))
 	content.add_child(mute)
+	section("คุณภาพภาพ")
+	var gr := row()
+	for l in Graphics.LEVELS:
+		var b := P.button(Graphics.NAMES[l], P.PINK if l == Graphics.level() else Color(1, 1, 1, 0.9), 14)
+		b.custom_minimum_size.x = 86
+		b.pressed.connect(func():
+			Graphics.set_level(get_tree(), l)
+			refresh())
+		gr.add_child(b)
+	var hint := P.label("สูง/สูงสุด: ภาพคม เงาละเอียด แสงสะท้อน โมเดลเนียน (ใช้เครื่องแรงขึ้น)\nมือถือแนะนำ กลาง หรือ ต่ำ", 12, P.TEXT.lightened(0.2))
+	content.add_child(hint)
 	section("บัญชี")
 	content.add_child(P.label("ตัวละครจะถูกบันทึกก่อนออก", 13, P.TEXT.lightened(0.2)))
 	var out := P.button("ออกไปหน้าเมนู / เปลี่ยนตัวละคร", P.PINK, 15)

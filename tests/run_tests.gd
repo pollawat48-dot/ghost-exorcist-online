@@ -26,6 +26,9 @@ func _initialize() -> void:
 
 
 func _run_all() -> void:
+	load("res://client/hud.gd").config_path = "user://test_settings.cfg"
+	load("res://client/graphics.gd").config_path = "user://test_settings.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_settings.cfg"))
 	print("== combat ==")
 	_test_combat()
 	print("== progression ==")
@@ -39,6 +42,8 @@ func _run_all() -> void:
 	await _test_expansion()
 	print("== ตกปลา พระเครื่อง บัฟปาร์ตี้ ==")
 	await _test_fishing_buffs()
+	print("== กดเควสเดินเอง / หน้าต่างบังปุ่ม ==")
+	await _test_quest_guide()
 	print("== ออนไลน์: ผู้เล่นอื่น แชท ปาร์ตี้แชร์ EXP บัฟ ==")
 	await _test_online_game()
 	print("== หน้าเมนู: Guest ออฟไลน์ สร้างตัวละคร เข้าเกม บันทึก ==")
@@ -216,7 +221,45 @@ func _test_character(main: Node3D) -> void:
 	check("fan_khatha" in player.available_skills() and not "ying_son" in player.available_skills(), "เรียนได้เฉพาะสกิลของสายตัวเอง")
 	check(player.learn_skill("fan_khatha") and player.skill_level("fan_khatha") == 1, "ใช้แต้มสกิลเรียนฟันคาถา")
 	hud.refresh()
-	check(hud.slot_actions[1] == "skill:fan_khatha", "สกิลที่เรียนแล้วขึ้นแถบสกิลเอง")
+	check(hud.slot_actions[1] == "skill:fan_khatha", "เรียนสกิลใหม่แล้วใส่ช่องว่างรอบปุ่มโจมตีให้เอง")
+	check(hud.slots.size() == 9 and hud.slots[8].kind == "" and hud.chat.get_parent() != hud, "ช่องสกิล 9 ช่องล้อมปุ่มโจมตี (ช่องที่เหลือว่าง) แชทย้ายไปล่างกลาง")
+	var ac: Vector2 = hud.attack_button.get_global_rect().get_center()
+	var ring_ok := true
+	for b in hud.slots:
+		var dist: float = b.get_global_rect().get_center().distance_to(ac)
+		ring_ok = ring_ok and dist > 100.0 and dist < 210.0
+	check(ring_ok, "ช่องสกิลอยู่เป็นวงรอบปุ่มโจมตี")
+	check(player.set_skill_slot(5, "fan_khatha") and hud.slot_actions[5] == "skill:fan_khatha" and hud.slot_actions[1] == "", "ลากสกิลจากหน้าต่างสกิลใส่ช่องอื่น: ย้ายไปช่องใหม่")
+	check(not player.set_skill_slot(2, "ying_son"), "สกิลที่ยังไม่ได้เรียนใส่ช่องไม่ได้")
+	hud._slot_dragged(hud.slots[0].get_global_rect().get_center(), 5)
+	check(hud.slot_actions[0] == "skill:fan_khatha" and hud.slot_actions[5] == "skill:holy_water", "ลากช่องไปปล่อยบนอีกช่อง: สลับกัน")
+	hud._slot_dragged(Vector2(300, 300), 5)
+	check(hud.slot_actions[5] == "" and player.skill_slots()[5] == "", "ลากช่องออกนอกวง: เอาสกิลออก")
+	var hits := [0]
+	hud.slots[0].pressed.connect(func(): hits[0] += 1)
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = hud.slots[0].get_global_rect().get_center()
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.position = down.position
+	hud.slots[0]._input(down)
+	check(hits[0] == 0, "ช่องสกิลยังไม่ทำงานตอนกดลง (รอดูว่าจะลากไหม)")
+	hud.slots[0]._input(up)
+	check(hits[0] == 1, "แตะแล้วปล่อยที่เดิม = ใช้สกิล")
+	var saved: Dictionary = player.save_data()
+	var Player2 = load("res://client/player.gd")
+	var p2: Node3D = Player2.new()
+	p2.apply_save(saved)
+	check(p2.skill_slots()[0] == "fan_khatha", "ช่องสกิลบันทึกไปกับตัวละคร")
+	saved["state"].erase("skill_slots")
+	var p3: Node3D = Player2.new()
+	p3.apply_save(saved)
+	check("fan_khatha" in p3.skill_slots() and "holy_water" in p3.skill_slots(), "เซฟเก่าที่ยังไม่มีช่องสกิล: ใส่สกิลที่เรียนไว้ให้")
+	p2.free()
+	p3.free()
+	player.set_skill_slot(1, "fan_khatha")
 
 	var ghost := _nearest(main, player.pos)
 	player.pos = ghost.pos + Vector2(30, 0)
@@ -343,7 +386,7 @@ func _test_world() -> void:
 		main.tick(STEP)
 		time += STEP
 	check(player.quest_status("q_krasue") == "ready", "ปราบกระสือครบ 8 ตัว เควสพร้อมส่ง (%d วินาที)" % time)
-	check(hud.quest_panel.visible and hud.quest_label.text.contains("8/8"), "รายการเควสบนจอแสดงความคืบหน้า")
+	check(hud.quest_panel.visible and hud.quest_rows.get_child_count() > 0 and hud.quest_rows.get_child(0).text.contains("8/8"), "รายการเควสบนจอแสดงความคืบหน้า")
 	luang_ta._process(0.0)
 	main._refresh_npc_markers()
 	check(luang_ta.marker_state == "ready", "หลวงตาขึ้นเครื่องหมาย ? ให้กลับไปส่ง")
@@ -592,7 +635,7 @@ func _test_expansion() -> void:
 	var res: Dictionary = player.refine("mitmo", "hin_ti_1")
 	check(res["result"] == "success" and player.inventory.get("mitmo+1", 0) == 1 and not player.inventory.has("mitmo") and player.coins() == coins - ItemDB.refine_fee(0) and player.inventory["hin_ti_1"] == 1, "ตี +1 สำเร็จแน่นอน (ใช้หิน 1 ก้อน + เหรียญ)")
 	check(player.refine_stones_for(4).is_empty() == false and not "hin_ti_1" in player.refine_stones_for(4), "หินขั้นต้นตีเกิน +4 ไม่ได้ ต้องใช้หินขั้นสูงกว่า")
-	player.inventory["hin_ti_3"] = 400
+	player.inventory["hin_ti_3"] = 5000  # ตีจนถึง +10 เป็นการสุ่ม ใส่หินเผื่อไว้เยอะ
 	player.state["coins"] = 50000000
 	# สวมแล้วตีของที่สวมอยู่ ค่าพลังต้องขึ้นตาม
 	player.state["class"] = "nak_rob"
@@ -604,7 +647,7 @@ func _test_expansion() -> void:
 	var tries := 0
 	var max_seen := 0
 	var risky_safe := true
-	while lv < 10 and tries < 400:
+	while lv < 10 and tries < 5000:
 		var before := lv
 		var r: Dictionary = player.refine(player.state["equipment"]["weapon"], "hin_ti_3", "weapon")
 		lv = r["level"]
@@ -663,6 +706,144 @@ func _test_expansion() -> void:
 	await process_frame
 	check(main.map.map_id == "krung_kao", "ออกจากถ้ำกลับกรุงเก่า")
 	main.free()
+
+
+func _test_quest_guide() -> void:
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	var guide: RefCounted = main.guide
+	check(guide.next_hop("lam_than", "pa_cha") == "khlong_village" and guide.next_hop("khlong_village", "krung_kao") == "pa_cha", "หาเส้นทางข้ามแผนที่ผ่านประตูวาร์ปได้")
+	check(guide.targets("q_thread") == ["krasue_noi"] and guide.targets("q_krasue") == ["krasue_noi"], "เควสหาของรู้ว่าต้องตีผีตัวไหน")
+
+	# ยังทำไม่เสร็จ: อยู่ลำธาร กดเควสแล้วเดินข้ามแผนที่ไปตีกระสือเองจนครบ
+	player.accept_quest("q_krasue")
+	player.add_item("herb_potion", 40)
+	main.load_map("lam_than")
+	hud.quest_rows.get_child(0).pressed.emit()
+	check(guide.active() and guide.mode == "hunt" and guide.goal_map == "khlong_village", "กดเควสในรายการ: เริ่มนำทางไปหาผี")
+	var time := 0.0
+	while time < 400.0 and player.quest_status("q_krasue") != "ready":
+		if player.hp < player.stats["max_hp"] * 0.4:
+			player.use_potion("hp")
+		main.tick(0.1)
+		time += 0.1
+	check(main.map.map_id == "khlong_village" and player.quest_status("q_krasue") == "ready", "เดินข้ามแผนที่ไปตีกระสือเองจนเควสครบ (%d วินาที)" % time)
+	main.tick(0.1)
+	check(not guide.active(), "เควสครบแล้วหยุดนำทาง")
+
+	# ทำเสร็จแล้ว: กดเควสอีกครั้งเดินกลับไปหาหลวงตาแล้วเปิดหน้าส่งเควส
+	hud.quest_rows.get_child(0).pressed.emit()
+	check(guide.mode == "return" or main.talk_target != null, "กดเควสที่ครบแล้ว: เดินกลับไปส่ง")
+	time = 0.0
+	while time < 120.0 and not hud.windows["quest"].visible:
+		main.tick(0.1)
+		time += 0.1
+	check(hud.windows["quest"].visible and hud.windows["quest"].npc.get("id", "") == "luang_ta", "เดินถึงหลวงตาแล้วเปิดหน้าส่งเควส (%d วินาที)" % time)
+	player.complete_quest("q_krasue")
+	hud.close_windows()
+
+	# ส่งจากต่างแผนที่: อยู่ป่าช้า เควสหาของครบ กดแล้วเดินกลับหมู่บ้านไปส่ง
+	player.accept_quest("q_shard")
+	player.add_item("spirit_shard", 10)
+	main.load_map("pa_cha")
+	main.guide_quest("q_shard")
+	time = 0.0
+	while time < 300.0 and not hud.windows["quest"].visible:
+		player.hp = player.stats["max_hp"]
+		main.tick(0.1)
+		time += 0.1
+	check(main.map.map_id == "khlong_village" and hud.windows["quest"].visible, "ส่งเควสจากต่างแผนที่: เดินผ่านประตูกลับไปหาหลวงตา (%d วินาที)" % time)
+	hud.close_windows()
+
+	# บังคับเองแล้วหยุดนำทาง
+	player.accept_quest("q_takiang")
+	main.guide_quest("q_takiang")
+	check(guide.active(), "เควสปราบผีตะเกียง: เริ่มนำทาง")
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = Vector2(640, 500)
+	main._unhandled_input(click)
+	check(not guide.active(), "คลิกเดินเองแล้วยกเลิกการนำทาง")
+
+	# ผีที่กำลังตีถูกลบไปแล้ว (เช่น ตายแล้วหายไป/เปลี่ยนแผนที่): นำทางต้องไม่พัง แต่หาเป้าหมายใหม่
+	main.load_map("khlong_village")
+	main.guide_quest("q_takiang")
+	check(guide.active() and guide.mode == "hunt", "เริ่มนำทางเควสปราบผีตะเกียง")
+	var gone: Node3D = main.alive_ghosts()[0]
+	player.attack_target = gone
+	gone.get_parent().remove_child(gone)
+	gone.free()
+	guide.think_timer = 0.0
+	guide.tick(0.1)
+	check(is_instance_valid(player.attack_target) and player.attack_target.ghost_id in guide.ghost_ids, "เป้าหมายเดิมถูกลบไปแล้ว: นำทางหาผีตัวใหม่ได้ ไม่ค้าง")
+	guide.stop()
+
+	# คุณภาพภาพ: เปลี่ยนระดับแล้วปรับทันที ยืนที่เดิม
+	var Graphics = load("res://client/graphics.gd")
+	var K = load("res://maps/props/mesh_kit.gd")
+	check(Graphics.level() == "high" and K.detail == 2.0, "คุณภาพภาพเริ่มต้นบน PC = สูง (โมเดลละเอียด x2)")
+	var stand: Vector2 = player.pos
+	var map_before: String = main.map.map_id
+	Graphics.set_level(main.get_tree(), "ultra")
+	var vp: Viewport = main.get_viewport()
+	check(vp.msaa_3d == Viewport.MSAA_8X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED and main.ambience.env.ssil_enabled and main.ambience.env.volumetric_fog_enabled, "ระดับสูงสุด: ลบรอยหยัก 8x ไม่เบลอ มีแสงสะท้อนและหมอกมีแสง")
+	check(K.detail == 2.5 and main.map.map_id == map_before and player.pos.distance_to(stand) < 1.0, "เปลี่ยนระดับแล้วสร้างฉากใหม่ ยืนที่เดิม")
+	Graphics.set_level(main.get_tree(), "low")
+	check(vp.msaa_3d == Viewport.MSAA_DISABLED and vp.scaling_3d_scale < 1.0 and not main.ambience.env.ssao_enabled and K.detail == 1.0, "ระดับต่ำ: ปิดเอฟเฟกต์หนักๆ เรนเดอร์เล็กลงสำหรับมือถือ")
+	var gcfg := ConfigFile.new()
+	gcfg.load(Graphics.config_path)
+	check(gcfg.get_value("graphics", "level", "") == "low", "จำระดับคุณภาพภาพไว้")
+	Graphics.set_level(main.get_tree(), "high")
+
+	# แถบเมนูใต้แผนที่ย่อ: ย่อ/กางได้ และจำค่าไว้
+	check(not hud.menu_collapsed and hud.menu_buttons["bag"].visible and hud.menu_toggle.kind == "fold", "แถบเมนูกางอยู่ตอนเริ่ม มีปุ่มย่อ")
+	var tclick := InputEventMouseButton.new()
+	tclick.button_index = MOUSE_BUTTON_LEFT
+	tclick.pressed = true
+	tclick.position = hud.menu_toggle.get_global_rect().get_center()
+	hud.menu_toggle._input(tclick)
+	var tup := InputEventMouseButton.new()
+	tup.button_index = MOUSE_BUTTON_LEFT
+	hud.menu_toggle._input(tup)
+	var all_hidden := true
+	for key in hud.menu_buttons:
+		all_hidden = all_hidden and not hud.menu_buttons[key].visible
+	check(hud.menu_collapsed and all_hidden and hud.menu_toggle.visible and hud.menu_toggle.kind == "menu", "กดปุ่มย่อ: ซ่อนปุ่มเมนูทั้งหมด เหลือปุ่มเมนูปุ่มเดียว")
+	player.state["skill_points"] += 1
+	hud.refresh()
+	check(hud.menu_toggle.badge, "ย่ออยู่แต่มีแต้มสกิล: ปุ่มเมนูขึ้นจุดแดง")
+	var cfg := ConfigFile.new()
+	cfg.load(load("res://client/hud.gd").config_path)
+	check(cfg.get_value("ui", "menu_collapsed", false) == true, "จำว่าย่อแถบเมนูไว้ (เปิดเกมครั้งหน้ายังย่ออยู่)")
+	hud.menu_toggle._input(tclick)
+	hud.menu_toggle._input(tup)
+	check(not hud.menu_collapsed and hud.menu_buttons["bag"].visible and not hud.menu_toggle.badge, "กดอีกครั้ง: กางแถบเมนูกลับมา")
+
+	# หน้าต่างบังปุ่มบนจอ: กดที่หน้าต่างต้องไม่ทะลุไปกดปุ่มโจมตีข้างหลัง
+	var btn: Control = hud.attack_button
+	var hits := [0]
+	btn.pressed.connect(func(): hits[0] += 1)
+	var at := btn.get_global_rect().get_center()
+	var w: Control = hud.windows["bag"]
+	hud.toggle_window("bag")
+	w.global_position = at - w.size / 2.0
+	click.position = at
+	btn._input(click)
+	check(hits[0] == 0, "กดบนหน้าต่าง ปุ่มโจมตีที่อยู่ข้างหลังไม่ทำงาน")
+	hud.close_windows()
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	btn._input(up)
+	btn._input(click)
+	check(hits[0] == 1, "ปิดหน้าต่างแล้วกดปุ่มโจมตีได้ตามปกติ")
+	btn._input(up)
+	main.queue_free()
+	await process_frame
 
 
 func _test_fishing_buffs() -> void:

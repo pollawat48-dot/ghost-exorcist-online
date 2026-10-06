@@ -18,6 +18,7 @@ var _zoom := 0.0
 
 
 func _ready() -> void:
+	load("res://client/graphics.gd").level()  # ตั้งความละเอียดโมเดลก่อนสร้างฉาก
 	map = Village.new()
 	add_child(map)
 	add_child(map.build_props())

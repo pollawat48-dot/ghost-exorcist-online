@@ -12,6 +12,7 @@ var title_label: Label
 
 func setup(title: String, width: float) -> void:
 	add_theme_stylebox_override("panel", P.panel_style(20))
+	add_to_group(P.UI_BLOCK)  # ปุ่มบนจอที่อยู่ใต้หน้าต่างจะไม่รับการกด
 	anchor_left = 0.5
 	anchor_right = 0.5
 	anchor_top = 0.5

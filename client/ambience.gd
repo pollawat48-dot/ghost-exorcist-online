@@ -5,6 +5,7 @@ extends Node3D
 signal phase_changed(text: String)
 
 const K = preload("res://maps/props/mesh_kit.gd")
+const Graphics = preload("res://client/graphics.gd")
 const DAY_LENGTH := 240.0
 
 ## 0..1 ของหนึ่งวัน: 0–0.42 กลางวัน, 0.42–0.55 พลบค่ำ, 0.55–0.88 กลางคืน, 0.88–1 รุ่งสาง
@@ -40,34 +41,31 @@ func _ready() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.5
-	env.ambient_light_color = Color(1.0, 0.9, 0.85)
-	env.ambient_light_sky_contribution = 0.3
+	env.ambient_light_energy = 0.4
+	env.ambient_light_color = Color(0.92, 0.88, 1.0)
+	env.ambient_light_sky_contribution = 0.35
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.95
+	env.tonemap_exposure = 0.9
 	env.tonemap_white = 6.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.4
-	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 1.2
-	env.ssao_enabled = true
-	env.ssao_radius = 0.8
-	env.ssao_intensity = 0.8
+	env.glow_intensity = 0.45
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 1.1
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.fog_enabled = true
 	env.fog_density = 0.006
 	env.fog_sky_affect = 0.3
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.2
+	env.adjustment_saturation = 1.22
 	env.adjustment_brightness = 1.0
+	env.adjustment_contrast = 1.1
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
 
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 60.0
-	sun.shadow_blur = 2.0
-	sun.shadow_opacity = 0.55
+	sun.shadow_opacity = 0.78
 	add_child(sun)
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color(0.55, 0.65, 1.0)
@@ -94,7 +92,15 @@ func _ready() -> void:
 	add_child(fireflies)
 	if map != null:
 		setup(map)
+	add_to_group("graphics_listener")
+	_on_graphics_changed()
 	tick(0.0)
+
+
+## ปรับตามระดับคุณภาพภาพที่เลือก (client/graphics.gd)
+func _on_graphics_changed() -> void:
+	Graphics.apply_viewport(get_viewport())
+	Graphics.apply_environment(env, sun)
 
 
 func _process(delta: float) -> void:
@@ -112,7 +118,7 @@ func tick(delta: float) -> void:
 	# ดวงอาทิตย์เคลื่อนจากตะวันออกไปตะวันตกในช่วงกลางวัน
 	var sun_t := clampf(time_of_day / 0.55, 0.0, 1.0)
 	sun.rotation = Vector3(-0.37 - sin(sun_t * PI) * 0.95, lerpf(-1.4, 1.4, sun_t), 0)
-	sun.light_energy = 0.85 * (1.0 - night) * (1.0 - gloom * 0.35)
+	sun.light_energy = 1.0 * (1.0 - night) * (1.0 - gloom * 0.35)
 	sun.light_color = Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.65, 0.5), dusk)
 	moon.light_energy = 0.45 * night
 
@@ -123,13 +129,13 @@ func tick(delta: float) -> void:
 		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(map.gloom_horizon, gloom * 0.6)
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.1).lerp(Color(0.02, 0.02, 0.04), night)
-	env.ambient_light_energy = lerpf(0.5, 0.45, night)
+	env.ambient_light_energy = lerpf(0.4, 0.45, night)
 	env.fog_light_color = sky_mat.sky_horizon_color
 	env.fog_density = lerpf(0.0015, 0.012, night) + gloom * 0.004
 	if gloom > 0.0:
 		env.fog_light_color = env.fog_light_color.lerp(map.gloom_fog, gloom)
 	env.adjustment_brightness = 1.0 - gloom * 0.06
-	env.adjustment_contrast = 1.0 + gloom * 0.12
+	env.adjustment_contrast = 1.1 + gloom * 0.12
 	env.ambient_light_energy *= 1.0 - gloom * 0.25
 
 	var lights := get_tree().get_nodes_in_group("night_light") if is_inside_tree() else []
