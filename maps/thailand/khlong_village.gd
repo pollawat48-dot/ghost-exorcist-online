@@ -112,6 +112,7 @@ func build_props() -> Node3D:
 	# บ้านเรือน
 	for pos in [Vector2(330, 300), Vector2(620, 270), Vector2(880, 250), Vector2(300, 1330), Vector2(780, 1300), Vector2(330, 1720), Vector2(800, 1700)]:
 		_add("stilt_house", pos)
+	_build_village_details()
 	# มะพร้าวริมคลองทั้งสองฝั่ง
 	for y in range(120, 1950, 150):
 		if absf(y - BRIDGE_Y) > 120:
@@ -134,6 +135,7 @@ func build_props() -> Node3D:
 		_try_add("tomb", GRAVE_CENTER + Vector2(cos(a), sin(a) * 0.8) * r, true)
 	_scatter("palm", Rect2(2450, 120, 700, 500), 6, true)
 	_scatter("bush", field_rect, 20, true)
+	_build_haunted_corner()
 	_build_border_trees()
 	_build_rice()
 	_build_grass()
@@ -141,18 +143,93 @@ func build_props() -> Node3D:
 	return props_root
 
 
-func _add(kind: String, pos: Vector2) -> void:
+## บ้านคน ต้นไม้ และของใช้ในหมู่บ้านฝั่งวัด + บ้านชาวนาฝั่งทุ่ง
+func _build_village_details() -> void:
+	var cottages := [
+		Vector2(180, 190), Vector2(470, 160), Vector2(760, 140), Vector2(1020, 300),
+		Vector2(320, 1170), Vector2(800, 1170), Vector2(1010, 1420), Vector2(140, 1500),
+		Vector2(720, 1500), Vector2(420, 1530), Vector2(1000, 1720), Vector2(560, 1860), Vector2(150, 1880),
+		Vector2(1580, 900), Vector2(2470, 880), Vector2(2950, 380),
+	]
+	for c in cottages:
+		if _place("cottage", c, 64.0, 110.0):
+			_place("flower_bed", c + Vector2(-20, 74), 0.0, 20.0)
+			if _rng.randf() < 0.4 and _clear_of_props(c + Vector2(66, 84), 30.0):
+				_add("fence", c + Vector2(66, 84))
+			if _rng.randf() < 0.45:
+				_place("laundry", c + Vector2(92, 10), 0.0, 30.0)
+			if _rng.randf() < 0.5:
+				_place("mango", c + Vector2(-100, -50), 14.0, 60.0)
+	for w in [Vector2(450, 1300), Vector2(2380, 960), Vector2(950, 1580)]:
+		_place("well", w, 24.0, 70.0)
+	# ลีลาวดีมุมลานวัด
+	for f in [Vector2(240, 520), Vector2(830, 520), Vector2(240, 720), Vector2(830, 700)]:
+		_add("frangipani", f)
+	# จามจุรีต้นใหญ่ให้ร่มเงา
+	for r in [Vector2(1050, 620), Vector2(120, 1080), Vector2(1560, 1080), Vector2(2560, 560)]:
+		_place("rain_tree", r, 30.0, 90.0)
+	_scatter("mango", Rect2(40, 80, 1050, 1850), 12, true)
+	# กอไผ่ตามขอบหมู่บ้านและริมป่ากล้วย
+	_scatter("bamboo", Rect2(10, 80, 80, 1850), 7, true)
+	_scatter("bamboo", Rect2(1380, 1150, 120, 760), 4, true)
+	_scatter("bamboo", Rect2(2300, 1250, 150, 650), 4, true)
+	# เรือพายจอดริมคลอง + ท่าน้ำ
+	for y in [640.0, 1360.0, 1680.0]:
+		var boat := _add("boat", Vector2(canal_center(y) - 26.0, y))
+		boat.rotation.y = _rng.randf_range(-0.25, 0.25)
+		boat.set_meta("keep_rotation", true)
+	_add("pier", Vector2(canal_center(760.0) - CANAL_WATER - 40.0, 760.0))
+
+
+## มุมตะวันออกเฉียงใต้: บ้านร้างหลังป่าช้า มีต้นไม้ตาย รั้วพัง และหลุมศพเก่า
+func _build_haunted_corner() -> void:
+	_add("haunted_house", Vector2(2760, 1770))
+	var second := _add("haunted_house", Vector2(3060, 1640))
+	second.variant = 1
+	for f in [Vector2(2660, 1880), Vector2(2860, 1890), Vector2(2990, 1760)]:
+		_add("broken_fence", f)
+	for d in [Vector2(2580, 1690), Vector2(2930, 1600), Vector2(3120, 1880), Vector2(2560, 1900), Vector2(2860, 1650), Vector2(2450, 1560)]:
+		_place("dead_tree", d, 10.0, 60.0)
+	for i in 6:
+		_try_add("tomb", Vector2(_rng.randf_range(2450, 3150), _rng.randf_range(1620, 1960)), true)
+	_scatter("bush", Rect2(2450, 1600, 700, 380), 5, true)
+
+
+## วางสิ่งปลูกสร้างถ้าที่ว่างพอ: ไม่ทับคลอง ทาง ลานวัด ทุ่งนา ป่า และไม่ชิดของอื่นเกิน gap
+func _place(kind: String, pos: Vector2, radius: float, gap: float) -> bool:
+	if not world_rect.grow(-radius).has_point(pos):
+		return false
+	if absf(pos.x - canal_center(pos.y)) < CANAL_BANK + radius + 10.0:
+		return false
+	if path_distance(pos) < PATH_W * 0.5 + radius + 8.0:
+		return false
+	for area in [COURTYARD.grow(20), PADDY, GROVE]:
+		if area.grow(radius).has_point(pos):
+			return false
+	if pos.distance_to(GRAVE_CENTER) < GRAVE_R + radius:
+		return false
+	if pos.distance_to(spawn_point) < 80.0:
+		return false
+	if not _clear_of_props(pos, gap):
+		return false
+	_add(kind, pos)
+	return true
+
+
+func _add(kind: String, pos: Vector2) -> Node3D:
 	var prop := Prop.new()
 	prop.kind = kind
 	prop.variant = _rng.randi() % 12
 	prop.position = K.to3d(pos)
-	if kind in ["palm", "banana", "bush", "tomb"]:
+	if kind in ["palm", "banana", "bush", "mango", "rain_tree", "bamboo", "frangipani", "dead_tree", "well"]:
 		prop.rotation.y = _rng.randf() * TAU
+		prop.set_meta("keep_rotation", true)
 	props_root.add_child(prop)
 	_placed.append(pos)
 	var fp: Rect2 = prop.footprint()
 	if fp.has_area():
 		_mark_solid(Rect2(pos + fp.position, fp.size))
+	return prop
 
 
 func _try_add(kind: String, pos: Vector2, avoid_paths: bool) -> bool:

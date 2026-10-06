@@ -10,6 +10,7 @@ const Ghost = preload("res://client/ghost.gd")
 const Drop = preload("res://client/drop.gd")
 const Hud = preload("res://client/hud.gd")
 const CameraRig = preload("res://client/camera_rig.gd")
+const OcclusionFader = preload("res://client/occlusion_fader.gd")
 
 const RESPAWN_DELAY := 8.0
 const PICKUP_RADIUS := 20.0
@@ -60,6 +61,10 @@ func _ready() -> void:
 	camera_rig = CameraRig.new()
 	camera_rig.target = player
 	add_child(camera_rig)
+
+	var fader := OcclusionFader.new()
+	fader.setup(camera_rig.camera, player, map.props_root)
+	add_child(fader)
 
 	hud = Hud.new()
 	add_child(hud)
