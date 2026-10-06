@@ -19,8 +19,16 @@ var sky_mat: ProceduralSkyMaterial
 var fireflies: CPUParticles3D
 
 
+## เปลี่ยนแผนที่: ย้ายหิ่งห้อย/ดวงไฟผีไปตามพื้นที่ล่าผีของแผนที่นั้น
 func setup(map_ref: Node3D) -> void:
 	map = map_ref
+	if fireflies == null:
+		return
+	var field: Rect2 = map.field_rect
+	fireflies.emission_box_extents = Vector3(field.size.x * K.S / 2.0, 1.0, field.size.y * K.S / 2.0)
+	fireflies.position = K.to3d(field.get_center(), 1.4)
+	fireflies.material_override = K.mat(map.firefly_color, 6.0)
+	fireflies.restart()
 
 
 func _ready() -> void:
@@ -74,13 +82,9 @@ func _ready() -> void:
 	dot.radial_segments = 4
 	dot.rings = 2
 	fireflies.mesh = dot
-	fireflies.material_override = K.mat(Color(0.75, 1.0, 0.35), 6.0)
 	fireflies.amount = 260
 	fireflies.lifetime = 6.0
 	fireflies.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	var field: Rect2 = map.field_rect
-	fireflies.emission_box_extents = Vector3(field.size.x * K.S / 2.0, 1.0, field.size.y * K.S / 2.0)
-	fireflies.position = K.to3d(field.get_center(), 1.4)
 	fireflies.gravity = Vector3.ZERO
 	fireflies.direction = Vector3(1, 0.2, 0)
 	fireflies.spread = 180.0
@@ -88,6 +92,8 @@ func _ready() -> void:
 	fireflies.initial_velocity_max = 0.5
 	fireflies.emitting = false
 	add_child(fireflies)
+	if map != null:
+		setup(map)
 	tick(0.0)
 
 
@@ -99,27 +105,38 @@ func tick(delta: float) -> void:
 	time_of_day = fposmod(time_of_day + delta / DAY_LENGTH, 1.0)
 	night = _night_factor(time_of_day)
 	var dusk := clampf(1.0 - absf(night - 0.5) * 2.0, 0.0, 1.0)
+	# แผนที่หม่น (ป่าช้า): ท้องฟ้าครึ้มม่วง หมอกหนา ไฟผีติดแม้กลางวัน
+	var gloom: float = map.gloom if map != null else 0.0
+	var dark := maxf(night, gloom * 0.55)
 
 	# ดวงอาทิตย์เคลื่อนจากตะวันออกไปตะวันตกในช่วงกลางวัน
 	var sun_t := clampf(time_of_day / 0.55, 0.0, 1.0)
 	sun.rotation = Vector3(-0.37 - sin(sun_t * PI) * 0.95, lerpf(-1.4, 1.4, sun_t), 0)
-	sun.light_energy = 0.85 * (1.0 - night)
+	sun.light_energy = 0.85 * (1.0 - night) * (1.0 - gloom * 0.35)
 	sun.light_color = Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.65, 0.5), dusk)
 	moon.light_energy = 0.45 * night
 
 	sky_mat.sky_top_color = Color(0.55, 0.76, 0.98).lerp(Color(0.7, 0.55, 0.85), dusk).lerp(Color(0.16, 0.16, 0.36), clampf(night * 1.5 - 0.5, 0.0, 1.0))
 	sky_mat.sky_horizon_color = Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.72, 0.62), dusk).lerp(Color(0.32, 0.3, 0.52), clampf(night * 1.5 - 0.5, 0.0, 1.0))
+	if gloom > 0.0:
+		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(Color(0.42, 0.38, 0.62), gloom * 0.6)
+		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(Color(0.72, 0.66, 0.8), gloom * 0.6)
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.1).lerp(Color(0.02, 0.02, 0.04), night)
 	env.ambient_light_energy = lerpf(0.5, 0.45, night)
 	env.fog_light_color = sky_mat.sky_horizon_color
-	env.fog_density = lerpf(0.0015, 0.012, night)
+	env.fog_density = lerpf(0.0015, 0.012, night) + gloom * 0.004
+	if gloom > 0.0:
+		env.fog_light_color = env.fog_light_color.lerp(Color(0.5, 0.46, 0.66), gloom)
+	env.adjustment_brightness = 1.0 - gloom * 0.06
+	env.adjustment_contrast = 1.0 + gloom * 0.12
+	env.ambient_light_energy *= 1.0 - gloom * 0.25
 
 	var lights := get_tree().get_nodes_in_group("night_light") if is_inside_tree() else []
 	for l in lights:
-		l.light_energy = float(l.get_meta("base_energy", 1.0)) * night
-		l.visible = night > 0.02
-	fireflies.emitting = night > 0.3
+		l.light_energy = float(l.get_meta("base_energy", 1.0)) * dark
+		l.visible = dark > 0.02
+	fireflies.emitting = dark > 0.3
 
 	var p := _phase_name(time_of_day)
 	if p != phase:

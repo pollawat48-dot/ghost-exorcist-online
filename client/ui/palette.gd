@@ -14,6 +14,7 @@ const HP_LOW := Color(0.98, 0.5, 0.55)
 const SP := Color(0.5, 0.7, 0.98)
 const EXP := Color(1.0, 0.78, 0.4)
 const OUTLINE := Color(0.42, 0.29, 0.38)
+const P_TEXT_DARK := Color(0.5, 0.36, 0.62)
 
 
 static func panel_style(radius: int = 18, bg: Color = CREAM, border: Color = LAVENDER) -> StyleBoxFlat:
@@ -160,6 +161,38 @@ static func draw_icon(ci: CanvasItem, kind: String, c: Vector2, s: float) -> voi
 			st.set_corner_radius_all(int(s * 0.16))
 			ci.draw_style_box(st, Rect2(c + Vector2(-s * 0.32, -s * 0.18), Vector2(s * 0.64, s * 0.52)))
 			ci.draw_arc(c + Vector2(0, -s * 0.18), s * 0.16, PI, TAU, 16, OUTLINE, 3.0, true)
+		"auto":
+			# ลูกศรวนสองเส้น (เล่นอัตโนมัติ)
+			for k in 2:
+				var a0 := k * PI + 0.3
+				ci.draw_arc(c, s * 0.3, a0, a0 + PI * 0.75, 16, P_TEXT_DARK, s * 0.1, true)
+				var tip := c + Vector2(cos(a0 + PI * 0.75), sin(a0 + PI * 0.75)) * s * 0.3
+				var dir := Vector2(-sin(a0 + PI * 0.75), cos(a0 + PI * 0.75))
+				var side := Vector2(-dir.y, dir.x)
+				ci.draw_colored_polygon(PackedVector2Array([tip + dir * s * 0.16, tip + side * s * 0.12, tip - side * s * 0.12]), P_TEXT_DARK)
+			ci.draw_circle(c, s * 0.1, PINK_DEEP)
+		"gear":
+			var pts := PackedVector2Array()
+			for i in 32:
+				var a := i * TAU / 32.0
+				var r := s * (0.38 if (i / 2) % 2 == 0 else 0.28)
+				pts.append(c + Vector2(cos(a), sin(a)) * r)
+			ci.draw_colored_polygon(pts, Color(0.86, 0.82, 0.95))
+			ci.draw_polyline(pts + PackedVector2Array([pts[0]]), OUTLINE, 2.0, true)
+			ci.draw_circle(c, s * 0.12, Color.WHITE)
+			ci.draw_arc(c, s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
+		"scroll":
+			ci.draw_rect(Rect2(c + Vector2(-s * 0.26, -s * 0.3), Vector2(s * 0.52, s * 0.6)), Color(1.0, 0.95, 0.8))
+			ci.draw_rect(Rect2(c + Vector2(-s * 0.26, -s * 0.3), Vector2(s * 0.52, s * 0.6)), OUTLINE, false, 2.0)
+			for k in 3:
+				ci.draw_line(c + Vector2(-s * 0.16, -s * 0.14 + k * s * 0.13), c + Vector2(s * 0.16, -s * 0.14 + k * s * 0.13), Color(0.7, 0.55, 0.5), 2.0)
+			for y in [-0.33, 0.33]:
+				ci.draw_rect(Rect2(c + Vector2(-s * 0.32, s * y - s * 0.05), Vector2(s * 0.64, s * 0.1)), Color(0.86, 0.64, 0.48))
+			ci.draw_circle(c + Vector2(s * 0.2, s * 0.2), s * 0.08, PINK_DEEP)
+		"coin":
+			ci.draw_circle(c, s * 0.36, LEMON)
+			ci.draw_arc(c, s * 0.36, 0, TAU, 24, OUTLINE, 2.0, true)
+			ci.draw_arc(c, s * 0.24, 0, TAU, 20, Color(0.85, 0.6, 0.2), 2.0, true)
 		_:
 			pass
 

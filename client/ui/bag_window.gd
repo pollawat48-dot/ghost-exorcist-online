@@ -45,8 +45,9 @@ func _build() -> void:
 			b.pressed.connect(func(): player.equip(id))
 			r.add_child(b)
 		elif item["type"] == "consumable":
+			info.add_child(P.label(ItemDB.use_text(id), 12, P.TEXT.lightened(0.2)))
 			var b := P.button("ใช้", P.SKY, 14)
-			b.pressed.connect(func(): player.use_herb())
+			b.pressed.connect(func(): player.use_item(id))
 			r.add_child(b)
 
 

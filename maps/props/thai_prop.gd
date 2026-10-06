@@ -30,8 +30,11 @@ const FOOTPRINTS := {
 	"mango": Rect2(-12, -12, 24, 24),
 	"bamboo": Rect2(-22, -22, 44, 44),
 	"dead_tree": Rect2(-10, -10, 20, 20),
+	"ossuary": Rect2(-16, -16, 32, 32),
+	"meru": Rect2(-112, -125, 224, 215),
+	"ruin_wall": Rect2(-80, -12, 160, 24),
 }
-const SWAYING := ["palm", "banana", "bamboo", "laundry", "haunted_house"]
+const SWAYING := ["palm", "banana", "bamboo", "laundry", "haunted_house", "campfire", "meru"]
 
 ## สีผนังบ้านพาสเทล: ชมพู มิ้นต์ ครีมเหลือง ฟ้า และหลังคาคู่กัน
 const COTTAGE_WALLS := [Color(1.0, 0.86, 0.84), Color(0.84, 0.95, 0.86), Color(1.0, 0.93, 0.74), Color(0.84, 0.9, 1.0)]
@@ -46,6 +49,7 @@ var _sway_nodes: Array[Node3D] = []
 var _lights: Array[OmniLight3D] = []
 var _wisps: Array[Node3D] = []
 var _wisp_base: Array[float] = []
+var _flames: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -82,6 +86,11 @@ func _ready() -> void:
 		"bamboo": _bamboo()
 		"frangipani": _frangipani()
 		"dead_tree": _dead_tree()
+		"ossuary": _ossuary()
+		"meru": _meru()
+		"campfire": _campfire()
+		"ruin_wall": _ruin_wall()
+		"incense": _incense()
 	set_process(kind in SWAYING)
 
 
@@ -94,7 +103,9 @@ func _process(delta: float) -> void:
 	for i in _sway_nodes.size():
 		_sway_nodes[i].rotation.z = sin(t * 1.2 + i * 0.7 + variant) * 0.04
 		_sway_nodes[i].rotation.x = sin(t * 0.9 + i) * 0.03
-	# ดวงไฟผีลอยขึ้นลงรอบบ้านร้าง
+	# ดวงไฟผีลอยขึ้นลงรอบบ้านร้าง / เปลวไฟกองไฟไหว
+	for i in _flames.size():
+		_flames[i].scale = Vector3(1.0, 1.0 + sin(t * 9.0 + i * 1.7) * 0.18, 1.0)
 	for i in _wisps.size():
 		_wisps[i].position.y = _wisp_base[i] + sin(t * 1.6 + i * 2.0) * 0.25
 
@@ -679,3 +690,117 @@ func _frangipani() -> void:
 				var fa := f * 2.1 + b
 				K.sphere(self, 0.08, tip + Vector3(cos(fa) * 0.2, 0.3, sin(fa) * 0.2), K.mat(petal, 0.2), 6, Vector3(1, 0.5, 1))
 				K.sphere(self, 0.03, tip + Vector3(cos(fa) * 0.2, 0.34, sin(fa) * 0.2), K.mat(Color(1, 0.85, 0.35), 0.0, 0.8, 0.0, false), 4)
+
+
+# ---------- ป่าช้าวัดร้าง ----------
+
+## เจดีย์บรรจุอัฐิขนาดเล็ก ทาสีขาวซีด มีกรอบรูปและพวงมาลัยแห้ง
+func _ossuary() -> void:
+	var tones := [Color(0.96, 0.94, 0.9), Color(0.9, 0.88, 0.92), Color(0.94, 0.9, 0.84)]
+	var white := K.mat(tones[variant % 3].darkened(0.05 * (variant % 2)), 0.0, 0.9)
+	var trim: Material = K.gold() if variant % 4 == 0 else K.mat(Color(0.78, 0.74, 0.8))
+	K.box(self, Vector3(0.95, 0.25, 0.95), Vector3(0, 0.12, 0), K.mat(Color(0.74, 0.7, 0.72)))
+	K.box(self, Vector3(0.75, 0.6, 0.75), Vector3(0, 0.55, 0), white)
+	K.box(self, Vector3(0.85, 0.08, 0.85), Vector3(0, 0.88, 0), trim)
+	K.cyl(self, 0.22, 0.36, 0.35, Vector3(0, 1.08, 0), white, 10)
+	for i in 4:
+		K.cyl(self, 0.16 - i * 0.035, 0.2 - i * 0.035, 0.12, Vector3(0, 1.32 + i * 0.12, 0), white, 10)
+	K.cyl(self, 0.005, 0.06, 0.35, Vector3(0, 1.95, 0), trim, 8)
+	# กรอบรูปผู้ล่วงลับ + พวงมาลัย
+	K.box(self, Vector3(0.24, 0.3, 0.03), Vector3(0, 0.6, 0.39), K.gold())
+	K.box(self, Vector3(0.18, 0.24, 0.03), Vector3(0, 0.6, 0.4), K.mat(Color(0.75, 0.72, 0.8)))
+	if variant % 3 != 1:
+		var ring := TorusMesh.new()
+		ring.inner_radius = 0.1
+		ring.outer_radius = 0.15
+		K.add(self, ring, Vector3(0, 0.38, 0.41), K.mat(Color(1.0, 0.85, 0.5) if variant % 2 == 0 else Color(0.95, 0.62, 0.72)), Vector3(PI / 2.0, 0, 0))
+	if variant % 5 == 2:
+		# ตะไคร่เกาะ
+		K.sphere(self, 0.18, Vector3(0.3, 0.3, 0.3), K.mat(Color(0.5, 0.68, 0.48)), 6)
+
+
+## เมรุร้าง: ฐานยกสูง บันได เสาสี่ต้น หลังคาทรงไทยซีดจาง และปล่องควันสูงด้านหลัง
+func _meru() -> void:
+	var plaster := K.mat(Color(0.9, 0.87, 0.88), 0.0, 0.95)
+	var faded_red := Color(0.8, 0.5, 0.52)
+	var stone := K.mat(Color(0.74, 0.7, 0.74), 0.0, 0.95)
+	K.box(self, Vector3(6.6, 0.9, 4.6), Vector3(0, 0.45, 0), stone)
+	for i in 4:
+		K.box(self, Vector3(2.0, 0.22, 0.4), Vector3(0, 0.11 + i * 0.22, 2.7 - i * 0.35), K.mat(Color(0.7, 0.66, 0.7)))
+	for x in [-2.6, 2.6]:
+		for z in [-1.8, 1.8]:
+			K.box(self, Vector3(0.45, 3.0, 0.45), Vector3(x, 2.4, z), plaster)
+			K.box(self, Vector3(0.6, 0.2, 0.6), Vector3(x, 3.95, z), K.mat(Color(0.82, 0.7, 0.5)))
+	# แท่นเผาตรงกลาง
+	K.box(self, Vector3(2.0, 0.8, 1.2), Vector3(0, 1.3, 0), plaster)
+	K.box(self, Vector3(2.2, 0.12, 1.4), Vector3(0, 1.76, 0), K.mat(Color(0.82, 0.7, 0.5)))
+	_thai_roof(4.1, 6.4, 4.6, 0.8, 4.0, faded_red)
+	_thai_roof(4.9, 4.6, 4.2, 2.6, 0.0, faded_red.lightened(0.1))
+	# ปล่องควันทรงสอบ
+	K.box(self, Vector3(1.2, 4.0, 1.2), Vector3(0, 2.0, -3.2), plaster)
+	K.box(self, Vector3(0.9, 3.0, 0.9), Vector3(0, 5.5, -3.2), plaster)
+	K.box(self, Vector3(1.1, 0.25, 1.1), Vector3(0, 7.1, -3.2), K.mat(Color(0.5, 0.46, 0.52)))
+	# รอยร้าวและเถาวัลย์
+	for i in 6:
+		K.cyl(self, 0.03, 0.03, 0.6 + (i % 3) * 0.4, Vector3(-2.6 + (i % 2) * 5.2, 3.1 - (i % 3) * 0.2, 1.95 - (i / 2) * 1.8), K.mat(Color(0.45, 0.62, 0.45)), 4)
+	K.box(self, Vector3(0.05, 1.4, 0.02), Vector3(0.3, 4.0, -2.58), K.mat(Color(0.55, 0.5, 0.56)), Vector3(0, 0, 0.3))
+	# ควันจางๆ ลอยจากปล่อง
+	for i in 3:
+		var puff := Node3D.new()
+		var base := 7.6 + i * 0.7
+		puff.position = Vector3(0.2 * i, base, -3.2)
+		add_child(puff)
+		K.sphere(puff, 0.35 + i * 0.12, Vector3.ZERO, K.mat(Color(0.85, 0.82, 0.92, 0.45), 0.3, 0.9, 0.0, false), 8)
+		_wisps.append(puff)
+		_wisp_base.append(base)
+	# ดวงไฟผีม่วงใต้ชายคา
+	_night_light(Vector3(0, 2.5, 2.4), Color(0.75, 0.55, 1.0), 1.6, 8.0)
+
+
+## กองไฟที่แคมป์สัปเหร่อ
+func _campfire() -> void:
+	var rock := K.mat(Color(0.66, 0.62, 0.66))
+	for i in 8:
+		var a := i * TAU / 8.0
+		K.sphere(self, 0.16, Vector3(cos(a) * 0.55, 0.08, sin(a) * 0.55), rock, 6, Vector3(1.2, 0.7, 1.0))
+	for i in 3:
+		K.cyl(self, 0.07, 0.07, 0.9, Vector3(0, 0.12, 0), K.mat(Color(0.55, 0.38, 0.3)), 6, Vector3(PI / 2.0, i * PI / 3.0, 0))
+	for i in 3:
+		var f := Node3D.new()
+		f.position = Vector3((i - 1) * 0.12, 0.15, (i % 2) * 0.1)
+		add_child(f)
+		var c: Color = [Color(1.0, 0.55, 0.3), Color(1.0, 0.8, 0.35), Color(1.0, 0.45, 0.4)][i]
+		K.cyl(f, 0.0, 0.18 - i * 0.03, 0.55 - i * 0.1, Vector3(0, 0.27, 0), K.mat(c, 2.5, 0.5, 0.0, false), 8)
+		_flames.append(f)
+	var light := OmniLight3D.new()
+	light.position = Vector3(0, 0.9, 0)
+	light.light_color = Color(1.0, 0.65, 0.35)
+	light.omni_range = 6.0
+	light.light_energy = 1.4
+	add_child(light)
+
+
+## กำแพงวัดเก่าที่พังเป็นช่วงๆ
+func _ruin_wall() -> void:
+	var brick := K.mat(Color(0.84, 0.66, 0.6), 0.0, 0.95)
+	var plaster := K.mat(Color(0.9, 0.87, 0.86), 0.0, 0.95)
+	var x := -2.3
+	var i := 0
+	while x < 2.4:
+		var h := 1.4 - float((i * 7 + variant) % 5) * 0.2
+		K.box(self, Vector3(0.9, h, 0.5), Vector3(x + 0.45, h / 2.0, 0), plaster if (i + variant) % 3 else brick)
+		x += 0.95
+		i += 1
+	K.box(self, Vector3(0.5, 0.25, 0.4), Vector3(0.6, 0.12, 0.7), brick, Vector3(0, 0.5, 0.2))
+	K.sphere(self, 0.3, Vector3(-1.5, 1.0, 0.2), K.mat(Color(0.5, 0.7, 0.46)), 8)
+
+
+## กระถางธูปกับเทียนหน้าหลุมศพ
+func _incense() -> void:
+	K.cyl(self, 0.18, 0.14, 0.22, Vector3(0, 0.11, 0), K.mat(Color(0.9, 0.75, 0.45)), 10)
+	for i in 3:
+		K.cyl(self, 0.01, 0.01, 0.4, Vector3(-0.06 + i * 0.06, 0.4, 0), K.mat(Color(0.85, 0.3, 0.25)), 4)
+		K.sphere(self, 0.02, Vector3(-0.06 + i * 0.06, 0.61, 0), K.mat(Color(1.0, 0.6, 0.3), 3.0, 0.5, 0.0, false), 4)
+	for x in [-0.3, 0.3]:
+		K.cyl(self, 0.04, 0.04, 0.25, Vector3(x, 0.12, 0.05), K.mat(Color(1.0, 0.96, 0.85)), 6)
+		K.sphere(self, 0.035, Vector3(x, 0.28, 0.05), K.mat(Color(1.0, 0.8, 0.4), 3.0, 0.5, 0.0, false), 6, Vector3(1, 1.6, 1))

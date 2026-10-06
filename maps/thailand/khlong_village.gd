@@ -1,22 +1,17 @@
-extends Node3D
+extends "res://maps/map_base.gd"
 ## ประเทศไทย แผนที่ 1: หมู่บ้านริมคลอง (3D)
 ## ฝั่งซ้ายเป็นหมู่บ้านกับวัด ข้ามสะพานไปฝั่งขวาเป็นทุ่งนา ป่ากล้วย และป่าช้าเก่า
 ## ตรรกะของแผนที่ (เดิน, จุดเกิดผี) ใช้หน่วยเดิม 32 หน่วย = 1 เมตร บนพื้นราบ x/z
 ## พื้นและน้ำวาดด้วย shader, สิ่งของสร้างใน thai_prop.gd, ต้นข้าว/หญ้าใช้ MultiMesh
 
-const K = preload("res://maps/props/mesh_kit.gd")
-const Prop = preload("res://maps/props/thai_prop.gd")
 const GROUND_SHADER = preload("res://maps/thailand/ground.gdshader")
 const WATER_SHADER = preload("res://maps/thailand/water.gdshader")
-const FOLIAGE_SHADER = preload("res://maps/thailand/foliage.gdshader")
 
-const CELL := 32
 const CANAL_X := 1220.0
 const CANAL_WATER := 62.0
 const CANAL_BANK := 80.0
 const BRIDGE_Y := 1000.0
 const BRIDGE_HALF := 40.0
-const PATH_W := 30.0
 const COURTYARD := Rect2(200, 460, 680, 620)
 const PADDY := Rect2(1450, 150, 1150, 640)
 const PLOT := Vector2(230, 160)
@@ -28,6 +23,7 @@ const PATH_SEGS := [
 	[Vector2(1300, 1000), Vector2(1700, 990)],
 	[Vector2(1700, 990), Vector2(2250, 1060)],
 	[Vector2(2250, 1060), Vector2(2700, 1090)],
+	[Vector2(2700, 1090), Vector2(3150, 1100)],
 	[Vector2(1700, 990), Vector2(1760, 790)],
 	[Vector2(2250, 1060), Vector2(2200, 1230)],
 	[Vector2(550, 1000), Vector2(550, 1550)],
@@ -35,29 +31,41 @@ const PATH_SEGS := [
 	[Vector2(150, 380), Vector2(900, 330)],
 ]
 
-var country := "ประเทศไทย"
-var map_name := "หมู่บ้านริมคลอง"
-var world_rect := Rect2(0, 0, 3200, 2000)
-var field_rect := Rect2(1350, 100, 1800, 1800)
-var spawn_point := Vector2(560, 1000)
-var spawns := [
-	{"id": "krasue_noi", "count": 4, "rect": PADDY.grow(-40)},
-	{"id": "krasue_noi", "count": 3, "rect": Rect2(2550, 1080, 450, 420)},
-	{"id": "phi_takiang", "count": 3, "rect": GROVE.grow(-40)},
-	{"id": "phi_takiang", "count": 2, "rect": Rect2(2650, 720, 450, 280)},
-]
-## จุดที่บอสประจำถิ่น (นางพญากระสือ) สุ่มเกิด
-var boss_id := "krasue_queen"
-var boss_spawns := [
-	{"name": "ป่าช้าเก่า", "pos": GRAVE_CENTER + Vector2(-60, 40)},
-	{"name": "บ้านร้างหลังป่าช้า", "pos": Vector2(2900, 1840)},
-	{"name": "ป่ากล้วย", "pos": GROVE.get_center()},
-]
-var lanterns: Array[Vector2] = []
-var astar := AStarGrid2D.new()
-var props_root: Node3D
-var _placed: Array[Vector2] = []
-var _rng := RandomNumberGenerator.new()
+## ประตูวาร์ปไปป่าช้าวัดร้าง อยู่สุดทางดินฝั่งตะวันออก
+const PORTAL_EAST := Vector2(3130, 1100)
+
+
+func _init() -> void:
+	map_id = "khlong_village"
+	map_name = "หมู่บ้านริมคลอง"
+	world_rect = Rect2(0, 0, 3200, 2000)
+	field_rect = Rect2(1350, 100, 1800, 1800)
+	spawn_point = Vector2(560, 1000)
+	path_segs = PATH_SEGS
+	spawns = [
+		{"id": "krasue_noi", "count": 4, "rect": PADDY.grow(-40)},
+		{"id": "krasue_noi", "count": 3, "rect": Rect2(2550, 1150, 400, 350)},
+		{"id": "phi_takiang", "count": 3, "rect": GROVE.grow(-40)},
+		{"id": "phi_takiang", "count": 2, "rect": Rect2(2650, 720, 400, 260)},
+	]
+	# จุดที่บอสประจำถิ่น (นางพญากระสือ) สุ่มเกิด
+	boss_id = "krasue_queen"
+	boss_spawns = [
+		{"name": "ป่าช้าเก่า", "pos": GRAVE_CENTER + Vector2(-60, 40)},
+		{"name": "บ้านร้างหลังป่าช้า", "pos": Vector2(2900, 1840)},
+		{"name": "ป่ากล้วย", "pos": GROVE.get_center()},
+	]
+	# NPC หน้าโบสถ์: ร้านยาของยาย กับหลวงตาที่ให้เควส
+	npcs = [
+		{"id": "yai_chan", "name": "ยายจันทร์ ร้านยา", "role": "shop", "pos": Vector2(650, 925),
+			"look": {"robe": Color(0.98, 0.72, 0.62), "sash": Color(0.55, 0.78, 0.6), "hat": "bun"},
+			"stock": ["herb_potion", "nam_mon", "ya_hom_thong", "nam_mon_yai"]},
+		{"id": "luang_ta", "name": "หลวงตาเมือง", "role": "quest", "pos": Vector2(460, 925),
+			"look": {"robe": Color(1.0, 0.66, 0.3), "sash": Color(0.95, 0.55, 0.25), "hat": "bald"}},
+	]
+	portals = [
+		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 12+)"},
+	]
 
 
 func _ready() -> void:
@@ -76,35 +84,30 @@ func is_water(p: Vector2) -> bool:
 	return absf(p.x - canal_center(p.y)) < CANAL_WATER and absf(p.y - BRIDGE_Y) > BRIDGE_HALF
 
 
-func is_walkable(p: Vector2) -> bool:
-	return world_rect.has_point(p) and not astar.is_point_solid(_cell(p))
+func _blocked(pos: Vector2, radius: float) -> bool:
+	return absf(pos.x - canal_center(pos.y)) < CANAL_BANK + radius or COURTYARD.grow(20).has_point(pos) \
+		or PADDY.has_point(pos) or pos.distance_to(PORTAL_EAST) < 90.0
 
 
-func path_distance(p: Vector2) -> float:
-	var best := INF
-	for seg in PATH_SEGS:
-		best = minf(best, Geometry2D.get_closest_point_to_segment(p, seg[0], seg[1]).distance_to(p))
-	return best
-
-
-## หาเส้นทางเดินจาก from ไป to (ถ้าปลายทางเดินไม่ได้ จะไปจุดที่ใกล้ที่สุดแทน)
-func find_path(from: Vector2, to: Vector2) -> PackedVector2Array:
-	var a := _nearest_open(_cell(from))
-	var b := _nearest_open(_cell(to))
-	var pts := astar.get_point_path(a, b)
-	if pts.size() > 1:
-		pts.remove_at(0)
-	if pts.is_empty():
-		return pts
-	if b == _cell(to) and is_walkable(to):
-		pts[pts.size() - 1] = to
-	return pts
+func minimap_color(p: Vector2) -> Color:
+	if is_water(p):
+		return Color(0.55, 0.78, 0.96)
+	if path_distance(p) < PATH_W * 0.6:
+		return Color(0.98, 0.88, 0.7)
+	if COURTYARD.has_point(p):
+		return Color(1.0, 0.94, 0.84)
+	if p.distance_to(GRAVE_CENTER) < GRAVE_R:
+		return Color(0.82, 0.78, 0.9)
+	if PADDY.has_point(p):
+		return Color(0.78, 0.93, 0.56)
+	if GROVE.has_point(p):
+		return Color(0.52, 0.76, 0.5)
+	return Color(0.68, 0.86, 0.56)
 
 
 ## สร้างสิ่งของทั้งหมดใส่ container ที่ y-sort แล้วมาร์คจุดที่เดินผ่านไม่ได้
 func build_props() -> Node3D:
-	props_root = Node3D.new()
-	props_root.name = "Props"
+	super.build_props()
 
 	# วัด
 	_add("chedi", Vector2(528, 585))
@@ -215,53 +218,12 @@ func _place(kind: String, pos: Vector2, radius: float, gap: float) -> bool:
 			return false
 	if pos.distance_to(GRAVE_CENTER) < GRAVE_R + radius:
 		return false
-	if pos.distance_to(spawn_point) < 80.0:
+	if pos.distance_to(spawn_point) < 80.0 or pos.distance_to(PORTAL_EAST) < 90.0:
 		return false
 	if not _clear_of_props(pos, gap):
 		return false
 	_add(kind, pos)
 	return true
-
-
-func _add(kind: String, pos: Vector2) -> Node3D:
-	var prop := Prop.new()
-	prop.kind = kind
-	prop.variant = _rng.randi() % 12
-	prop.position = K.to3d(pos)
-	if kind in ["palm", "banana", "bush", "mango", "rain_tree", "bamboo", "frangipani", "dead_tree", "well"]:
-		prop.rotation.y = _rng.randf() * TAU
-		prop.set_meta("keep_rotation", true)
-	props_root.add_child(prop)
-	_placed.append(pos)
-	var fp: Rect2 = prop.footprint()
-	if fp.has_area():
-		_mark_solid(Rect2(pos + fp.position, fp.size))
-	return prop
-
-
-func _try_add(kind: String, pos: Vector2, avoid_paths: bool) -> bool:
-	if absf(pos.x - canal_center(pos.y)) < CANAL_BANK + 30 or COURTYARD.grow(20).has_point(pos) or PADDY.has_point(pos):
-		return false
-	if avoid_paths and path_distance(pos) < PATH_W + 24:
-		return false
-	var spacing := 64.0 if kind == "tomb" else 48.0
-	for other in _placed:
-		if other.distance_to(pos) < spacing:
-			return false
-	_add(kind, pos)
-	return true
-
-
-func _scatter(kind: String, rect: Rect2, count: int, avoid_paths: bool) -> void:
-	var added := 0
-	var tries := 0
-	while added < count and tries < count * 20:
-		tries += 1
-		var pos := Vector2(_rng.randf_range(rect.position.x, rect.end.x), _rng.randf_range(rect.position.y, rect.end.y))
-		if path_distance(pos) < PATH_W + 24:
-			continue
-		if _try_add(kind, pos, avoid_paths):
-			added += 1
 
 
 func _terrain_material(shader: Shader) -> ShaderMaterial:
@@ -352,48 +314,6 @@ func _build_bridge() -> void:
 			K.beam(bridge, Vector3(x0, 0.95 + sin(float(k) / 6.0 * PI) * 0.35, rz), Vector3(x1, 0.95 + sin(float(k + 1) / 6.0 * PI) * 0.35, rz), 0.09, dark)
 
 
-## กอข้าวหนึ่งกอ: ใบเรียวหลายใบ สีเข้มที่โคน อ่อนที่ปลาย
-func _tuft_mesh(blades: int, height: float, spread: float, base: Color, tip: Color) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = blades * 7 + int(height * 100)
-	for b in blades:
-		var a := TAU * b / blades + rng.randf() * 0.5
-		var dir := Vector3(cos(a), 0, sin(a))
-		var side := Vector3(-dir.z, 0, dir.x) * 0.03
-		var h := height * rng.randf_range(0.75, 1.1)
-		var top := dir * spread * h + Vector3(0, h, 0)
-		var mid := dir * spread * 0.4 * h + Vector3(0, h * 0.55, 0)
-		var n := Vector3.UP
-		for v in [[-side, base], [side, base], [mid + side * 0.6, base.lerp(tip, 0.5)],
-				[-side, base], [mid + side * 0.6, base.lerp(tip, 0.5)], [mid - side * 0.6, base.lerp(tip, 0.5)],
-				[mid - side * 0.6, base.lerp(tip, 0.5)], [mid + side * 0.6, base.lerp(tip, 0.5)], [top, tip]]:
-			st.set_color(v[1])
-			st.set_normal(n)
-			st.add_vertex(v[0])
-	return st.commit()
-
-
-func _foliage(mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color], name_: String) -> void:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = mesh
-	mm.instance_count = transforms.size()
-	for i in transforms.size():
-		mm.set_instance_transform(i, transforms[i])
-		mm.set_instance_color(i, colors[i])
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = name_
-	mmi.multimesh = mm
-	var mat := ShaderMaterial.new()
-	mat.shader = FOLIAGE_SHADER
-	mmi.material_override = mat
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	props_root.add_child(mmi)
-
-
 func _build_rice() -> void:
 	var mesh := _tuft_mesh(9, 0.75, 0.35, Color(0.4, 0.66, 0.3), Color(0.72, 0.92, 0.48))
 	var transforms: Array[Transform3D] = []
@@ -477,53 +397,3 @@ func _build_border_trees() -> void:
 		edge += _rng.randf_range(70, 140)
 
 
-func _clear_of_props(p: Vector2, dist: float) -> bool:
-	for other in _placed:
-		if other.distance_to(p) < dist:
-			return false
-	return true
-
-
-func _build_grid() -> void:
-	astar.region = Rect2i(0, 0, ceili(world_rect.size.x / CELL), ceili(world_rect.size.y / CELL))
-	astar.cell_size = Vector2(CELL, CELL)
-	astar.offset = Vector2(CELL / 2.0, CELL / 2.0)
-	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	astar.update()
-	for x in astar.region.size.x:
-		for y in astar.region.size.y:
-			var center := Vector2(x * CELL + CELL / 2.0, y * CELL + CELL / 2.0)
-			if is_water(center):
-				astar.set_point_solid(Vector2i(x, y))
-
-
-func _mark_solid(rect: Rect2) -> void:
-	for x in range(floori(rect.position.x / CELL), ceili(rect.end.x / CELL)):
-		for y in range(floori(rect.position.y / CELL), ceili(rect.end.y / CELL)):
-			var c := Vector2i(x, y)
-			if astar.is_in_boundsv(c) and rect.has_point(Vector2(x * CELL + CELL / 2.0, y * CELL + CELL / 2.0)):
-				astar.set_point_solid(c)
-
-
-func _cell(p: Vector2) -> Vector2i:
-	return Vector2i(
-		clampi(int(p.x / CELL), 0, astar.region.size.x - 1),
-		clampi(int(p.y / CELL), 0, astar.region.size.y - 1))
-
-
-func _nearest_open(c: Vector2i) -> Vector2i:
-	if not astar.is_point_solid(c):
-		return c
-	for r in range(1, 8):
-		for dx in range(-r, r + 1):
-			for dy in range(-r, r + 1):
-				if maxi(absi(dx), absi(dy)) != r:
-					continue
-				var n := c + Vector2i(dx, dy)
-				if astar.is_in_boundsv(n) and not astar.is_point_solid(n):
-					return n
-	return c
-
-
-func _rect_vec(r: Rect2) -> Vector4:
-	return Vector4(r.position.x, r.position.y, r.size.x, r.size.y)

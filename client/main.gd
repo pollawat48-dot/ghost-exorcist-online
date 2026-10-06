@@ -1,9 +1,18 @@
 extends Node3D
-## M1: ต้นแบบเล่นคนเดียว (3D) — ประเทศไทย: หมู่บ้านริมคลอง
+## M1: ต้นแบบเล่นคนเดียว (3D) — ประเทศไทย: หมู่บ้านริมคลอง → ป่าช้าวัดร้าง
 ## ทุกอย่างขับด้วย tick() เพื่อให้ย้ายไปรันบน zone server และทดสอบแบบ headless ได้
 ## ตรรกะเกมอยู่บนพื้นราบ 2D (pos) ส่วนสิ่งที่เห็นเป็น 3D
 
-const StartMap = preload("res://maps/thailand/khlong_village.gd")
+const MAPS := {
+	"khlong_village": preload("res://maps/thailand/khlong_village.gd"),
+	"pa_cha": preload("res://maps/thailand/pa_cha.gd"),
+}
+const START_MAP := "khlong_village"
+const Npc = preload("res://client/npc.gd")
+const Portal = preload("res://client/portal.gd")
+const AutoPlay = preload("res://client/auto_play.gd")
+const GhostDB = preload("res://shared/data/ghosts.gd")
+const Quests = preload("res://shared/data/quests.gd")
 const Ambience = preload("res://client/ambience.gd")
 const Player = preload("res://client/player.gd")
 const Ghost = preload("res://client/ghost.gd")
@@ -21,6 +30,7 @@ const PICKUP_RADIUS := 20.0
 const CLICK_RADIUS := 24.0
 const CLICK_RADIUS_SCREEN := 45.0
 const AUTO_TARGET_RADIUS := 320.0
+const NPC_CLICK_SCREEN := 60.0
 
 var map: Node3D
 var world: Node3D
@@ -36,63 +46,111 @@ var next_ghost_seed := 1
 var boss: Node3D = null
 var boss_timer := 0.0
 var boss_place := ""
+var npcs: Node3D
+var portals: Node3D
+var props: Node3D
+var fader: Node
+var auto: RefCounted
+var talk_target: Node3D = null  ## NPC ที่กำลังเดินไปคุย
+var portal_lock := 0.0  ## กันวาร์ปเด้งไปมาทันทีหลังเปลี่ยนแผนที่
 
 
 func _ready() -> void:
 	rng.seed = 12345
-	map = StartMap.new()
-	add_child(map)
-	ambience = Ambience.new()
-	ambience.setup(map)
-	add_child(ambience)
-
 	world = Node3D.new()
 	world.name = "World"
 	add_child(world)
-	world.add_child(map.build_props())
 	drops = Node3D.new()
 	drops.name = "Drops"
 	world.add_child(drops)
 	ghosts = Node3D.new()
 	ghosts.name = "Ghosts"
 	world.add_child(ghosts)
+	npcs = Node3D.new()
+	npcs.name = "Npcs"
+	world.add_child(npcs)
+	portals = Node3D.new()
+	portals.name = "Portals"
+	world.add_child(portals)
 
 	player = Player.new()
-	player.pos = map.spawn_point
-	player.spawn_point = map.spawn_point
-	player.bounds = map.world_rect
 	player.ghosts = ghosts
-	player.nav = map
 	world.add_child(player)
 
 	camera_rig = CameraRig.new()
 	camera_rig.target = player
 	add_child(camera_rig)
 
-	var fader := OcclusionFader.new()
-	fader.setup(camera_rig.camera, player, map.props_root)
+	ambience = Ambience.new()
+	add_child(ambience)
+	fader = OcclusionFader.new()
 	add_child(fader)
+	auto = AutoPlay.new(self)
 
 	hud = Hud.new()
 	add_child(hud)
 	hud.bind(player)
-	hud.set_location(map.country, map.map_name)
-	hud.set_phase(ambience.phase)
+	hud.bind_auto(auto)
 	hud.track(camera_rig.camera, ghosts)
-	hud.setup_minimap(map)
 	hud.action.connect(do_action)
 	ambience.phase_changed.connect(hud.set_phase)
+	player.changed.connect(_refresh_npc_markers)
 
+	load_map(START_MAP)
+	hud.add_log("ยินดีต้อนรับสู่%s! คุยกับหลวงตาเพื่อรับเควส ซื้อยาที่ร้านยาย แล้วข้ามสะพานไปล่าผี" % map.map_name)
+
+
+## โหลดแผนที่ใหม่ (ตอนเริ่มเกมหรือเดินเข้าประตูวาร์ป) ตัวละครและของในกระเป๋าคงเดิม
+func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
+	if map != null:
+		map.queue_free()
+		props.queue_free()
+		for root in [ghosts, drops, npcs, portals]:
+			for c in root.get_children():
+				root.remove_child(c)
+				c.queue_free()
+	respawn_queue.clear()
+	boss = null
+	talk_target = null
+	map = MAPS[map_id].new()
+	add_child(map)
+	props = map.build_props()
+	world.add_child(props)
+	ambience.setup(map)
+	ambience.tick(0.0)
+	fader.setup(camera_rig.camera, player, map.props_root)
+
+	player.pos = map.spawn_point if entry == Vector2.INF else entry
+	player.spawn_point = map.spawn_point
+	player.bounds = map.world_rect
+	player.nav = map
+	player.command_move(player.pos)
+	player.attack_target = null
+	camera_rig.snap()
+
+	for entry_npc in map.npcs:
+		var n := Npc.new()
+		n.setup(entry_npc)
+		npcs.add_child(n)
+	for entry_portal in map.portals:
+		var w := Portal.new()
+		w.setup(entry_portal)
+		portals.add_child(w)
 	boss_timer = rng.randf_range(BOSS_FIRST_DELAY.x, BOSS_FIRST_DELAY.y)
 	for i in map.spawns.size():
 		for n in map.spawns[i]["count"]:
 			_spawn_ghost(i)
-	ambience.tick(0.0)
-	hud.add_log("ยินดีต้อนรับสู่%s! ข้ามสะพานไปทางขวาเพื่อล่าผีที่ทุ่งนาและป่าช้า" % map.map_name)
+	portal_lock = 1.0
+	hud.set_location(map.country, map.map_name)
+	hud.setup_minimap(map, npcs, portals)
+	hud.close_windows()
+	_refresh_npc_markers()
 
 
 func _process(delta: float) -> void:
 	player.stick = _stick_world()
+	if player.stick != Vector2.ZERO:
+		auto.pause(1.5)
 	tick(delta)
 
 
@@ -118,18 +176,74 @@ func _stick_world() -> Vector2:
 func do_action(name: String) -> void:
 	match name:
 		"attack":
+			var npc := nearest_npc(Npc.TALK_RADIUS + 30.0)
+			if npc != null:
+				talk_to(npc)
+				return
 			var target := nearest_ghost(AUTO_TARGET_RADIUS)
 			if target != null:
+				auto.pause()
 				player.command_attack(target)
 			else:
 				hud.add_log("ไม่มีผีอยู่ใกล้ๆ")
 		"holy_water":
 			player.cast_holy_water()
-		"herb":
-			player.use_herb()
+		"herb", "potion_hp":
+			player.use_potion("hp")
+		"potion_sp":
+			player.use_potion("sp")
+		"auto":
+			toggle_auto()
 		_:
 			if name.begins_with("skill:"):
 				player.use_skill(name.substr(6))
+
+
+func toggle_auto() -> void:
+	auto.set_enabled(not auto.enabled)
+	hud.add_log("เปิดระบบออโต้: ตีผี ใช้สกิล เก็บของ และกินยาเอง" if auto.enabled else "ปิดระบบออโต้แล้ว")
+	hud.refresh_auto()
+
+
+func nearest_npc(radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_dist := radius
+	for n in npcs.get_children():
+		var d: float = player.pos.distance_to(n.pos)
+		if d < best_dist:
+			best = n
+			best_dist = d
+	return best
+
+
+## คุยกับ NPC: ถ้าอยู่ไกลจะเดินไปหาก่อน แล้วเปิดหน้าต่างร้านค้า/เควส
+func talk_to(npc: Node3D) -> void:
+	if player.pos.distance_to(npc.pos) <= Npc.TALK_RADIUS:
+		talk_target = null
+		player.command_move(player.pos)
+		hud.open_npc(npc.data)
+		return
+	talk_target = npc
+	player.command_move(npc.pos + Vector2(0, 46))
+
+
+## เครื่องหมายเหนือหัว NPC: ! มีเควสใหม่ ? มีเควสส่งได้
+func _refresh_npc_markers() -> void:
+	if npcs == null:
+		return
+	for n in npcs.get_children():
+		if n.role() == "shop":
+			n.set_marker("shop")
+			continue
+		var mark := ""
+		for id in Quests.for_giver(n.npc_id()):
+			var st: String = player.quest_status(id)
+			if st == "ready":
+				mark = "ready"
+				break
+			if st == "available":
+				mark = "available"
+		n.set_marker(mark)
 
 
 func nearest_ghost(radius: float) -> Node3D:
@@ -146,7 +260,10 @@ func nearest_ghost(radius: float) -> Node3D:
 
 
 func tick(delta: float) -> void:
+	auto.tick(delta)
 	player.tick(delta)
+	_tick_talk()
+	_tick_portals(delta)
 	for g in ghosts.get_children():
 		if g.has_method("tick"):
 			g.tick(delta)
@@ -157,6 +274,12 @@ func tick(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		auto.pause()
+		var npc := npc_at_screen(event.position)
+		if npc != null:
+			talk_to(npc)
+			return
+		talk_target = null
 		var ghost := ghost_at_screen(event.position)
 		if ghost != null:
 			player.command_attack(ghost)
@@ -168,7 +291,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		match event.keycode:
 			KEY_0, KEY_Q:
-				do_action("herb")
+				do_action("potion_hp")
+			KEY_E:
+				do_action("potion_sp")
+			KEY_F:
+				var npc := nearest_npc(Npc.TALK_RADIUS + 60.0)
+				if npc != null:
+					talk_to(npc)
+			KEY_V:
+				toggle_auto()
 			KEY_SPACE:
 				do_action("attack")
 			KEY_C:
@@ -177,8 +308,25 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.toggle_window("skills")
 			KEY_I, KEY_B:
 				hud.toggle_window("bag")
+			KEY_J:
+				hud.toggle_window("questlog")
 			KEY_ESCAPE:
 				hud.close_windows()
+
+
+func npc_at_screen(screen: Vector2) -> Node3D:
+	var cam: Camera3D = camera_rig.camera
+	var best: Node3D = null
+	var best_dist := NPC_CLICK_SCREEN
+	for n in npcs.get_children():
+		var world_pos: Vector3 = n.global_position + Vector3(0, 1.0, 0)
+		if cam.is_position_behind(world_pos):
+			continue
+		var d := screen.distance_to(cam.unproject_position(world_pos))
+		if d < best_dist:
+			best = n
+			best_dist = d
+	return best
 
 
 ## ผีที่อยู่ใต้เมาส์บนหน้าจอ (เทียบกับตัวผีที่ลอยอยู่ ไม่ใช่เงาบนพื้น)
@@ -229,7 +377,7 @@ func _spawn_ghost(spawn_index: int) -> void:
 
 
 func _on_ghost_died(g: Node3D) -> void:
-	player.gain_exp(g.data["exp"])
+	player.reward_kill(g.ghost_id, g.data["exp"], g.data.get("coins", 0))
 	var spread := 60.0 if g.is_boss() else 14.0
 	var dropped_equip := false
 	var equip_pool: Array[String] = []
@@ -303,3 +451,31 @@ func _tick_pickups() -> void:
 		if player.pos.distance_to(d.pos) < PICKUP_RADIUS:
 			player.add_item(d.item_id)
 			d.queue_free()
+
+
+func _tick_talk() -> void:
+	if talk_target == null:
+		return
+	if not is_instance_valid(talk_target) or player.attack_target != null:
+		talk_target = null
+		return
+	if player.pos.distance_to(talk_target.pos) <= Npc.TALK_RADIUS:
+		var npc := talk_target
+		talk_target = null
+		talk_to(npc)
+	elif not player.moving:
+		talk_target = null
+
+
+## เหยียบประตูวาร์ปแล้วย้ายแผนที่ (ระหว่างออโต้ทำงานจะไม่วาร์ปเอง กันหลงไปแผนที่อื่น)
+func _tick_portals(delta: float) -> void:
+	portal_lock = maxf(0.0, portal_lock - delta)
+	if portal_lock > 0.0 or (auto.enabled and not auto.is_paused()):
+		return
+	for w in portals.get_children():
+		if player.pos.distance_to(w.pos) < Portal.RADIUS:
+			var to: String = w.data["to"]
+			var at: Vector2 = w.data["to_pos"]
+			load_map(to, at)
+			hud.add_log("เดินทางมาถึง%s" % map.map_name)
+			return

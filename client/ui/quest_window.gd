@@ -1,0 +1,105 @@
+extends "res://client/ui/game_window.gd"
+## หน้าต่างเควส: คุยกับ NPC เพื่อรับ/ส่งเควส หรือเปิดจากเมนูเพื่อดูเควสที่กำลังทำ
+
+const Quests = preload("res://shared/data/quests.gd")
+
+var npc := {}  ## ว่าง = สมุดเควส (ดูเควสที่รับไว้ทั้งหมด)
+
+
+func _ready() -> void:
+	setup("สมุดเควส", 580)
+
+
+func open_for(npc_data: Dictionary) -> void:
+	npc = npc_data
+	title_label.text = npc["name"]
+	show_window()
+
+
+func _build() -> void:
+	var ids: Array[String] = []
+	if npc.is_empty():
+		for id in player.active_quests():
+			ids.append(id)
+		if ids.is_empty():
+			content.add_child(P.label("ยังไม่ได้รับเควส คุยกับ NPC ที่มีเครื่องหมาย ! บนหัวเพื่อรับเควส", 14))
+			return
+	else:
+		content.add_child(P.label(_greeting(), 14, P.TEXT.lightened(0.15)))
+		var locked_shown := 0
+		for id in Quests.for_giver(npc["id"]):
+			var st: String = player.quest_status(id)
+			if st == "locked":
+				locked_shown += 1
+				if locked_shown > 2:
+					continue
+			ids.append(id)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(580, mini(420, 96 * ids.size()))
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 10)
+	scroll.add_child(list)
+	for id in ids:
+		_quest_card(list, id)
+
+
+func _greeting() -> String:
+	match npc["id"]:
+		"luang_ta":
+			return "\"โยมศิษย์วัด ช่วยหลวงตาปราบผีที่มากวนชาวบ้านหน่อยนะ\""
+		"ta_sappare":
+			return "\"ป่าช้านี้ไม่สงบมานานแล้ว เจ้ากล้าพอจะช่วยตาไหม\""
+	return ""
+
+
+func _quest_card(list: VBoxContainer, id: String) -> void:
+	var q: Dictionary = Quests.QUESTS[id]
+	var st: String = player.quest_status(id)
+	var card := PanelContainer.new()
+	var bg: Color = {"ready": Color(0.9, 1.0, 0.9), "active": Color(1.0, 0.98, 0.9), "available": Color(1.0, 0.95, 0.97), "done": Color(0.94, 0.94, 0.94), "locked": Color(0.95, 0.94, 0.96)}[st]
+	var style := P.panel_style(12, bg, P.LAVENDER.lightened(0.2))
+	style.shadow_size = 0
+	card.add_theme_stylebox_override("panel", style)
+	list.add_child(card)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	card.add_child(h)
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 0)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(info)
+	var tag: String = {"ready": "ส่งได้", "active": "กำลังทำ", "available": "ใหม่", "done": "สำเร็จแล้ว", "locked": "ยังรับไม่ได้"}[st]
+	var title := "%s  [%s]%s" % [q["name"], tag, "  (ทำซ้ำได้)" if q["repeatable"] else ""]
+	info.add_child(P.label(title, 15, P.TEXT if st != "locked" else P.TEXT.lightened(0.4)))
+	var desc := P.label(q["desc"], 12, P.TEXT.lightened(0.2))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size.x = 420
+	info.add_child(desc)
+	var goal := Quests.goal_text(player.state, player.inventory, id)
+	if st == "locked":
+		var need := "ต้องเลเวล %d" % q["min_level"]
+		if q["requires"] != "" and not player.state["quests_done"].has(q["requires"]):
+			need += " และทำเควส \"%s\" ก่อน" % Quests.QUESTS[q["requires"]]["name"]
+		goal = need
+	info.add_child(P.label("เป้าหมาย: " + goal, 13, P.PINK_DEEP if st == "ready" else P.TEXT))
+	info.add_child(P.label("รางวัล: " + Quests.reward_text(id), 12, Color(0.7, 0.5, 0.15)))
+	match st:
+		"available":
+			var b := P.button("รับเควส", P.MINT, 15)
+			b.pressed.connect(func(): player.accept_quest(id))
+			h.add_child(b)
+		"ready":
+			var b := P.button("ส่งเควส", P.LEMON, 15)
+			b.disabled = not npc.is_empty() and npc["id"] != q["giver"]
+			b.pressed.connect(func(): player.complete_quest(id))
+			if npc.is_empty():
+				b.text = "กลับไปส่ง"
+				b.disabled = true
+			h.add_child(b)
+		"active":
+			var b := P.button("ยกเลิก", P.PINK, 13)
+			b.pressed.connect(func(): player.abandon_quest(id))
+			h.add_child(b)

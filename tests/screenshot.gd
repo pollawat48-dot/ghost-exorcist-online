@@ -16,6 +16,10 @@ func _shoot() -> void:
 	await process_frame
 	main.set_process(false)
 	var player: Node3D = main.player
+	var mode := args[7] if args.size() > 7 else ""
+	for part in mode.split(",", false):
+		if part.begins_with("map:"):
+			main.load_map(part.substr(4))
 	player.pos = Vector2(float(args[1]), float(args[2])) if args.size() > 2 else Vector2(1050, 700)
 	if args.size() > 3:
 		main.ambience.time_of_day = float(args[3])
@@ -35,8 +39,7 @@ func _shoot() -> void:
 		main.camera_rig.yaw = deg_to_rad(float(args[5]))
 	if args.size() > 6:
 		main.camera_rig.distance = float(args[6])
-	# โหมดพิเศษ: job:<คลาส>, boss, char, skills, bag, class, showcase
-	var mode := args[7] if args.size() > 7 else ""
+	# โหมดพิเศษ: map:<id>, job:<คลาส>, boss, char, skills, bag, class, showcase, shop, quest, questlog, auto, autoon, quests
 	for part in mode.split(",", false):
 		_apply_mode(main, part)
 	# ให้ตัวละครหันหน้าเข้ากล้องเพื่อดูหน้าตา
@@ -54,7 +57,9 @@ func _shoot() -> void:
 
 func _apply_mode(main: Node3D, mode: String) -> void:
 	var player: Node3D = main.player
-	if mode.begins_with("job:"):
+	if mode.begins_with("map:"):
+		pass
+	elif mode.begins_with("job:"):
 		var target := mode.substr(4)
 		var chain: Array[String] = load("res://shared/data/classes.gd").lineage(target)
 		player.gain_exp(50000000)
@@ -94,5 +99,21 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 			player.add_item(id)
 		for id in ["suea_kraphan", "mongkhon", "takrut", "mitmo"]:
 			player.equip(id)
-	elif mode in ["char", "skills", "bag", "class"]:
+	elif mode in ["char", "skills", "bag", "class", "questlog", "auto"]:
 		main.hud.toggle_window(mode)
+	elif mode in ["shop", "quest"]:
+		for n in main.npcs.get_children():
+			if n.role() == mode:
+				main.hud.open_npc(n.data)
+	elif mode == "autoon":
+		main.toggle_auto()
+	elif mode == "quests":
+		# รับเควสไว้ 2 อันให้เห็นรายการเควสบนจอ
+		for n in main.npcs.get_children():
+			if n.role() == "quest":
+				for id in load("res://shared/data/quests.gd").for_giver(n.npc_id()):
+					player.accept_quest(id)
+		main._refresh_npc_markers()
+	elif mode == "loot":
+		for id in ["red_thread", "spirit_shard", "lantern_oil", "soul_krasue", "khamot_ember", "mitmo"]:
+			player.add_item(id, 3)

@@ -16,6 +16,7 @@ func setup(cam: Camera3D, player_ref: Node3D, props_root: Node3D) -> void:
 	camera = cam
 	player = player_ref
 	props = props_root
+	_cache.clear()
 
 
 func _process(delta: float) -> void:

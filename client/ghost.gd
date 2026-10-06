@@ -32,6 +32,8 @@ var rng := RandomNumberGenerator.new()
 var model: Node3D
 var dangles: Array[Node3D] = []
 var base_scale := 1.0
+var float_height := 1.25  ## ความสูงที่ลอยจากพื้น (เมตร)
+var label_y := 2.15
 var aoe_timer := 0.0
 
 
@@ -60,8 +62,16 @@ func _ready() -> void:
 			_build_krasue(eye, shine, blush)
 		"krasue_queen":
 			_build_krasue(eye, shine, blush)
-			_build_queen_crown()
-			model.scale = Vector3.ONE * 2.2
+			_build_queen_crown(Vector3.ZERO)
+		"phi_khamot":
+			_build_khamot(eye, shine, blush)
+		"phi_pop":
+			_build_pop(eye, shine, blush)
+		"phi_pret":
+			_build_pret(eye, shine, blush)
+		"pret_king":
+			_build_pret(eye, shine, blush)
+			_build_queen_crown(Vector3(0, 2.0, 0))
 		"phi_takiang":
 			# ผีตะเกียงตัวกลม หน้าตาง่วงๆ แก้มแดง
 			K.cyl(model, 0.32, 0.36, 0.58, Vector3.ZERO, K.mat(Color(1.0, 0.82, 0.5), 1.4, 0.5), 14)
@@ -86,8 +96,8 @@ func _ready() -> void:
 	light.set_meta("base_energy", 1.6)
 	light.add_to_group("night_light")
 	model.add_child(light)
+	base_scale = data.get("scale", 2.2 if is_boss() else 1.0)
 	if is_boss():
-		base_scale = 2.2
 		# บอสเรืองแสงตลอดเวลา ไม่ต้องรอกลางคืน
 		var glow := OmniLight3D.new()
 		glow.light_color = c
@@ -95,9 +105,9 @@ func _ready() -> void:
 		glow.light_energy = 1.5
 		glow.position.y = 1.0
 		add_child(glow)
-		K.label(self, "★ %s Lv.%d ★" % [data["name"], data["level"]], Vector3(0, 4.2, 0), Color(1, 0.85, 0.4), 44)
+		K.label(self, "★ %s Lv.%d ★" % [data["name"], data["level"]], Vector3(0, label_y * base_scale * 0.95 + 0.6, 0), Color(1, 0.85, 0.4), 44)
 	else:
-		K.label(self, data["name"], Vector3(0, 2.15, 0), Color(1, 0.88, 0.88), 34)
+		K.label(self, "%s Lv.%d" % [data["name"], data["level"]], Vector3(0, label_y, 0), Color(1, 0.88, 0.88), 34)
 	_sync()
 
 
@@ -125,19 +135,95 @@ func _build_krasue(eye: Material, shine: Material, blush: Material) -> void:
 		dangles.append(d)
 
 
-## ชฎาทองของนางพญากระสือ + ต่างหูอัญมณี
-func _build_queen_crown() -> void:
-	K.cyl(model, 0.26, 0.3, 0.1, Vector3(0, 0.36, -0.04), K.gold(), 16)
-	K.cyl(model, 0.13, 0.22, 0.18, Vector3(0, 0.5, -0.04), K.gold(), 14)
-	K.cyl(model, 0.015, 0.12, 0.34, Vector3(0, 0.76, -0.04), K.gold(), 12)
-	K.sphere(model, 0.05, Vector3(0, 0.38, 0.24), K.mat(Color(1.0, 0.3, 0.5), 2.0, 0.3, 0.0, false), 8)
+## ชฎาทองของบอส + ต่างหูอัญมณี (head = ตำแหน่งกลางหัว)
+func _build_queen_crown(head: Vector3) -> void:
+	K.cyl(model, 0.26, 0.3, 0.1, head + Vector3(0, 0.36, -0.04), K.gold(), 16)
+	K.cyl(model, 0.13, 0.22, 0.18, head + Vector3(0, 0.5, -0.04), K.gold(), 14)
+	K.cyl(model, 0.015, 0.12, 0.34, head + Vector3(0, 0.76, -0.04), K.gold(), 12)
+	K.sphere(model, 0.05, head + Vector3(0, 0.38, 0.24), K.mat(Color(1.0, 0.3, 0.5), 2.0, 0.3, 0.0, false), 8)
 	for x in [-0.33, 0.33]:
-		K.sphere(model, 0.05, Vector3(x, -0.12, 0.05), K.mat(Color(0.5, 1.0, 0.8), 2.0, 0.3, 0.0, false), 8)
+		K.sphere(model, 0.05, head + Vector3(x, -0.12, 0.05), K.mat(Color(0.5, 1.0, 0.8), 2.0, 0.3, 0.0, false), 8)
+
+
+## ผีโขมด: ดวงไฟสีฟ้าอมเขียว ตาโตใส มีเปลวไฟเล็กๆ ลุกบนหัวและหางไฟห้อย
+func _build_khamot(eye: Material, shine: Material, blush: Material) -> void:
+	var core := Color(0.55, 1.0, 0.9)
+	K.sphere(model, 0.32, Vector3.ZERO, K.mat(core, 1.6, 0.4), 16)
+	K.sphere(model, 0.45, Vector3.ZERO, K.mat(Color(core, 0.25), 1.5, 0.5, 0.0, false), 14)
+	for i in 3:
+		var a := (i - 1) * 0.45
+		K.cyl(model, 0.0, 0.13 - absf(a) * 0.08, 0.42 - absf(a) * 0.15, Vector3(sin(a) * 0.18, 0.4, -0.04), K.mat(Color(0.75, 1.0, 0.95), 2.2, 0.4, 0.0, false), 8, Vector3(0, 0, -a))
+	for x in [-0.12, 0.12]:
+		K.sphere(model, 0.07, Vector3(x, 0.0, 0.28), eye, 10, Vector3(0.85, 1.2, 0.5))
+		K.sphere(model, 0.025, Vector3(x + 0.025, 0.04, 0.32), shine, 6)
+		K.sphere(model, 0.05, Vector3(x * 1.6, -0.1, 0.26), blush, 8, Vector3(1.2, 0.6, 0.4))
+	for i in 3:
+		var d := Node3D.new()
+		d.position = Vector3(-0.1 + i * 0.1, -0.25, -0.05)
+		model.add_child(d)
+		K.cyl(d, 0.07 - i * 0.01, 0.0, 0.35, Vector3(0, -0.15, 0), K.mat(Color(0.5, 0.95, 0.9, 0.8), 1.8, 0.4, 0.0, false), 6)
+		dangles.append(d)
+
+
+## ผีปอบ: ตัวกลมป้อมสีเขียวอ่อนแบบผ้าคลุม ผมยุ่ง ยิ้มกว้างมีเขี้ยวเล็ก แขนสั้นๆ
+func _build_pop(eye: Material, shine: Material, blush: Material) -> void:
+	float_height = 0.75
+	var skin := K.mat(Color(0.74, 0.9, 0.7), 0.2, 0.7)
+	K.sphere(model, 0.48, Vector3.ZERO, skin, 18, Vector3(1.0, 1.05, 0.95))
+	K.cyl(model, 0.46, 0.5, 0.35, Vector3(0, -0.4, 0), skin, 16)
+	for i in 6:
+		var a := i * TAU / 6.0
+		K.sphere(model, 0.13, Vector3(cos(a) * 0.42, -0.6, sin(a) * 0.42), skin, 8)
+	var hair := K.mat(Color(0.3, 0.26, 0.36), 0.0, 0.6)
+	for i in 7:
+		var a := -1.2 + i * 0.4
+		K.cyl(model, 0.0, 0.1, 0.32, Vector3(sin(a) * 0.3, 0.42 + cos(a) * 0.06, -0.12), hair, 6, Vector3(-0.3, 0, -a * 0.8))
+	for x in [-0.17, 0.17]:
+		K.sphere(model, 0.085, Vector3(x, 0.08, 0.42), eye, 10, Vector3(0.85, 1.1, 0.5))
+		K.sphere(model, 0.03, Vector3(x + 0.03, 0.12, 0.47), shine, 6)
+		K.sphere(model, 0.07, Vector3(x * 1.5, -0.06, 0.4), blush, 8, Vector3(1.2, 0.6, 0.4))
+	K.sphere(model, 0.12, Vector3(0, -0.14, 0.42), K.mat(Color(0.75, 0.3, 0.38), 0.0, 0.8, 0.0, false), 10, Vector3(1.6, 0.7, 0.5))
+	for x in [-0.07, 0.07]:
+		K.cyl(model, 0.0, 0.03, 0.06, Vector3(x, -0.1, 0.48), K.mat(Color(1, 1, 1)), 6, Vector3(PI, 0, 0))
+	for side in [-1.0, 1.0]:
+		var d := Node3D.new()
+		d.position = Vector3(side * 0.47, -0.1, 0.05)
+		model.add_child(d)
+		K.cyl(d, 0.07, 0.09, 0.3, Vector3(0, -0.12, 0), skin, 8, Vector3(0, 0, side * 0.4))
+		dangles.append(d)
+
+
+## เปรต: ตัวสูงผอมสีม่วงอ่อน หัวเล็ก ปากจิ๋วเท่ารูเข็ม แขนยาวเรียวห้อยลงพื้น
+func _build_pret(eye: Material, shine: Material, blush: Material) -> void:
+	float_height = 0.15
+	label_y = 3.6
+	var skin := K.mat(Color(0.82, 0.76, 0.98), 0.25, 0.7)
+	var cloth := K.mat(Color(0.62, 0.58, 0.72), 0.0, 0.8)
+	K.cyl(model, 0.12, 0.3, 1.0, Vector3(0, 0.5, 0), cloth, 12)
+	K.cyl(model, 0.1, 0.13, 0.7, Vector3(0, 1.35, 0), skin, 10)
+	K.cyl(model, 0.08, 0.08, 0.3, Vector3(0, 1.82, 0), skin, 8)
+	K.sphere(model, 0.3, Vector3(0, 2.1, 0), skin, 16)
+	var hair := K.mat(Color(0.86, 0.86, 0.94), 0.0, 0.6)
+	for i in 5:
+		var a := -0.8 + i * 0.4
+		K.cyl(model, 0.0, 0.035, 0.25, Vector3(sin(a) * 0.2, 2.38, -0.05), hair, 4, Vector3(-0.2, 0, -a))
+	for x in [-0.11, 0.11]:
+		K.sphere(model, 0.06, Vector3(x, 2.12, 0.25), eye, 10, Vector3(0.85, 1.2, 0.5))
+		K.sphere(model, 0.02, Vector3(x + 0.02, 2.15, 0.29), shine, 6)
+		K.sphere(model, 0.045, Vector3(x * 1.6, 2.02, 0.24), blush, 8, Vector3(1.2, 0.6, 0.4))
+	K.sphere(model, 0.025, Vector3(0, 1.98, 0.28), K.mat(Color(0.4, 0.2, 0.3), 0.0, 0.8, 0.0, false), 6)
+	for side in [-1.0, 1.0]:
+		var d := Node3D.new()
+		d.position = Vector3(side * 0.16, 1.6, 0.0)
+		model.add_child(d)
+		K.cyl(d, 0.04, 0.05, 1.3, Vector3(side * 0.05, -0.65, 0), skin, 6, Vector3(0, 0, side * 0.08))
+		K.sphere(d, 0.1, Vector3(side * 0.1, -1.35, 0), skin, 8, Vector3(1, 1.3, 0.8))
+		dangles.append(d)
 
 
 func _sync() -> void:
 	position = K.to3d(pos)
-	model.position.y = (1.25 + sin(bob) * 0.12) * (1.6 if is_boss() else 1.0)
+	model.position.y = (float_height + sin(bob) * 0.12) * (1.6 if is_boss() and float_height > 1.0 else 1.0)
 	for i in dangles.size():
 		dangles[i].rotation.x = sin(bob * 1.3 + i) * 0.25
 	model.scale = Vector3.ONE * base_scale * (1.15 if flash > 0.0 else 1.0)
@@ -154,7 +240,7 @@ func take_damage(amount: int, attacker: Node3D, crit: bool = false) -> void:
 	flash = 0.15
 	target = attacker
 	returning = false
-	var text_y := 4.5 if is_boss() else 2.0
+	var text_y := label_y * base_scale * 0.95 + 0.3
 	if crit:
 		DamageText.spawn(get_parent(), position + Vector3(0, text_y, 0), "%d!" % amount, Color(1, 0.85, 0.3))
 	else:
