@@ -10,12 +10,15 @@ const Classes = preload("res://shared/data/classes.gd")
 const Skills = preload("res://shared/data/skills.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const Quests = preload("res://shared/data/quests.gd")
+const Crafting = preload("res://shared/data/crafting.gd")
+const World = preload("res://shared/data/world.gd")
 const DamageText = preload("res://client/damage_text.gd")
 const Effect = preload("res://client/effect.gd")
 
 signal changed
 signal message(text: String)
 signal class_changed(class_id: String)
+signal open_refine(stone_id: String)  ## กดใช้หินตี+ จากกระเป๋า
 
 const SPEED := 140.0
 const REGEN_INTERVAL := 3.0
@@ -26,6 +29,8 @@ const SP_ITEM := "nam_mon"
 const HP_POTIONS := ["herb_potion", "ya_hom_thong"]
 const SP_POTIONS := ["nam_mon", "nam_mon_yai"]
 const POTION_COOLDOWN := 0.6
+const MINE_TIME := 1.2  ## วินาทีต่อการขุดหนึ่งครั้ง
+const MINE_REACH := 46.0
 const SHOT_COLORS := {"neutral": Color(1, 0.95, 0.8), "holy": Color(0.6, 0.9, 1.0), "fire": Color(1.0, 0.55, 0.3)}
 
 var player_name := "ศิษย์วัด"
@@ -52,6 +57,8 @@ var skill_cd := {}  ## id -> วินาทีที่เหลือ
 var guard_timer := 0.0  ## อาคมคงกระพัน
 var guard_bonus := 0.0
 var potion_cd := 0.0
+var mine_target: Node3D = null  ## ก้อนหินแร่ที่กำลังเดินไปขุด/กำลังขุด
+var mine_timer := 0.0
 var regen_timer := 0.0
 var swing := 0.0
 var levelup_fx := 0.0
@@ -272,6 +279,7 @@ func _sync(delta: float) -> void:
 
 func command_move(dest: Vector2) -> void:
 	attack_target = null
+	mine_target = null
 	pending_skill = ""
 	_set_path(Vector2(
 		clampf(dest.x, bounds.position.x, bounds.end.x),
@@ -280,6 +288,7 @@ func command_move(dest: Vector2) -> void:
 
 func command_attack(ghost: Node3D) -> void:
 	attack_target = ghost
+	mine_target = null
 	pending_skill = ""
 	moving = false
 	repath_timer = 0.0
@@ -306,8 +315,11 @@ func tick(delta: float) -> void:
 	if attack_target != null and (not is_instance_valid(attack_target) or not attack_target.alive):
 		attack_target = null
 		pending_skill = ""
+	if mine_target != null and (not is_instance_valid(mine_target) or not mine_target.has_ore()):
+		mine_target = null
 	if stick.length() > 0.15:
 		attack_target = null
+		mine_target = null
 		pending_skill = ""
 		moving = false
 		_walk_dir(stick.limit_length(1.0) * SPEED * delta)
@@ -332,6 +344,8 @@ func tick(delta: float) -> void:
 			moving = false
 			attack_cooldown = stats["attack_interval"]
 			_basic_attack(attack_target)
+	elif mine_target != null:
+		_tick_mining(delta)
 	elif moving:
 		_follow_path(delta)
 	if model != null:
@@ -578,7 +592,9 @@ func change_class(class_id: String) -> bool:
 
 
 func can_equip(item_id: String) -> bool:
-	var item: Dictionary = ItemDB.ITEMS.get(item_id, {})
+	if not ItemDB.has(item_id):
+		return false
+	var item: Dictionary = ItemDB.info(item_id)
 	if item.get("type", "") != "equip":
 		return false
 	return item["line"] == "any" or item["line"] == class_info()["line"]
@@ -588,15 +604,15 @@ func equip(item_id: String) -> bool:
 	if inventory.get(item_id, 0) <= 0:
 		return false
 	if not can_equip(item_id):
-		message.emit("คลาสนี้ใช้ %s ไม่ได้" % ItemDB.ITEMS[item_id]["name"])
+		message.emit("คลาสนี้ใช้ %s ไม่ได้" % ItemDB.display_name(item_id))
 		return false
-	var slot: String = ItemDB.ITEMS[item_id]["slot"]
+	var slot: String = ItemDB.info(item_id)["slot"]
 	if state["equipment"].has(slot):
 		unequip(slot)
 	_remove_item(item_id)
 	state["equipment"][slot] = item_id
 	recalc()
-	message.emit("สวม %s" % ItemDB.ITEMS[item_id]["name"])
+	message.emit("สวม %s" % ItemDB.display_name(item_id))
 	changed.emit()
 	return true
 
@@ -651,7 +667,10 @@ func use_herb() -> bool:
 func use_item(item_id: String) -> bool:
 	if hp <= 0 or inventory.get(item_id, 0) <= 0 or potion_cd > 0.0:
 		return false
-	var item: Dictionary = ItemDB.ITEMS[item_id]
+	var item: Dictionary = ItemDB.info(item_id)
+	if item["type"] == "refine":
+		open_refine.emit(item_id)
+		return true
 	if item["type"] != "consumable":
 		return false
 	var heal: int = item.get("heal", 0)
@@ -700,7 +719,7 @@ func sell(item_id: String, count: int = 1) -> bool:
 	for i in count:
 		_remove_item(item_id)
 	state["coins"] += each * count
-	message.emit("ขาย %s x%d (+%d เหรียญ)" % [ItemDB.ITEMS[item_id]["name"], count, each * count])
+	message.emit("ขาย %s x%d (+%d เหรียญ)" % [ItemDB.display_name(item_id), count, each * count])
 	changed.emit()
 	return true
 
@@ -738,7 +757,7 @@ func complete_quest(id: String) -> bool:
 			_remove_item(q["target"])
 	state["quests"].erase(id)
 	state["quests_done"][id] = state["quests_done"].get(id, 0) + 1
-	var r: Dictionary = q["reward"]
+	var r := Quests.reward(id, class_info()["line"])
 	state["coins"] += r["coins"]
 	message.emit("ส่งเควส %s สำเร็จ! +%d เหรียญ" % [q["name"], r["coins"]])
 	for item in r["items"]:
@@ -757,6 +776,147 @@ func reward_kill(ghost_id: String, exp_amount: int, coin_amount: int) -> void:
 			if state["quests"][id] == q["count"]:
 				message.emit("เควส %s ครบแล้ว! กลับไปส่งได้" % q["name"])
 	gain_exp(exp_amount, coin_amount)
+
+
+# ---------- ตีบวก หลอมแร่ ขุดแร่ วาร์ป ----------
+
+## ของสวมใส่ที่ตีบวกได้: ในกระเป๋า (slot = "") และที่สวมอยู่ (slot = ช่อง)
+func refinable_items() -> Array:
+	var result := []
+	for slot in ItemDB.SLOTS:
+		if state["equipment"].has(slot):
+			result.append({"key": state["equipment"][slot], "slot": slot})
+	for key in inventory:
+		if ItemDB.info(key)["type"] == "equip":
+			result.append({"key": key, "slot": ""})
+	return result
+
+
+## หินตี+ ที่ใช้ตีจาก +level ได้ (หินขั้นสูงใช้ตีขั้นต่ำได้ด้วย)
+func refine_stones_for(level: int) -> Array[String]:
+	var result: Array[String] = []
+	for id in ["hin_ti_1", "hin_ti_2", "hin_ti_3"]:
+		if inventory.get(id, 0) > 0 and ItemDB.ITEMS[id]["refine_max"] >= level + 1:
+			result.append(id)
+	return result
+
+
+## ตีบวกของหนึ่งชิ้น: ใช้หิน 1 ก้อน + เหรียญ ยิ่งขั้นสูงยิ่งแพงและติดยาก
+## ตั้งแต่ +7 ขึ้นไป ถ้าพลาดจะลดขั้นลง 1–2 ขั้น
+## คืน {"ok", "result": "success"/"fail"/"down"/"error", "key": คีย์ใหม่, "level"}
+func refine(key: String, stone_id: String, slot: String = "") -> Dictionary:
+	var err := {"ok": false, "result": "error", "key": key, "level": ItemDB.refine_of(key)}
+	var owned: bool = state["equipment"].get(slot, "") == key if slot != "" else inventory.get(key, 0) > 0
+	if not owned or not ItemDB.has(key) or ItemDB.info(key)["type"] != "equip":
+		return err
+	var lv := ItemDB.refine_of(key)
+	if lv >= ItemDB.REFINE_MAX:
+		message.emit("%s ตีถึง +%d สูงสุดแล้ว" % [ItemDB.display_name(key), ItemDB.REFINE_MAX])
+		return err
+	if not stone_id in refine_stones_for(lv):
+		message.emit("ต้องใช้หินตี+ ที่ตีถึง +%d ได้" % (lv + 1))
+		return err
+	var fee := ItemDB.refine_fee(lv)
+	if state["coins"] < fee:
+		message.emit("เหรียญไม่พอ (ค่าตีบวก %d)" % fee)
+		return err
+	_remove_item(stone_id)
+	state["coins"] -= fee
+	var new_lv := lv
+	var result := "fail"
+	if rng.randf() < ItemDB.REFINE_CHANCE[lv]:
+		new_lv = lv + 1
+		result = "success"
+	elif lv >= ItemDB.REFINE_RISKY_FROM:
+		new_lv = maxi(0, lv - rng.randi_range(1, 2))
+		result = "down"
+	var base := ItemDB.base_id(key)
+	var new_key := ItemDB.refined_key(base, new_lv)
+	if slot != "":
+		state["equipment"][slot] = new_key
+		recalc()
+	else:
+		_remove_item(key)
+		inventory[new_key] = inventory.get(new_key, 0) + 1
+	match result:
+		"success":
+			levelup_fx = 0.6
+			message.emit("ตีบวกสำเร็จ! ได้ %s" % ItemDB.display_name(new_key))
+		"down":
+			message.emit("ตีบวกล้มเหลว... %s ลดเหลือ +%d" % [ItemDB.info(base)["name"], new_lv])
+		_:
+			message.emit("ตีบวกล้มเหลว (ของยังอยู่ +%d เสียหินและเหรียญ)" % lv)
+	changed.emit()
+	return {"ok": result == "success", "result": result, "key": new_key, "level": new_lv}
+
+
+## หลอมแร่เป็นหินตี+ ที่ร้านหลอม
+func craft(recipe_id: String, count: int = 1) -> bool:
+	if count <= 0 or Crafting.max_craft(recipe_id, inventory, state["coins"]) < count:
+		message.emit("แร่หรือเหรียญไม่พอสำหรับหลอม %s" % ItemDB.ITEMS[recipe_id]["name"])
+		return false
+	var r: Dictionary = Crafting.RECIPES[recipe_id]
+	state["coins"] -= r["coins"] * count
+	for ore in r["ores"]:
+		for i in r["ores"][ore] * count:
+			_remove_item(ore)
+	inventory[recipe_id] = inventory.get(recipe_id, 0) + count
+	message.emit("หลอม %s x%d สำเร็จ (-%d เหรียญ)" % [ItemDB.ITEMS[recipe_id]["name"], count, r["coins"] * count])
+	changed.emit()
+	return true
+
+
+## เดินไปขุดหินแร่ในถ้ำ (ขุดต่อเนื่องจนหินหมด)
+func command_mine(rock: Node3D) -> void:
+	attack_target = null
+	pending_skill = ""
+	mine_target = rock
+	mine_timer = 0.0
+	moving = false
+	repath_timer = 0.0
+
+
+func _tick_mining(delta: float) -> void:
+	if pos.distance_to(mine_target.pos) > MINE_REACH:
+		repath_timer -= delta
+		if repath_timer <= 0.0 or not moving:
+			repath_timer = REPATH_INTERVAL
+			_set_path(mine_target.pos + (pos - mine_target.pos).limit_length(30.0))
+		_follow_path(delta)
+		return
+	moving = false
+	mine_timer += delta
+	if swing <= 0.0:
+		swing = 0.2
+	if mine_timer >= MINE_TIME:
+		mine_timer = 0.0
+		var ore: String = mine_target.mine(rng)
+		if ore != "":
+			add_item(ore)
+		if not mine_target.has_ore():
+			message.emit("หินแร่ก้อนนี้หมดแล้ว")
+			mine_target = null
+
+
+## ค่าวาร์ปไปแผนที่นั้น (แผนที่ที่ยังไม่เคยไปวาร์ปไม่ได้)
+func warp_fee(map_id: String) -> int:
+	return World.MAPS[map_id]["fee"]
+
+
+func can_warp(map_id: String) -> bool:
+	return state["visited"].has(map_id) and state["coins"] >= warp_fee(map_id)
+
+
+func pay_warp(map_id: String) -> bool:
+	if not state["visited"].has(map_id):
+		message.emit("ต้องเดินทางไป%sด้วยตัวเองก่อนหนึ่งครั้ง" % World.map_name(map_id))
+		return false
+	if state["coins"] < warp_fee(map_id):
+		message.emit("เหรียญไม่พอสำหรับค่าวาร์ป (%d)" % warp_fee(map_id))
+		return false
+	state["coins"] -= warp_fee(map_id)
+	changed.emit()
+	return true
 
 
 func take_damage(amount: int) -> void:
@@ -787,13 +947,13 @@ func gain_exp(amount: int, coin_amount: int = 0) -> void:
 
 func add_item(item_id: String, count: int = 1) -> void:
 	inventory[item_id] = inventory.get(item_id, 0) + count
-	var item: Dictionary = ItemDB.ITEMS[item_id]
+	var item: Dictionary = ItemDB.info(item_id)
 	var note := ""
 	if item["type"] == "soul":
 		note = " ✨ (ไว้ผนึกพลังในอนาคต)"
 	elif item["type"] == "equip":
 		note = " [%s] %s" % [ItemDB.RARITY[item["rarity"]]["name"], ItemDB.bonus_text(item_id)]
-	message.emit("ได้รับ %s x%d%s" % [item["name"], count, note])
+	message.emit("ได้รับ %s x%d%s" % [ItemDB.display_name(item_id), count, note])
 	changed.emit()
 
 
@@ -806,6 +966,7 @@ func _remove_item(item_id: String) -> void:
 func _revive() -> void:
 	pos = spawn_point
 	attack_target = null
+	mine_target = null
 	pending_skill = ""
 	moving = false
 	path.clear()

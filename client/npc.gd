@@ -66,6 +66,13 @@ func _ready() -> void:
 			K.sphere(head, 0.14, Vector3(0, 0.48, -0.1), hair, 10)
 			K.cyl(head, 0.015, 0.015, 0.42, Vector3(0, 0.52, -0.1), K.gold(), 4, Vector3(0, 0, PI / 2.0))
 			K.sphere(head, 0.1, Vector3(0, -0.28, 0.28), K.mat(Color(0.96, 0.96, 0.96)), 8, Vector3(1.0, 1.4, 0.6))
+		"headband":
+			# ผ้าโพกหัวแบบช่างตีเหล็ก/หมอผีดอย
+			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
+			var band := TorusMesh.new()
+			band.inner_radius = 0.36
+			band.outer_radius = 0.43
+			K.add(head, band, Vector3(0, 0.16, -0.03), sash, Vector3(-0.15, 0, 0))
 		"farmer":
 			# งอบสาน
 			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
@@ -77,7 +84,34 @@ func _ready() -> void:
 		K.box(head, Vector3(0.12, 0.035, 0.03), Vector3(x, -0.01, 0.35), eye)
 		K.sphere(head, 0.06, Vector3(x * 1.55, -0.11, 0.31), blush, 8, Vector3(1.2, 0.6, 0.4))
 	K.sphere(head, 0.03, Vector3(0, -0.15, 0.36), K.mat(Color(0.85, 0.4, 0.42), 0.0, 0.8, 0.0, false), 6, Vector3(1.4, 0.7, 0.6))
-	if role() == "shop":
+	if role() == "smith":
+		# เตาหลอมกับทั่งตีเหล็กข้างตัว
+		K.cyl(self, 0.45, 0.55, 0.9, Vector3(1.0, 0.45, 0.0), K.mat(Color(0.7, 0.55, 0.5)), 10)
+		K.cyl(self, 0.32, 0.32, 0.05, Vector3(1.0, 0.92, 0.0), K.mat(Color(1.0, 0.55, 0.25), 2.5, 0.4, 0.0, false), 10)
+		K.box(self, Vector3(0.5, 0.3, 0.25), Vector3(-0.8, 0.45, 0.2), K.mat(Color(0.45, 0.45, 0.52), 0.0, 0.4, 0.5))
+		K.box(self, Vector3(0.2, 0.3, 0.2), Vector3(-0.8, 0.15, 0.2), K.mat(Color(0.55, 0.42, 0.36)))
+		var fire := OmniLight3D.new()
+		fire.position = Vector3(1.0, 1.3, 0.2)
+		fire.light_color = Color(1.0, 0.6, 0.3)
+		fire.omni_range = 3.5
+		fire.light_energy = 1.2
+		add_child(fire)
+	elif role() == "warp":
+		# วงแหวนลอยรอบตัวร่างทรง
+		var ring := TorusMesh.new()
+		ring.inner_radius = 0.75
+		ring.outer_radius = 0.82
+		K.add(self, ring, Vector3(0, 0.08, 0), K.mat(Color(0.6, 0.85, 1.0), 2.5, 0.3, 0.0, false))
+	if role() == "shop" and data.get("sign", "") == "ร้านอาวุธ":
+		# ชั้นวางอาวุธ: ดาบ ธนู คัมภีร์
+		K.box(self, Vector3(1.1, 0.08, 0.5), Vector3(0.95, 0.5, 0.1), K.mat(Color(0.75, 0.55, 0.42)))
+		for x in [0.5, 1.4]:
+			K.box(self, Vector3(0.08, 0.5, 0.4), Vector3(x, 0.25, 0.1), K.mat(Color(0.62, 0.45, 0.36)))
+		K.box(self, Vector3(0.06, 0.9, 0.03), Vector3(0.7, 1.0, 0.1), K.mat(Color(0.88, 0.92, 1.0), 0.6, 0.3), Vector3(0, 0, 0.15))
+		K.box(self, Vector3(0.25, 0.05, 0.08), Vector3(0.75, 0.6, 0.1), K.gold())
+		K.box(self, Vector3(0.3, 0.06, 0.36), Vector3(1.15, 0.57, 0.1), K.mat(Color(0.75, 0.3, 0.35)))
+		K.beam(self, Vector3(1.4, 0.55, 0.0), Vector3(1.35, 1.35, 0.0), 0.04, K.mat(Color(0.75, 0.52, 0.36)))
+	elif role() == "shop":
 		# แผงยาเล็กๆ ข้างตัว มีขวดยาสีพาสเทล
 		K.box(self, Vector3(1.1, 0.55, 0.6), Vector3(0.95, 0.28, 0.1), K.mat(Color(0.86, 0.64, 0.48)))
 		K.box(self, Vector3(1.2, 0.06, 0.7), Vector3(0.95, 0.58, 0.1), K.mat(Color(1.0, 0.86, 0.84)))

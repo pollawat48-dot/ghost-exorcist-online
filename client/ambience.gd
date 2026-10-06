@@ -119,15 +119,15 @@ func tick(delta: float) -> void:
 	sky_mat.sky_top_color = Color(0.55, 0.76, 0.98).lerp(Color(0.7, 0.55, 0.85), dusk).lerp(Color(0.16, 0.16, 0.36), clampf(night * 1.5 - 0.5, 0.0, 1.0))
 	sky_mat.sky_horizon_color = Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.72, 0.62), dusk).lerp(Color(0.32, 0.3, 0.52), clampf(night * 1.5 - 0.5, 0.0, 1.0))
 	if gloom > 0.0:
-		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(Color(0.42, 0.38, 0.62), gloom * 0.6)
-		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(Color(0.72, 0.66, 0.8), gloom * 0.6)
+		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(map.gloom_sky, gloom * 0.6)
+		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(map.gloom_horizon, gloom * 0.6)
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.1).lerp(Color(0.02, 0.02, 0.04), night)
 	env.ambient_light_energy = lerpf(0.5, 0.45, night)
 	env.fog_light_color = sky_mat.sky_horizon_color
 	env.fog_density = lerpf(0.0015, 0.012, night) + gloom * 0.004
 	if gloom > 0.0:
-		env.fog_light_color = env.fog_light_color.lerp(Color(0.5, 0.46, 0.66), gloom)
+		env.fog_light_color = env.fog_light_color.lerp(map.gloom_fog, gloom)
 	env.adjustment_brightness = 1.0 - gloom * 0.06
 	env.adjustment_contrast = 1.0 + gloom * 0.12
 	env.ambient_light_energy *= 1.0 - gloom * 0.25

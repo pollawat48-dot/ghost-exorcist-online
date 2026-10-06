@@ -6,6 +6,9 @@ const Progression = preload("res://shared/combat/progression.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const GhostDB = preload("res://shared/data/ghosts.gd")
 const Drop = preload("res://client/drop.gd")
+const Quests = preload("res://shared/data/quests.gd")
+const World = preload("res://shared/data/world.gd")
+const Crafting = preload("res://shared/data/crafting.gd")
 
 const STEP := 0.05
 
@@ -25,6 +28,9 @@ func _run_all() -> void:
 	await _test_gameplay()
 	print("== ร้านค้า เควส ออโต้ แผนที่ ==")
 	await _test_world()
+	print("== แผนที่ถึง Lv150 ถ้ำ หลอมแร่ ตีบวก วาร์ป ==")
+	_test_data()
+	await _test_expansion()
 	if failures == 0:
 		print("ผ่านทั้งหมด")
 	else:
@@ -267,7 +273,7 @@ func _test_world() -> void:
 	var hud: CanvasLayer = main.hud
 
 	# ---- ร้านค้า ----
-	check(main.npcs.get_child_count() == 3, "หมู่บ้านมี NPC ร้านยา หลวงตา และครูใหญ่สำนัก")
+	check(main.npcs.get_child_count() == 6, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ และช่างหลอมแร่")
 	for n in main.npcs.get_children():
 		if n.role() == "class":
 			player.pos = n.pos + Vector2(0, 40)
@@ -384,7 +390,7 @@ func _test_world() -> void:
 	for g in main.alive_ghosts():
 		min_level = mini(min_level, g.data["level"])
 	check(main.alive_ghosts().size() == 21 and min_level >= 12, "ป่าช้ามีผีเลเวลสูงขึ้น (ต่ำสุด Lv %d)" % min_level)
-	check(main.npcs.get_child_count() == 2 and main.map.props_root.get_child_count() > 150, "ป่าช้ามี NPC และฉากครบ (สิ่งของ %d ชิ้น)" % main.map.props_root.get_child_count())
+	check(main.npcs.get_child_count() == 3 and main.map.props_root.get_child_count() > 150, "ป่าช้ามี NPC และฉากครบ (สิ่งของ %d ชิ้น)" % main.map.props_root.get_child_count())
 	var route: PackedVector2Array = main.map.find_path(main.map.spawn_point, Vector2(2550, 1000))
 	check(route.size() > 0 and route[route.size() - 1].distance_to(Vector2(2550, 1000)) < 40.0, "เดินจากทางเข้าไปสุดป่าช้าได้")
 	var boss: Node3D = main.spawn_boss(0)
@@ -418,3 +424,228 @@ func _item_count(player: Node3D) -> int:
 	for id in player.inventory:
 		n += player.inventory[id]
 	return n
+
+
+## ข้อมูลทั้งหมดอ้างอิงกันถูกต้อง (ไอเทมที่ดรอป เป้าหมายเควส ของในร้าน)
+func _test_data() -> void:
+	var missing: Array[String] = []
+	var max_level := 0
+	for gid in GhostDB.GHOSTS:
+		max_level = maxi(max_level, GhostDB.GHOSTS[gid]["level"])
+		for d in GhostDB.GHOSTS[gid]["drops"]:
+			if not ItemDB.ITEMS.has(d["item"]):
+				missing.append(d["item"])
+	check(missing.is_empty(), "ของที่ผีดรอปมีอยู่ในฐานข้อมูลครบ %s" % str(missing))
+	check(max_level == 150, "มีผีถึงเลเวล 150")
+	for id in World.MAPS:
+		var boss_id: String = World.MAPS[id]["boss"]
+		check(GhostDB.GHOSTS.has(boss_id) and GhostDB.GHOSTS[boss_id].get("boss", false), "%s มีบอส %s Lv %d" % [World.MAPS[id]["name"], GhostDB.GHOSTS[boss_id]["name"], GhostDB.GHOSTS[boss_id]["level"]])
+	var bad_quests: Array[String] = []
+	for qid in Quests.QUESTS:
+		var q: Dictionary = Quests.QUESTS[qid]
+		var target_ok: bool = GhostDB.GHOSTS.has(q["target"]) if q["type"] == "kill" else ItemDB.ITEMS.has(q["target"])
+		var r := Quests.reward(qid, "melee")
+		for item in r["items"]:
+			target_ok = target_ok and ItemDB.ITEMS.has(item)
+		if not target_ok or r["exp"] <= 0:
+			bad_quests.append(qid)
+	check(bad_quests.is_empty(), "เควสทุกอันมีเป้าหมายและรางวัลถูกต้อง %s" % str(bad_quests))
+	# รางวัลเยอะขึ้นตามความเก่งของผี
+	var low := Quests.reward("q_tai_hong", "melee")
+	var high := Quests.reward("q_asura", "melee")
+	check(high["exp"] > low["exp"] * 5, "ผีเก่งกว่าให้ EXP เควสมากกว่า (%d vs %d)" % [high["exp"], low["exp"]])
+	check(Quests.reward("q_thahan")["coins"] > Quests.reward("q_tai_hong")["coins"], "เควสรางวัลเงินให้เหรียญตามความเก่งของผี")
+	check(Quests.reward("q_tai_hong")["items"].has("ya_hom_thong") and Quests.reward("q_asura")["items"].has("ya_thip"), "เควสรางวัลยาให้ยาขวดใหญ่ขึ้นในแผนที่สูง")
+	var gear_melee: Dictionary = Quests.reward("q_khun_suek", "melee")["items"]
+	var gear_magic: Dictionary = Quests.reward("q_khun_suek", "magic")["items"]
+	check(gear_melee.has("dab_krung") and gear_magic.has("khoi_boran"), "เควสบอสให้อาวุธล้ำค่าตามสายผู้เล่น")
+	check(Quests.reward("q_hua_khat", "ranged")["items"].size() == 1, "เควสรางวัลของสวมใส่ให้ของ 1 ชิ้น")
+	var stock_ok := true
+	for map_script in [load("res://maps/thailand/khlong_village.gd"), load("res://maps/thailand/krung_kao.gd"), load("res://maps/thailand/nong_naga.gd")]:
+		var m: Node3D = map_script.new()
+		for n in m.npcs:
+			for item in n.get("stock", []):
+				stock_ok = stock_ok and ItemDB.ITEMS.has(item) and ItemDB.ITEMS[item].get("buy", 0) > 0
+		m.free()
+	check(stock_ok, "ของในร้านทุกชิ้นมีราคาขาย")
+	# แร่: สังกะสีออกบ่อยสุด เพชรยากสุด ราคาเรียงกลับกัน
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var counts := {}
+	for i in 20000:
+		var ore := World.roll_ore(1, rng)
+		counts[ore] = counts.get(ore, 0) + 1
+	check(counts["ore_zinc"] > counts["ore_iron"] and counts["ore_iron"] > counts["ore_gold"] and counts["ore_gold"] > counts["ore_diamond"] and counts["ore_diamond"] > 0,
+		"สุ่มแร่: สังกะสี %d > เหล็ก %d > ทอง %d > เพชร %d" % [counts["ore_zinc"], counts["ore_iron"], counts["ore_gold"], counts["ore_diamond"]])
+	check(ItemDB.sell_price("ore_zinc") < ItemDB.sell_price("ore_iron") and ItemDB.sell_price("ore_iron") < ItemDB.sell_price("ore_gold") and ItemDB.sell_price("ore_gold") < ItemDB.sell_price("ore_diamond"), "ราคาแร่: สังกะสีถูกสุด เพชรแพงสุด")
+	var w5 := World.ore_weights(5)
+	check(w5[3] > World.ore_weights(1)[3] and w5[0] > w5[1] and w5[1] > w5[2] and w5[2] > w5[3], "ถ้ำลึกได้เพชรบ่อยขึ้น แต่ยังเรียงสังกะสี > เหล็ก > ทอง > เพชร")
+	# ตีบวก: ค่าพลังเพิ่มขึ้นเรื่อยๆ และยากขึ้นเรื่อยๆ
+	var prev := 0
+	var rising := true
+	for lv in range(0, 11):
+		var atk: int = ItemDB.bonus_of(ItemDB.refined_key("mitmo", lv))["atk"]
+		rising = rising and atk > prev
+		prev = atk
+	check(rising, "ตีบวก +0 ถึง +10 ค่า ATK เพิ่มทุกขั้น (มีดหมอ +10 ATK %d)" % prev)
+	var harder := true
+	for lv in range(1, 10):
+		harder = harder and ItemDB.REFINE_CHANCE[lv] < ItemDB.REFINE_CHANCE[lv - 1] and ItemDB.refine_fee(lv) > ItemDB.refine_fee(lv - 1)
+	check(harder, "ตีบวกขั้นสูงขึ้น โอกาสสำเร็จลดลงและค่าตีแพงขึ้น")
+	check(ItemDB.display_name("mitmo+7") == "+7 มีดหมอลงอาคม" and ItemDB.base_id("mitmo+7") == "mitmo" and ItemDB.sell_price("mitmo+7") > ItemDB.sell_price("mitmo"), "ของตีบวกมีชื่อ +N และขายได้แพงขึ้น")
+
+
+func _test_expansion() -> void:
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	check(player.state["caves"].size() == World.CAVE_COUNT, "เริ่มโลกใหม่สุ่มแผนที่ที่มีถ้ำ %s" % str(player.state["caves"]))
+
+	# ---- แผนที่ใหม่ทุกแผนที่โหลดได้ มีผีตามช่วงเลเวล มีทางเดินถึงประตูถัดไป ----
+	player.state["caves"] = ["krung_kao", "doi_phi", "yom_lok"]
+	var expected := {"krung_kao": [32, 50], "doi_phi": [62, 85], "nong_naga": [96, 122], "yom_lok": [132, 148]}
+	for id in expected:
+		main.load_map(id)
+		await process_frame
+		var lo := 999
+		var hi := 0
+		for g in main.alive_ghosts():
+			lo = mini(lo, g.data["level"])
+			hi = maxi(hi, g.data["level"])
+		var range_ok: bool = lo == expected[id][0] and hi == expected[id][1]
+		check(range_ok and main.alive_ghosts().size() >= 15, "%s: ผี %d ตัว Lv %d–%d" % [main.map.map_name, main.alive_ghosts().size(), lo, hi])
+		var far := Vector2(2600, 1000)
+		var route: PackedVector2Array = main.map.find_path(main.map.spawn_point, far)
+		check(route.size() > 0 and route[route.size() - 1].distance_to(far) < 50.0, "%s: เดินจากแคมป์ไปสุดทางตะวันออกได้" % main.map.map_name)
+		var roles := []
+		for n in main.npcs.get_children():
+			roles.append(n.role())
+		check("quest" in roles and "shop" in roles and "warp" in roles, "%s: แคมป์มี NPC เควส ร้านยา และวาร์ป" % main.map.map_name)
+		var has_cave := false
+		for w in main.portals.get_children():
+			has_cave = has_cave or w.data.get("style", "") == "cave"
+		check(has_cave == (id in player.state["caves"]), "%s: %s" % [main.map.map_name, "มีปากถ้ำ (ถูกสุ่ม)" if has_cave else "ไม่มีถ้ำ"])
+		var boss: Node3D = main.spawn_boss(0)
+		check(boss != null and boss.is_boss() and boss.data["level"] >= 70, "%s: บอส %s Lv %d" % [main.map.map_name, boss.data["name"], boss.data["level"]])
+		_run(main, 1.0)
+	check(main.map.portals.size() >= 1 and main.map.portals[0]["to"] == "nong_naga", "ยมโลกเป็นแผนที่สุดท้าย มีประตูกลับบึงนาคา")
+
+	# ---- วาร์ป ----
+	player.state["coins"] = 100000
+	var coins: int = player.coins()
+	check(main.warp_to("krung_kao") and main.map.map_id == "krung_kao" and player.coins() == coins - World.MAPS["krung_kao"]["fee"], "ร่างทรงวาร์ปไปกรุงเก่าได้ (จ่ายค่าวาร์ป)")
+	player.state["visited"].erase("doi_phi")
+	check(not main.warp_to("doi_phi") and main.map.map_id == "krung_kao", "แผนที่ที่ยังไม่เคยไปวาร์ปไม่ได้")
+	for n in main.npcs.get_children():
+		if n.role() == "warp":
+			player.pos = n.pos + Vector2(0, 40)
+			main.talk_to(n)
+	check(hud.windows["warp"].visible, "คุยกับร่างทรงแล้วเปิดหน้าต่างวาร์ป")
+	hud.windows["warp"].warp_requested.emit("khlong_village")
+	await process_frame
+	check(main.map.map_id == "khlong_village", "กดวาร์ปในหน้าต่างแล้วกลับหมู่บ้าน")
+
+	# ---- ร้านอาวุธ + ร้านหลอม ----
+	for n in main.npcs.get_children():
+		if n.npc_id() == "lung_lek":
+			player.pos = n.pos + Vector2(0, 40)
+			main.talk_to(n)
+	check(hud.windows["shop"].visible and hud.windows["shop"].title_label.text.contains("ร้านอาวุธ"), "เปิดร้านอาวุธในหมู่บ้านได้")
+	coins = player.coins()
+	check(player.buy("mitmo") and player.inventory.get("mitmo", 0) == 1 and player.coins() == coins - ItemDB.ITEMS["mitmo"]["buy"], "ซื้อมีดหมอจากร้านอาวุธ")
+	hud.close_windows()
+	for ore in World.ORE_ORDER:
+		player.inventory[ore] = 30
+	for n in main.npcs.get_children():
+		if n.role() == "smith":
+			player.pos = n.pos + Vector2(0, 40)
+			main.talk_to(n)
+	check(hud.windows["smith"].visible, "คุยกับช่างหลอมแร่แล้วเปิดหน้าต่างหลอม")
+	coins = player.coins()
+	check(player.craft("hin_ti_1", 2) and player.inventory["hin_ti_1"] == 2 and player.inventory["ore_zinc"] == 20 and player.inventory["ore_iron"] == 28 and player.coins() == coins - 100, "หลอมหินตี+ ขั้นต้น 2 ก้อน ใช้แร่และเหรียญ")
+	check(player.craft("hin_ti_3", 1) and player.inventory["ore_diamond"] == 29, "หลอมหินตี+ ขั้นสูง ใช้เพชร")
+	player.inventory["ore_diamond"] = 0
+	check(not player.craft("hin_ti_3", 1), "แร่ไม่พอหลอมไม่ได้")
+	hud.close_windows()
+
+	# ---- ตีบวก ----
+	player.use_item("hin_ti_1")
+	check(hud.windows["refine"].visible, "กดใช้หินตี+ แล้วเปิดหน้าต่างตีบวก")
+	coins = player.coins()
+	var res: Dictionary = player.refine("mitmo", "hin_ti_1")
+	check(res["result"] == "success" and player.inventory.get("mitmo+1", 0) == 1 and not player.inventory.has("mitmo") and player.coins() == coins - ItemDB.refine_fee(0) and player.inventory["hin_ti_1"] == 1, "ตี +1 สำเร็จแน่นอน (ใช้หิน 1 ก้อน + เหรียญ)")
+	check(player.refine_stones_for(4).is_empty() == false and not "hin_ti_1" in player.refine_stones_for(4), "หินขั้นต้นตีเกิน +4 ไม่ได้ ต้องใช้หินขั้นสูงกว่า")
+	player.inventory["hin_ti_3"] = 400
+	player.state["coins"] = 50000000
+	# สวมแล้วตีของที่สวมอยู่ ค่าพลังต้องขึ้นตาม
+	player.state["class"] = "nak_rob"
+	player.recalc()
+	check(player.equip("mitmo+1"), "สวมมีดหมอ +1 ได้")
+	var atk_before: int = player.stats["atk"]
+	var lv := 1
+	var downs := 0
+	var tries := 0
+	var max_seen := 0
+	var risky_safe := true
+	while lv < 10 and tries < 400:
+		var before := lv
+		var r: Dictionary = player.refine(player.state["equipment"]["weapon"], "hin_ti_3", "weapon")
+		lv = r["level"]
+		max_seen = maxi(max_seen, lv)
+		if r["result"] == "down":
+			downs += 1
+			risky_safe = risky_safe and before >= ItemDB.REFINE_RISKY_FROM and before - lv >= 1 and before - lv <= 2
+		elif r["result"] == "fail":
+			risky_safe = risky_safe and before < ItemDB.REFINE_RISKY_FROM and lv == before
+		tries += 1
+	check(lv == 10 and player.state["equipment"]["weapon"] == "mitmo+10", "ตีจนถึง +10 ได้ (ลอง %d ครั้ง ลดขั้น %d ครั้ง)" % [tries, downs])
+	check(risky_safe, "ล้มเหลวก่อน +7 ไม่ลดขั้น ตั้งแต่ +7 ลดขั้น 1–2")
+	check(player.stats["atk"] > atk_before, "ของที่สวมอยู่ตีบวกแล้ว ATK เพิ่ม (%d -> %d)" % [atk_before, player.stats["atk"]])
+	var stones: int = player.inventory["hin_ti_3"]
+	check(not player.refine("mitmo+10", "hin_ti_3", "weapon")["ok"] and player.inventory["hin_ti_3"] == stones, "ตีเกิน +10 ไม่ได้ (ไม่เสียหิน)")
+	hud.open_refine("hin_ti_3")
+	check(hud.windows["refine"].visible, "หน้าต่างตีบวกแสดงของ +10 ได้")
+	hud.close_windows()
+
+	# ---- ถ้ำ: ผีพิเศษ + ขุดแร่ ----
+	main.load_map("krung_kao")
+	await process_frame
+	var cave_gate: Node3D = null
+	for w in main.portals.get_children():
+		if w.data.get("style", "") == "cave":
+			cave_gate = w
+	player.pos = cave_gate.pos + Vector2(0, -80)
+	player.command_move(cave_gate.pos)
+	_run(main, 3.0)
+	await process_frame
+	check(main.map.map_id == "cave:krung_kao" and main.map.map_name == "ถ้ำใต้กรุงเก่าร้าง", "เดินเข้าปากถ้ำแล้วลงไปในถ้ำ")
+	var special := true
+	for g in main.alive_ghosts():
+		special = special and g.ghost_id == "cave_krung_kao"
+	check(special and main.alive_ghosts().size() == 11, "ในถ้ำมีผีพิเศษ (%s)" % GhostDB.GHOSTS["cave_krung_kao"]["name"])
+	check(main.rocks.get_child_count() == 14, "ในถ้ำมีหินแร่ 14 ก้อน")
+	for g in main.alive_ghosts():
+		g.free()
+	main.respawn_queue.clear()
+	var ores_before := 0
+	for ore in World.ORE_ORDER:
+		ores_before += player.inventory.get(ore, 0)
+	var rock: Node3D = main.nearest_rock(2000.0)
+	player.pos = main.map.spawn_point
+	player.command_mine(rock)
+	_run(main, 20.0)
+	var ores_after := 0
+	for ore in World.ORE_ORDER:
+		ores_after += player.inventory.get(ore, 0)
+	check(ores_after - ores_before == rock.CHARGES and not rock.has_ore(), "เดินไปขุดหินจนหมด ได้แร่ %d ก้อน" % (ores_after - ores_before))
+	_run(main, rock.RESPAWN + 1.0)
+	check(rock.has_ore(), "หินแร่งอกใหม่หลังรอสักพัก")
+	player.pos = main.portals.get_child(0).pos + Vector2(80, 0)
+	player.command_move(main.portals.get_child(0).pos)
+	_run(main, 3.0)
+	await process_frame
+	check(main.map.map_id == "krung_kao", "ออกจากถ้ำกลับกรุงเก่า")
+	main.free()

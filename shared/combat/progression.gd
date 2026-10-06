@@ -34,6 +34,7 @@ static func new_state() -> Dictionary:
 		"base": base, "stat_points": 0, "skill_points": 0,
 		"skills": {"holy_water": 1}, "equipment": {},
 		"coins": START_COINS, "quests": {}, "quests_done": {},
+		"visited": {}, "caves": [],
 	}
 
 
@@ -41,7 +42,7 @@ static func new_state() -> Dictionary:
 static func equipment_bonus(state: Dictionary) -> Dictionary:
 	var total := {}
 	for slot in state["equipment"]:
-		var bonus: Dictionary = ItemDB.ITEMS[state["equipment"][slot]].get("bonus", {})
+		var bonus := ItemDB.bonus_of(state["equipment"][slot])
 		for key in bonus:
 			total[key] = total.get(key, 0) + bonus[key]
 	return total

@@ -28,6 +28,15 @@ var portals := []
 ## ความหม่นของแผนที่ 0..1 (ป่าช้ามืดครึ้มกว่าหมู่บ้าน ตะเกียงและผีเรืองแสงแม้ตอนกลางวัน)
 var gloom := 0.0
 var firefly_color := Color(0.75, 1.0, 0.35)
+## สีท้องฟ้า/หมอกเมื่อแผนที่หม่น (ยมโลกเป็นโทนแดง ถ้ำมืดเกือบดำ)
+var gloom_sky := Color(0.42, 0.38, 0.62)
+var gloom_horizon := Color(0.72, 0.66, 0.8)
+var gloom_fog := Color(0.5, 0.46, 0.66)
+## จุดปากถ้ำ ใช้เมื่อแผนที่นี้ถูกสุ่มให้มีถ้ำ (Vector2.INF = แผนที่นี้ไม่มีที่ให้ถ้ำ)
+var cave_spot := Vector2.INF
+## เฉพาะในถ้ำ: ตำแหน่งก้อนหินแร่ และระดับถ้ำ (ยิ่งสูงแร่หายากยิ่งออกบ่อย)
+var ore_rocks: Array[Vector2] = []
+var cave_tier := 0
 var path_segs := []
 var lanterns: Array[Vector2] = []
 var astar := AStarGrid2D.new()
@@ -101,6 +110,9 @@ func _try_add(kind: String, pos: Vector2, avoid_paths: bool) -> bool:
 		return false
 	if avoid_paths and path_distance(pos) < PATH_W + 24:
 		return false
+	for n in npcs:
+		if pos.distance_to(n["pos"]) < 70.0:
+			return false
 	var spacing := 64.0 if kind == "tomb" else 48.0
 	if not _clear_of_props(pos, spacing):
 		return false
