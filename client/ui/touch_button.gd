@@ -14,11 +14,17 @@ var count := -1  ## -1 = ไม่แสดงจำนวน
 var cooldown := 0.0  ## 0..1 ส่วนที่ยังติดคูลดาวน์
 var badge := false  ## จุดแดงมุมขวาบน (มีแต้มให้ใช้ ฯลฯ)
 var caption := ""  ## ข้อความใต้ปุ่ม
+var lit := false  ## เปิดใช้งานอยู่ (เช่น ออโต้) วาดวงแสงรอบปุ่ม
 var _touch := -2  ## -2 = ไม่ได้กด, -1 = เมาส์, อื่นๆ = index นิ้ว
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _process(_delta: float) -> void:
+	if lit:
+		queue_redraw()
 
 
 func _input(event: InputEvent) -> void:
@@ -66,6 +72,9 @@ func _draw() -> void:
 	var c := off + sz * 0.5
 	if round:
 		var r := sz.x * 0.5
+		if lit:
+			var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 220.0)
+			draw_circle(c, r + 5.0 + pulse * 3.0, Color(1.0, 0.85, 0.4, 0.45))
 		draw_circle(c + Vector2(0, 3), r, Color(0.4, 0.25, 0.4, 0.2))
 		draw_circle(c, r, fill.darkened(0.08) if down else fill)
 		draw_circle(c + Vector2(0, -r * 0.12), r * 0.8, fill.lightened(0.25))

@@ -5,6 +5,7 @@ const Combat = preload("res://shared/combat/combat.gd")
 const Progression = preload("res://shared/combat/progression.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const GhostDB = preload("res://shared/data/ghosts.gd")
+const Drop = preload("res://client/drop.gd")
 
 const STEP := 0.05
 
@@ -22,6 +23,8 @@ func _run_all() -> void:
 	_test_progression()
 	print("== gameplay ==")
 	await _test_gameplay()
+	print("== ร้านค้า เควส ออโต้ แผนที่ ==")
+	await _test_world()
 	if failures == 0:
 		print("ผ่านทั้งหมด")
 	else:
@@ -178,11 +181,19 @@ func _test_character(main: Node3D) -> void:
 	var hud: CanvasLayer = main.hud
 	player.command_move(player.pos)
 	player.gain_exp(9000)
-	check(player.state["level"] >= 10 and player.can_change_class(), "ถึงเลเวล 10 แล้วเลื่อนขั้นคลาสได้ (Lv %d)" % player.state["level"])
+	check(player.state["level"] >= 10 and player.class_level_reached() and not player.can_change_class(), "ถึงเลเวล 10 แล้ว แต่ยังเปลี่ยนอาชีพไม่ได้จนกว่าผ่านบททดสอบ (Lv %d)" % player.state["level"])
+	check(not player.change_class("nak_rob"), "ยังไม่ผ่านบททดสอบ เปลี่ยนอาชีพไม่ได้")
+	check(player.accept_quest("q_trial_1"), "รับบททดสอบจากครูใหญ่สำนัก")
+	for i in 15:
+		player.reward_kill("phi_takiang", 0, 0)
+	check(player.complete_quest("q_trial_1"), "ปราบผีตะเกียงครบ ส่งบททดสอบได้")
+	player.state["coins"] = 100
+	check(not player.can_change_class(), "เงินไม่พอค่าครู เปลี่ยนอาชีพไม่ได้")
+	player.state["coins"] = 1000
 	var atk_before: int = player.stats["atk"]
 	check(player.add_stat("str") and player.stats["atk"] == atk_before + 2, "อัป STR แล้วพลังโจมตีเพิ่ม")
 	check(not player.change_class("nak_dab"), "ข้ามขั้นคลาสไม่ได้")
-	check(player.change_class("nak_rob") and player.class_info()["name"] == "นักรบเวทย์", "เปลี่ยนคลาสเป็นนักรบเวทย์")
+	check(player.change_class("nak_rob") and player.class_info()["name"] == "นักรบเวทย์" and player.coins() == 700, "จ่ายค่าครู 300 แล้วเปลี่ยนเป็นนักรบเวทย์")
 	check(not player.can_change_class(), "เลื่อนขั้นต่อไม่ได้จนกว่าจะถึงเลเวล 50")
 	check("fan_khatha" in player.available_skills() and not "ying_son" in player.available_skills(), "เรียนได้เฉพาะสกิลของสายตัวเอง")
 	check(player.learn_skill("fan_khatha") and player.skill_level("fan_khatha") == 1, "ใช้แต้มสกิลเรียนฟันคาถา")
@@ -210,7 +221,15 @@ func _test_character(main: Node3D) -> void:
 
 	player.gain_exp(50000000)
 	check(player.state["level"] == 150, "เลเวลตันที่ 150")
-	check(player.change_class("nak_dab") and player.change_class("khun_phaen"), "เลื่อนขั้นคลาสครบ 3 ครั้ง")
+	check(not player.change_class("nak_dab"), "ขั้น 2 ต้องปราบนางพญากระสือก่อน")
+	player.state["coins"] = 100000
+	for pair in [["q_trial_2", "krasue_queen"], ["q_trial_3", "pret_king"]]:
+		player.accept_quest(pair[0])
+		player.reward_kill(pair[1], 0, 0)
+		player.complete_quest(pair[0])
+		if pair[0] == "q_trial_2":
+			check(player.change_class("nak_dab"), "ปราบนางพญากระสือ + จ่ายค่าครู แล้วเลื่อนขั้น 2")
+	check(player.change_class("khun_phaen") and player.coins() == 100000 - 5000 - 30000, "ปราบพญาเปรต + จ่ายค่าครู แล้วเลื่อนขั้น 3 ครบ")
 	check(not player.can_change_class(), "ขั้นสุดท้ายแล้วเลื่อนต่อไม่ได้")
 
 	# บอสประจำถิ่น
@@ -236,6 +255,147 @@ func _test_character(main: Node3D) -> void:
 			total += 1
 			check(d["chance"] <= 0.02, "ของสวมใส่จากผีทั่วไปดรอปยาก (%s %.1f%%)" % [d["item"], d["chance"] * 100.0])
 			break
+
+
+## ร้านค้า ยา เควส NPC ออโต้ และการย้ายแผนที่ (เริ่มตัวละครใหม่)
+func _test_world() -> void:
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+
+	# ---- ร้านค้า ----
+	check(main.npcs.get_child_count() == 3, "หมู่บ้านมี NPC ร้านยา หลวงตา และครูใหญ่สำนัก")
+	for n in main.npcs.get_children():
+		if n.role() == "class":
+			player.pos = n.pos + Vector2(0, 40)
+			main.talk_to(n)
+			check(hud.windows["class"].visible and n.marker_state == "class", "คุยกับครูใหญ่สำนักแล้วเปิดหน้าต่างเปลี่ยนอาชีพ")
+			hud.close_windows()
+			player.pos = main.map.spawn_point
+	var coins: int = player.coins()
+	var sp_before: int = player.inventory.get("nam_mon", 0)
+	check(player.buy("nam_mon", 2) and player.coins() == coins - 60 and player.inventory["nam_mon"] == sp_before + 2, "ซื้อน้ำมนต์ 2 ขวด เหรียญลดลง")
+	check(not player.buy("nam_mon_yai", 999), "เหรียญไม่พอซื้อไม่ได้")
+	player.add_item("lantern_oil", 3)
+	player.add_item("spirit_shard", 4)
+	coins = player.coins()
+	check(player.sell("lantern_oil", 1) and player.coins() == coins + ItemDB.sell_price("lantern_oil"), "ขายของจากผีได้เหรียญ")
+	coins = player.coins()
+	hud.windows["shop"].player = player
+	hud.windows["shop"].sell_all_loot()
+	check(not player.inventory.has("lantern_oil") and not player.inventory.has("spirit_shard") and player.coins() == coins + 2 * 14 + 4 * 6, "ขายของจากผีทั้งหมดในครั้งเดียว")
+	check(ItemDB.sell_price("mitmo") > ItemDB.sell_price("saisin"), "ของสวมใส่ยิ่งหายากยิ่งขายได้แพง")
+
+	# ---- ยาเลือด / ยามานา ----
+	player.hp = 5
+	var hp_potions: int = player.potion_count("hp")
+	check(player.use_potion("hp") and player.hp > 5 and player.potion_count("hp") == hp_potions - 1, "กดยาเลือดแล้ว HP เพิ่ม")
+	player.potion_cd = 0.0
+	player.sp = 0
+	check(player.use_potion("sp") and player.sp > 0, "กดน้ำมนต์แล้ว SP เพิ่ม")
+
+	# ---- คุยกับ NPC และเควส ----
+	var luang_ta: Node3D = null
+	for n in main.npcs.get_children():
+		if n.npc_id() == "luang_ta":
+			luang_ta = n
+	check(luang_ta != null and luang_ta.marker_state == "available", "หลวงตามีเครื่องหมาย ! เควสใหม่")
+	player.pos = luang_ta.pos + Vector2(300, 80)
+	main.talk_to(luang_ta)
+	_run(main, 5.0)
+	check(hud.windows["quest"].visible, "เดินไปคุยกับหลวงตาแล้วหน้าต่างเควสเปิด")
+	hud.close_windows()
+	check(player.accept_quest("q_krasue") and player.quest_status("q_krasue") == "active", "รับเควสปราบผีกระสือ")
+	check(player.quest_status("q_takiang") == "locked", "เควสต่อเนื่องยังรับไม่ได้จนกว่าทำเควสก่อนหน้า")
+	var kills := 0
+	var time := 0.0
+	player.pos = Vector2(1800, 500)
+	while time < 600.0 and player.quest_status("q_krasue") != "ready":
+		if player.attack_target == null:
+			var best: Node3D = null
+			for g in main.alive_ghosts():
+				if g.ghost_id == "krasue_noi" and (best == null or player.pos.distance_to(g.pos) < player.pos.distance_to(best.pos)):
+					best = g
+			player.command_attack(best)
+		if player.hp < player.stats["max_hp"] * 0.4:
+			player.use_potion("hp")
+		main.tick(STEP)
+		time += STEP
+	check(player.quest_status("q_krasue") == "ready", "ปราบกระสือครบ 8 ตัว เควสพร้อมส่ง (%d วินาที)" % time)
+	check(hud.quest_panel.visible and hud.quest_label.text.contains("8/8"), "รายการเควสบนจอแสดงความคืบหน้า")
+	luang_ta._process(0.0)
+	main._refresh_npc_markers()
+	check(luang_ta.marker_state == "ready", "หลวงตาขึ้นเครื่องหมาย ? ให้กลับไปส่ง")
+	coins = player.coins()
+	var exp_before: int = player.state["exp"] + Progression.exp_to_next(player.state["level"]) * 0
+	var lv_before: int = player.state["level"]
+	check(player.complete_quest("q_krasue") and player.coins() >= coins + 120 and (player.state["level"] > lv_before or player.state["exp"] > exp_before), "ส่งเควสได้รางวัลเหรียญและ EXP")
+	check(player.quest_status("q_krasue") == "done" and player.quest_status("q_thread") == "available", "ส่งแล้วปลดล็อกเควสถัดไป")
+	player.accept_quest("q_thread")
+	player.inventory.erase("red_thread")
+	player.add_item("red_thread", 6)
+	check(player.quest_status("q_thread") == "ready" and player.complete_quest("q_thread") and player.inventory.get("red_thread", 0) == 1, "เควสหาของ: ส่งแล้วหักของออกจากกระเป๋า")
+
+	# ---- ออโต้ ----
+	player.pos = Vector2(1800, 500)
+	player.command_move(player.pos)
+	var exp_start: int = player.state["exp"]
+	var level_start: int = player.state["level"]
+	var herbs_start: int = player.potion_count("hp")
+	main.toggle_auto()
+	check(main.auto.enabled and hud.auto_button.lit, "กดปุ่มออโต้แล้วเปิดใช้งาน")
+	player.hp = int(player.stats["max_hp"] * 0.2)
+	_run(main, 0.1)
+	check(player.potion_count("hp") == herbs_start - 1 and player.hp > player.stats["max_hp"] * 0.2, "ออโต้กินยาเลือดเองเมื่อ HP ต่ำ")
+	var kills_before: int = main.respawn_queue.size()
+	_run(main, 90.0)
+	check(player.state["level"] > level_start or player.state["exp"] > exp_start, "ออโต้หาผีตีเองจนได้ EXP")
+	for d in main.drops.get_children():
+		d.free()
+	var drop: Node3D = Drop.new()
+	drop.item_id = "red_thread"
+	drop.pos = player.pos + Vector2(120, 40)
+	for offset in [Vector2(120, 40), Vector2(-120, 40), Vector2(0, 130), Vector2(0, -130), Vector2(130, -60)]:
+		if main.map.is_walkable(player.pos + offset):
+			drop.pos = player.pos + offset
+			break
+	main.drops.add_child(drop)
+	var thread_before: int = player.inventory.get("red_thread", 0)
+	for g in main.alive_ghosts():
+		g.free()
+	main.respawn_queue.clear()
+	_run(main, 6.0)
+	check(player.inventory.get("red_thread", 0) > thread_before, "ออโต้เดินไปเก็บของที่ตกเอง")
+	main.toggle_auto()
+	check(not main.auto.enabled, "ปิดออโต้ได้")
+
+	# ---- แผนที่ถัดไป: ป่าช้าวัดร้าง ----
+	var portal: Node3D = main.portals.get_child(0)
+	player.pos = portal.pos + Vector2(-200, 0)
+	player.command_move(portal.pos)
+	_run(main, 4.0)
+	await process_frame
+	check(main.map.map_id == "pa_cha" and main.map.map_name == "ป่าช้าวัดร้าง", "เดินเข้าประตูวาร์ปแล้วไปป่าช้าวัดร้าง")
+	check(player.pos.distance_to(Vector2(260, 1000)) < 5.0 or player.pos.distance_to(main.map.spawn_point) < 60.0, "มาโผล่ที่ทางเข้าป่าช้า")
+	var min_level := 999
+	for g in main.alive_ghosts():
+		min_level = mini(min_level, g.data["level"])
+	check(main.alive_ghosts().size() == 21 and min_level >= 12, "ป่าช้ามีผีเลเวลสูงขึ้น (ต่ำสุด Lv %d)" % min_level)
+	check(main.npcs.get_child_count() == 2 and main.map.props_root.get_child_count() > 150, "ป่าช้ามี NPC และฉากครบ (สิ่งของ %d ชิ้น)" % main.map.props_root.get_child_count())
+	var route: PackedVector2Array = main.map.find_path(main.map.spawn_point, Vector2(2550, 1000))
+	check(route.size() > 0 and route[route.size() - 1].distance_to(Vector2(2550, 1000)) < 40.0, "เดินจากทางเข้าไปสุดป่าช้าได้")
+	var boss: Node3D = main.spawn_boss(0)
+	check(boss.data["name"] == "พญาเปรต" and hud.announce_label.text.contains("พญาเปรต"), "บอสป่าช้าคือพญาเปรต มีประกาศ")
+	_run(main, 2.0)
+	player.pos = main.portals.get_child(0).pos + Vector2(60, 0)
+	player.command_move(main.portals.get_child(0).pos)
+	_run(main, 3.0)
+	await process_frame
+	check(main.map.map_id == "khlong_village" and player.pos.distance_to(Vector2(3040, 1100)) < 60.0, "วาร์ปกลับหมู่บ้านได้")
+	main.free()
 
 
 func _run(main: Node3D, seconds: float) -> void:

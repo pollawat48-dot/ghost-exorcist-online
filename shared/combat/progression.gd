@@ -16,6 +16,7 @@ const STAT_DESC := {
 	"int": "เพิ่มพลังเวทและ SP", "dex": "เพิ่มพลังยิงระยะไกล", "luk": "เพิ่มโอกาสคริติคอล",
 }
 const BASE_STAT := 5
+const START_COINS := 200
 const SKILL_POINT_EVERY := 3
 
 
@@ -32,6 +33,7 @@ static func new_state() -> Dictionary:
 		"level": 1, "exp": 0, "class": "novice",
 		"base": base, "stat_points": 0, "skill_points": 0,
 		"skills": {"holy_water": 1}, "equipment": {},
+		"coins": START_COINS, "quests": {}, "quests_done": {},
 	}
 
 

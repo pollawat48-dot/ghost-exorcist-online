@@ -7,13 +7,17 @@ const PX := 20.0  ## หน่วยเกมต่อ 1 พิกเซลข�
 var map: Node3D
 var player: Node3D
 var ghosts: Node
+var npcs: Node
+var portals: Node
 var tex: ImageTexture
 
 
-func setup(m: Node3D, p: Node3D, g: Node) -> void:
+func setup(m: Node3D, p: Node3D, g: Node, npc_root: Node = null, portal_root: Node = null) -> void:
 	map = m
 	player = p
 	ghosts = g
+	npcs = npc_root
+	portals = portal_root
 	var w := int(map.world_rect.size.x / PX)
 	var h := int(map.world_rect.size.y / PX)
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
@@ -26,19 +30,7 @@ func setup(m: Node3D, p: Node3D, g: Node) -> void:
 
 
 func _color_at(p: Vector2) -> Color:
-	if map.is_water(p):
-		return Color(0.55, 0.78, 0.96)
-	if map.path_distance(p) < map.PATH_W * 0.6:
-		return Color(0.98, 0.88, 0.7)
-	if map.COURTYARD.has_point(p):
-		return Color(1.0, 0.94, 0.84)
-	if p.distance_to(map.GRAVE_CENTER) < map.GRAVE_R:
-		return Color(0.82, 0.78, 0.9)
-	if map.PADDY.has_point(p):
-		return Color(0.78, 0.93, 0.56)
-	if map.GROVE.has_point(p):
-		return Color(0.52, 0.76, 0.5)
-	return Color(0.68, 0.86, 0.56)
+	return map.minimap_color(p)
 
 
 func _process(_delta: float) -> void:
@@ -55,6 +47,16 @@ func _draw() -> void:
 	draw_rect(inner, Color(P.LAVENDER, 0.6), false, 2.0)
 	var to_map := func(wp: Vector2) -> Vector2:
 		return inner.position + (wp - map.world_rect.position) / map.world_rect.size * inner.size
+	if portals != null:
+		for gate in portals.get_children():
+			var gp: Vector2 = to_map.call(gate.pos)
+			draw_circle(gp, 6.0, Color(0.6, 0.85, 1.0))
+			draw_arc(gp, 6.0, 0, TAU, 20, Color.WHITE, 2.0, true)
+	if npcs != null:
+		for n in npcs.get_children():
+			var np: Vector2 = to_map.call(n.pos)
+			draw_circle(np, 4.5, Color(0.45, 0.85, 0.55) if n.role() == "quest" else Color(1.0, 0.75, 0.3))
+			draw_arc(np, 4.5, 0, TAU, 16, Color.WHITE, 1.5, true)
 	var boss: Node3D = null
 	for g in ghosts.get_children():
 		if g.has_method("take_damage") and g.alive:

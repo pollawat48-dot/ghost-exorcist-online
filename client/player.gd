@@ -9,6 +9,7 @@ const Progression = preload("res://shared/combat/progression.gd")
 const Classes = preload("res://shared/data/classes.gd")
 const Skills = preload("res://shared/data/skills.gd")
 const ItemDB = preload("res://shared/data/items.gd")
+const Quests = preload("res://shared/data/quests.gd")
 const DamageText = preload("res://client/damage_text.gd")
 const Effect = preload("res://client/effect.gd")
 
@@ -20,6 +21,11 @@ const SPEED := 140.0
 const REGEN_INTERVAL := 3.0
 const REPATH_INTERVAL := 0.4
 const HERB_ITEM := "herb_potion"
+const SP_ITEM := "nam_mon"
+## ยาเลือด/ยามานาเรียงจากเล็กไปใหญ่ (กดปุ่มยาแล้วเลือกขวดที่เหมาะกับที่ขาดอยู่)
+const HP_POTIONS := ["herb_potion", "ya_hom_thong"]
+const SP_POTIONS := ["nam_mon", "nam_mon_yai"]
+const POTION_COOLDOWN := 0.6
 const SHOT_COLORS := {"neutral": Color(1, 0.95, 0.8), "holy": Color(0.6, 0.9, 1.0), "fire": Color(1.0, 0.55, 0.3)}
 
 var player_name := "ศิษย์วัด"
@@ -45,6 +51,7 @@ var attack_cooldown := 0.0
 var skill_cd := {}  ## id -> วินาทีที่เหลือ
 var guard_timer := 0.0  ## อาคมคงกระพัน
 var guard_bonus := 0.0
+var potion_cd := 0.0
 var regen_timer := 0.0
 var swing := 0.0
 var levelup_fx := 0.0
@@ -63,7 +70,8 @@ func _ready() -> void:
 	recalc()
 	hp = stats["max_hp"]
 	sp = stats["max_sp"]
-	inventory[HERB_ITEM] = 3
+	inventory[HERB_ITEM] = 5
+	inventory[SP_ITEM] = 3
 	_build_model()
 	_build_fx()
 	_sync(0.0)
@@ -281,6 +289,7 @@ func tick(delta: float) -> void:
 	if hp <= 0:
 		return
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	potion_cd = maxf(0.0, potion_cd - delta)
 	for id in skill_cd.keys():
 		skill_cd[id] = maxf(0.0, skill_cd[id] - delta)
 	if guard_timer > 0.0:
@@ -523,14 +532,35 @@ func add_stat(key: String) -> bool:
 	return true
 
 
-func can_change_class() -> bool:
+## เงื่อนไขเปลี่ยนอาชีพขั้นถัดไป: เลเวลถึง, ผ่านเควสบททดสอบของครูใหญ่, มีเงินค่าครูพอ
+func class_change_status() -> Dictionary:
 	var need := Classes.change_level(state["class"])
-	return need > 0 and state["level"] >= need
+	if need < 0:
+		return {}
+	var trial := Classes.trial_for(state["class"])
+	return {
+		"level": need, "level_ok": state["level"] >= need,
+		"quest": trial["quest"], "quest_ok": state["quests_done"].has(trial["quest"]),
+		"fee": trial["fee"], "fee_ok": state["coins"] >= trial["fee"],
+	}
+
+
+func class_level_reached() -> bool:
+	var st := class_change_status()
+	return not st.is_empty() and st["level_ok"]
+
+
+func can_change_class() -> bool:
+	var st := class_change_status()
+	return not st.is_empty() and st["level_ok"] and st["quest_ok"] and st["fee_ok"]
 
 
 func change_class(class_id: String) -> bool:
 	if not can_change_class() or not class_id in Classes.next_classes(state["class"]):
 		return false
+	var fee: int = class_change_status()["fee"]
+	state["coins"] -= fee
+	message.emit("จ่ายค่าครู %d เหรียญ" % fee)
 	state["class"] = class_id
 	# ของที่สายใหม่ใช้ไม่ได้ให้ถอดเก็บเข้ากระเป๋า
 	for slot in state["equipment"].keys():
@@ -584,20 +614,149 @@ func unequip(slot: String) -> bool:
 
 # ---------- ไอเทม ความเสียหาย เลเวล ----------
 
+## ยาเลือดขวดที่เหมาะ: ขาดเลือดเยอะใช้ขวดใหญ่ ขาดน้อยใช้ขวดเล็ก (ถ้ามี)
+func pick_potion(kind: String) -> String:
+	var list: Array = HP_POTIONS if kind == "hp" else SP_POTIONS
+	var missing: int = (stats["max_hp"] - hp) if kind == "hp" else (stats["max_sp"] - sp)
+	var key := "heal" if kind == "hp" else "sp"
+	var best := ""
+	for id in list:
+		if inventory.get(id, 0) <= 0:
+			continue
+		if best == "" or ItemDB.ITEMS[best][key] < missing * 0.6:
+			best = id
+	return best
+
+
+func potion_count(kind: String) -> int:
+	var n := 0
+	for id in (HP_POTIONS if kind == "hp" else SP_POTIONS):
+		n += inventory.get(id, 0)
+	return n
+
+
+func use_potion(kind: String) -> bool:
+	var id := pick_potion(kind)
+	if id == "":
+		message.emit("ไม่มี%sเหลือแล้ว" % ("ยาเพิ่มเลือด" if kind == "hp" else "น้ำมนต์เพิ่ม SP"))
+		return false
+	return use_item(id)
+
+
 func use_herb() -> bool:
-	if hp <= 0:
+	return use_potion("hp")
+
+
+## ใช้ยา: เพิ่ม HP/SP ตามขวด +10% ของค่าสูงสุด
+func use_item(item_id: String) -> bool:
+	if hp <= 0 or inventory.get(item_id, 0) <= 0 or potion_cd > 0.0:
 		return false
-	if inventory.get(HERB_ITEM, 0) <= 0:
-		message.emit("ไม่มี%sเหลือแล้ว" % ItemDB.ITEMS[HERB_ITEM]["name"])
+	var item: Dictionary = ItemDB.ITEMS[item_id]
+	if item["type"] != "consumable":
 		return false
-	if hp >= stats["max_hp"]:
+	var heal: int = item.get("heal", 0)
+	var mana: int = item.get("sp", 0)
+	if (heal == 0 or hp >= stats["max_hp"]) and (mana == 0 or sp >= stats["max_sp"]):
 		return false
-	_remove_item(HERB_ITEM)
-	var heal: int = ItemDB.ITEMS[HERB_ITEM]["heal"] + stats["max_hp"] / 10
-	hp = mini(stats["max_hp"], hp + heal)
-	DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "+%d" % heal, Color(0.4, 1, 0.4))
+	_remove_item(item_id)
+	potion_cd = POTION_COOLDOWN
+	if heal > 0:
+		heal += stats["max_hp"] / 10
+		hp = mini(stats["max_hp"], hp + heal)
+		DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "+%d" % heal, Color(0.4, 1, 0.4))
+	if mana > 0:
+		mana += stats["max_sp"] / 10
+		sp = mini(stats["max_sp"], sp + mana)
+		DamageText.spawn(get_parent(), position + Vector3(0, 2.0, 0), "+%d SP" % mana, Color(0.5, 0.75, 1.0))
 	changed.emit()
 	return true
+
+
+# ---------- เงิน ร้านค้า ----------
+
+func coins() -> int:
+	return state["coins"]
+
+
+func buy(item_id: String, count: int = 1) -> bool:
+	var price: int = ItemDB.ITEMS[item_id].get("buy", 0) * count
+	if price <= 0 or count <= 0:
+		return false
+	if state["coins"] < price:
+		message.emit("เหรียญไม่พอ (ต้องใช้ %d)" % price)
+		return false
+	state["coins"] -= price
+	inventory[item_id] = inventory.get(item_id, 0) + count
+	message.emit("ซื้อ %s x%d (-%d เหรียญ)" % [ItemDB.ITEMS[item_id]["name"], count, price])
+	changed.emit()
+	return true
+
+
+func sell(item_id: String, count: int = 1) -> bool:
+	count = mini(count, inventory.get(item_id, 0))
+	var each := ItemDB.sell_price(item_id)
+	if count <= 0 or each <= 0:
+		return false
+	for i in count:
+		_remove_item(item_id)
+	state["coins"] += each * count
+	message.emit("ขาย %s x%d (+%d เหรียญ)" % [ItemDB.ITEMS[item_id]["name"], count, each * count])
+	changed.emit()
+	return true
+
+
+# ---------- เควส ----------
+
+func quest_status(id: String) -> String:
+	return Quests.status(state, inventory, id)
+
+
+func active_quests() -> Array:
+	return state["quests"].keys()
+
+
+func accept_quest(id: String) -> bool:
+	if quest_status(id) != "available":
+		return false
+	state["quests"][id] = 0
+	message.emit("รับเควส: %s" % Quests.QUESTS[id]["name"])
+	changed.emit()
+	return true
+
+
+func abandon_quest(id: String) -> void:
+	state["quests"].erase(id)
+	changed.emit()
+
+
+func complete_quest(id: String) -> bool:
+	if quest_status(id) != "ready":
+		return false
+	var q: Dictionary = Quests.QUESTS[id]
+	if q["type"] == "collect":
+		for i in q["count"]:
+			_remove_item(q["target"])
+	state["quests"].erase(id)
+	state["quests_done"][id] = state["quests_done"].get(id, 0) + 1
+	var r: Dictionary = q["reward"]
+	state["coins"] += r["coins"]
+	message.emit("ส่งเควส %s สำเร็จ! +%d เหรียญ" % [q["name"], r["coins"]])
+	for item in r["items"]:
+		add_item(item, r["items"][item])
+	gain_exp(r["exp"])
+	return true
+
+
+## ปราบผีได้: รับ EXP + เหรียญ และนับเควสที่เกี่ยวข้อง
+func reward_kill(ghost_id: String, exp_amount: int, coin_amount: int) -> void:
+	state["coins"] += coin_amount
+	for id in state["quests"]:
+		var q: Dictionary = Quests.QUESTS[id]
+		if q["type"] == "kill" and q["target"] == ghost_id and state["quests"][id] < q["count"]:
+			state["quests"][id] += 1
+			if state["quests"][id] == q["count"]:
+				message.emit("เควส %s ครบแล้ว! กลับไปส่งได้" % q["name"])
+	gain_exp(exp_amount, coin_amount)
 
 
 func take_damage(amount: int) -> void:
@@ -612,17 +771,17 @@ func take_damage(amount: int) -> void:
 	changed.emit()
 
 
-func gain_exp(amount: int) -> void:
+func gain_exp(amount: int, coin_amount: int = 0) -> void:
 	var ups := Progression.add_exp(state, amount)
-	message.emit("+%d EXP" % amount)
+	message.emit("+%d EXP · +%d เหรียญ" % [amount, coin_amount] if coin_amount > 0 else "+%d EXP" % amount)
 	if ups > 0:
 		recalc()
 		hp = stats["max_hp"]
 		sp = stats["max_sp"]
 		levelup_fx = 1.2
 		message.emit("เลเวลอัป! ตอนนี้เลเวล %d (แต้มสเตตัส %d)" % [state["level"], state["stat_points"]])
-		if can_change_class():
-			message.emit("ถึงเลเวลเปลี่ยนคลาสแล้ว! เปิดหน้าต่างตัวละครเพื่อเลื่อนขั้น")
+		if class_level_reached() and state["level"] - ups < class_change_status()["level"]:
+			message.emit("ถึงเลเวลเปลี่ยนอาชีพแล้ว! ไปคุยกับครูใหญ่สำนักหน้าโบสถ์เพื่อรับบททดสอบ")
 	changed.emit()
 
 

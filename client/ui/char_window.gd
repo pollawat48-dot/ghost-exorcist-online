@@ -7,6 +7,18 @@ const ItemDB = preload("res://shared/data/items.gd")
 
 signal open_class_change
 
+const Quests = preload("res://shared/data/quests.gd")
+
+
+## รายการเงื่อนไขเปลี่ยนอาชีพ พร้อมสถานะผ่าน/ยังไม่ผ่าน (ใช้ทั้งหน้าต่างตัวละครและหน้าต่าง NPC)
+static func requirement_lines(req: Dictionary) -> Array[String]:
+	var mark := func(ok: bool) -> String: return "[ผ่าน] " if ok else "[ยัง] "
+	return [
+		mark.call(req["level_ok"]) + "เลเวล %d ขึ้นไป" % req["level"],
+		mark.call(req["quest_ok"]) + "ผ่านเควส \"%s\"" % Quests.QUESTS[req["quest"]]["name"],
+		mark.call(req["fee_ok"]) + "ค่าครู %d เหรียญ" % req["fee"],
+	]
+
 
 func _ready() -> void:
 	setup("ตัวละคร", 640)
@@ -86,9 +98,8 @@ func _build() -> void:
 	var need := Classes.change_level(st["class"])
 	if need < 0:
 		content.add_child(P.label("ถึงขั้นสูงสุดแล้ว (เลื่อนขั้นครบ 3 ครั้ง)", 14))
-	elif player.can_change_class():
-		var up := P.button("เลื่อนขั้นคลาส! ✦", P.LEMON, 17)
-		up.pressed.connect(func(): open_class_change.emit())
-		content.add_child(up)
 	else:
-		content.add_child(P.label("เลื่อนขั้นคลาสได้เมื่อถึงเลเวล %d" % need, 14))
+		var req: Dictionary = player.class_change_status()
+		content.add_child(P.label("เปลี่ยนอาชีพที่ ครูใหญ่สำนัก (หน้าโบสถ์ หมู่บ้านริมคลอง)", 14, P.PINK_DEEP if player.can_change_class() else P.TEXT))
+		for line in requirement_lines(req):
+			content.add_child(P.label(line, 13))

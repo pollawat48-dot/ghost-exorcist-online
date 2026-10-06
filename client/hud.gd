@@ -1,8 +1,9 @@
 extends CanvasLayer
 ## หน้าจอข้อมูลผู้เล่นแบบพาสเทลน่ารัก ใช้ได้ทั้ง PC และมือถือ
 ## ซ้ายบน: ชื่อ/เลเวล/HP/SP  กลางบน: ชื่อแผนที่+เวลา+ประกาศ+หลอดบอส  ขวาบน: แผนที่ย่อ+ปุ่มเมนู
-## ล่างซ้าย: จอย  ล่างกลาง: แถบสกิล 1–9 + ยา (0)  ล่างขวา: ปุ่มโจมตี+สกิล+ยา
-## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เลื่อนขั้นคลาส
+## ล่างซ้าย: จอย  ล่างกลาง: แถบสกิล 1–8 + ยามานา (9) + ยาเลือด (0)  ล่างขวา: ปุ่มโจมตี+สกิล+ยา+ออโต้
+## ซ้าย: ข้อความเกม + รายการเควสที่กำลังทำ
+## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เควส (J), ออโต้, เลื่อนขั้นคลาส, ร้านค้า, เควสจาก NPC
 
 const ItemDB = preload("res://shared/data/items.gd")
 const Progression = preload("res://shared/combat/progression.gd")
@@ -15,8 +16,12 @@ const CharWindow = preload("res://client/ui/char_window.gd")
 const SkillWindow = preload("res://client/ui/skill_window.gd")
 const BagWindow = preload("res://client/ui/bag_window.gd")
 const ClassWindow = preload("res://client/ui/class_window.gd")
+const ShopWindow = preload("res://client/ui/shop_window.gd")
+const QuestWindow = preload("res://client/ui/quest_window.gd")
+const AutoWindow = preload("res://client/ui/auto_window.gd")
+const Quests = preload("res://shared/data/quests.gd")
 
-signal action(name: String)  ## "attack", "herb", "skill:<id>"
+signal action(name: String)  ## "attack", "potion_hp", "potion_sp", "auto", "skill:<id>"
 
 const MAX_LOG_LINES := 5
 const ANNOUNCE_TIME := 7.0
@@ -44,6 +49,12 @@ var slots: Array[Control] = []
 var bubble_a: Control
 var bubble_b: Control
 var skill_herb: Control
+var skill_sp: Control
+var auto_button: Control
+var auto_play: RefCounted
+var coin_label: Label
+var quest_panel: PanelContainer
+var quest_label: Label
 var attack_button: Control
 var lines: Array[String] = []
 
@@ -73,6 +84,7 @@ func _ready() -> void:
 	head.add_child(star)
 	title_label = _label(head, "", 20, P.TEXT)
 	info_label = _label(status, "", 14, P.TEXT.lightened(0.2))
+	coin_label = _label(status, "", 14, Color(0.78, 0.55, 0.15))
 	bars = Control.new()
 	bars.custom_minimum_size = Vector2(300, 66)
 	bars.draw.connect(_draw_status_bars)
@@ -101,15 +113,15 @@ func _ready() -> void:
 	minimap.position = Vector2(-234, 14)
 	minimap.size = Vector2(220, 142)
 	top_right.add_child(minimap)
-	var menus := [["char", "user", "ตัวละคร", P.PINK], ["skills", "book", "สกิล", P.SKY], ["bag", "bag", "กระเป๋า", P.LEMON]]
+	var menus := [["char", "user", "ตัวละคร", P.PINK], ["skills", "book", "สกิล", P.SKY], ["bag", "bag", "กระเป๋า", P.LEMON], ["questlog", "scroll", "เควส", P.MINT], ["auto", "gear", "ออโต้", P.LAVENDER.lightened(0.3)]]
 	for i in menus.size():
 		var m: Array = menus[i]
 		var b := TouchButton.new()
 		b.kind = m[1]
 		b.fill = m[3]
 		b.caption = m[2]
-		b.position = Vector2(-226 + i * 74, 166)
-		b.size = Vector2(56, 56)
+		b.position = Vector2(-290 + i * 56, 166)
+		b.size = Vector2(50, 50)
 		var key: String = m[0]
 		b.pressed.connect(func(): toggle_window(key))
 		top_right.add_child(b)
@@ -143,6 +155,16 @@ func _ready() -> void:
 	log_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
+	# ---- เควสที่กำลังทำ ----
+	quest_panel = PanelContainer.new()
+	quest_panel.add_theme_stylebox_override("panel", P.panel_style(14, Color(0.94, 1.0, 0.96, 0.78), Color(P.MINT.darkened(0.2), 0.8)))
+	quest_panel.position = Vector2(14, 352)
+	quest_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(quest_panel)
+	quest_label = _label(quest_panel, "", 13, P.TEXT)
+	quest_label.custom_minimum_size = Vector2(250, 0)
+	quest_panel.visible = false
+
 	# ---- จอย ----
 	stick = VirtualStick.new()
 	stick.position = Vector2(42, -214)
@@ -171,7 +193,7 @@ func _ready() -> void:
 		bottom_center.add_child(b)
 		slots.append(b)
 		slot_actions.append("")
-	var help := _label(bottom_center, "คลิก/แตะ: เดิน · คลิกผี: ตี · WASD/จอย: เดิน · 1–9: สกิล · 0/Q: ยา · C ตัวละคร · K สกิล · I กระเป๋า", 12, P.TEXT)
+	var help := _label(bottom_center, "คลิก: เดิน/ตี/คุย NPC · WASD: เดิน · 1–8 สกิล · 0/Q ยาเลือด · 9/E ยามานา · V ออโต้ · F คุย · C K I J หน้าต่าง", 12, P.TEXT)
 	help.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.9))
 	help.add_theme_constant_override("outline_size", 5)
 	help.position = Vector2(-bar_w / 2.0, -slot_size - 50)
@@ -182,14 +204,20 @@ func _ready() -> void:
 	bubble_a.pressed.connect(press_slot.bind(0))
 	bubble_b = _round_button(bottom_right, "", P.LEMON, Vector2(-232, -238), 80, "")
 	bubble_b.pressed.connect(press_slot.bind(1))
-	skill_herb = _round_button(bottom_right, "herb", P.MINT, Vector2(-120, -262), 70, "herb")
+	skill_herb = _round_button(bottom_right, "herb", P.MINT, Vector2(-120, -262), 70, "potion_hp")
+	skill_sp = _round_button(bottom_right, "water", P.SKY, Vector2(-104, -338), 62, "potion_sp")
+	auto_button = _round_button(bottom_right, "auto", P.LAVENDER.lightened(0.35), Vector2(-216, -336), 74, "auto")
+	auto_button.caption = "ออโต้"
 
 	# ---- หน้าต่างเมนู ----
-	for key in ["char", "skills", "bag", "class"]:
-		var w: Control = {"char": CharWindow, "skills": SkillWindow, "bag": BagWindow, "class": ClassWindow}[key].new()
+	var kinds := {"char": CharWindow, "skills": SkillWindow, "bag": BagWindow, "class": ClassWindow,
+		"shop": ShopWindow, "quest": QuestWindow, "questlog": QuestWindow, "auto": AutoWindow}
+	for key in kinds:
+		var w: Control = kinds[key].new()
 		add_child(w)
 		windows[key] = w
 	windows["char"].open_class_change.connect(func(): toggle_window("class"))
+	windows["auto"].toggle_requested.connect(func(): action.emit("auto"))
 
 
 func _anchor(ax: float, ay: float) -> Control:
@@ -219,6 +247,29 @@ func _round_button(parent: Control, kind: String, fill: Color, pos: Vector2, d: 
 func press_slot(i: int) -> void:
 	if i < slot_actions.size() and slot_actions[i] != "":
 		action.emit(slot_actions[i])
+
+
+## เปิดหน้าต่างของ NPC ที่คุยด้วย (ร้านค้า หรือรายการเควส)
+func open_npc(npc: Dictionary) -> void:
+	close_windows()
+	var w: Control = windows[{"shop": "shop", "class": "class"}.get(npc["role"], "quest")]
+	w.open_for(npc)
+
+
+func bind_auto(a: RefCounted) -> void:
+	auto_play = a
+	windows["auto"].auto_play = a
+	refresh_auto()
+
+
+func refresh_auto() -> void:
+	if auto_play == null:
+		return
+	auto_button.lit = auto_play.enabled
+	auto_button.caption = "ออโต้: เปิด" if auto_play.enabled else "ออโต้"
+	auto_button.queue_redraw()
+	if windows["auto"].visible:
+		windows["auto"].refresh()
 
 
 func toggle_window(key: String) -> void:
@@ -252,15 +303,19 @@ func announce(text: String) -> void:
 	add_log("[ประกาศ] " + text)
 
 
-## จัดสกิลที่เรียนแล้วลงแถบ 1–9 ส่วนช่อง 0 เป็นยาหอมเสมอ
+## จัดสกิลที่เรียนแล้วลงแถบ 1–8 ช่อง 9 เป็นยามานา ช่อง 0 เป็นยาเลือดเสมอ
 func _refresh_hotbar() -> void:
 	var learned: Array[String] = player.learned_skills()
 	for i in 10:
 		var b: Control = slots[i]
 		if i == 9:
-			slot_actions[i] = "herb"
+			slot_actions[i] = "potion_hp"
 			b.kind = "herb"
-			b.count = player.inventory.get(player.HERB_ITEM, 0)
+			b.count = player.potion_count("hp")
+		elif i == 8:
+			slot_actions[i] = "potion_sp"
+			b.kind = "water"
+			b.count = player.potion_count("sp")
 		elif i < learned.size():
 			slot_actions[i] = "skill:" + learned[i]
 			b.kind = Skills.SKILLS[learned[i]]["icon"]
@@ -277,8 +332,10 @@ func _refresh_hotbar() -> void:
 		if bubble.visible:
 			bubble.kind = Skills.SKILLS[learned[idx]]["icon"]
 			bubble.queue_redraw()
-	skill_herb.count = player.inventory.get(player.HERB_ITEM, 0)
+	skill_herb.count = player.potion_count("hp")
 	skill_herb.queue_redraw()
+	skill_sp.count = player.potion_count("sp")
+	skill_sp.queue_redraw()
 	var st: Dictionary = player.state
 	_set_badge("char", st["stat_points"] > 0 or player.can_change_class())
 	_set_badge("skills", st["skill_points"] > 0)
@@ -296,8 +353,8 @@ func track(cam: Camera3D, ghost_root: Node) -> void:
 	ghosts = ghost_root
 
 
-func setup_minimap(map: Node3D) -> void:
-	minimap.setup(map, player, ghosts)
+func setup_minimap(map: Node3D, npc_root: Node = null, portal_root: Node = null) -> void:
+	minimap.setup(map, player, ghosts, npc_root, portal_root)
 
 
 func _process(delta: float) -> void:
@@ -390,8 +447,29 @@ func refresh() -> void:
 	var need := Progression.exp_to_next(level)
 	title_label.text = player.player_name
 	info_label.text = "Lv %d  ·  %s  ·  Exp %.1f%%" % [level, player.class_info()["name"], 100.0 * player.state["exp"] / need]
+	coin_label.text = "เหรียญ %s" % _commas(player.coins())
 	bars.queue_redraw()
 	_refresh_hotbar()
+	_refresh_quests()
+
+
+func _refresh_quests() -> void:
+	var rows: Array[String] = []
+	for id in player.active_quests():
+		var mark := "★ " if player.quest_status(id) == "ready" else "- "
+		rows.append(mark + Quests.goal_text(player.state, player.inventory, id))
+	quest_panel.visible = not rows.is_empty()
+	quest_label.text = "เควส\n" + "\n".join(rows.slice(0, 4))
+	quest_panel.reset_size()
+
+
+static func _commas(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	while s.length() > 3:
+		out = "," + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return s + out
 
 
 func set_location(country: String, map_name: String) -> void:
