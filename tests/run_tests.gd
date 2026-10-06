@@ -26,6 +26,8 @@ func _initialize() -> void:
 
 
 func _run_all() -> void:
+	load("res://client/hud.gd").config_path = "user://test_settings.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_settings.cfg"))
 	print("== combat ==")
 	_test_combat()
 	print("== progression ==")
@@ -632,7 +634,7 @@ func _test_expansion() -> void:
 	var res: Dictionary = player.refine("mitmo", "hin_ti_1")
 	check(res["result"] == "success" and player.inventory.get("mitmo+1", 0) == 1 and not player.inventory.has("mitmo") and player.coins() == coins - ItemDB.refine_fee(0) and player.inventory["hin_ti_1"] == 1, "ตี +1 สำเร็จแน่นอน (ใช้หิน 1 ก้อน + เหรียญ)")
 	check(player.refine_stones_for(4).is_empty() == false and not "hin_ti_1" in player.refine_stones_for(4), "หินขั้นต้นตีเกิน +4 ไม่ได้ ต้องใช้หินขั้นสูงกว่า")
-	player.inventory["hin_ti_3"] = 400
+	player.inventory["hin_ti_3"] = 5000  # ตีจนถึง +10 เป็นการสุ่ม ใส่หินเผื่อไว้เยอะ
 	player.state["coins"] = 50000000
 	# สวมแล้วตีของที่สวมอยู่ ค่าพลังต้องขึ้นตาม
 	player.state["class"] = "nak_rob"
@@ -644,7 +646,7 @@ func _test_expansion() -> void:
 	var tries := 0
 	var max_seen := 0
 	var risky_safe := true
-	while lv < 10 and tries < 400:
+	while lv < 10 and tries < 5000:
 		var before := lv
 		var r: Dictionary = player.refine(player.state["equipment"]["weapon"], "hin_ti_3", "weapon")
 		lv = r["level"]
@@ -766,6 +768,43 @@ func _test_quest_guide() -> void:
 	click.position = Vector2(640, 500)
 	main._unhandled_input(click)
 	check(not guide.active(), "คลิกเดินเองแล้วยกเลิกการนำทาง")
+
+	# ผีที่กำลังตีถูกลบไปแล้ว (เช่น ตายแล้วหายไป/เปลี่ยนแผนที่): นำทางต้องไม่พัง แต่หาเป้าหมายใหม่
+	main.load_map("khlong_village")
+	main.guide_quest("q_takiang")
+	check(guide.active() and guide.mode == "hunt", "เริ่มนำทางเควสปราบผีตะเกียง")
+	var gone: Node3D = main.alive_ghosts()[0]
+	player.attack_target = gone
+	gone.get_parent().remove_child(gone)
+	gone.free()
+	guide.think_timer = 0.0
+	guide.tick(0.1)
+	check(is_instance_valid(player.attack_target) and player.attack_target.ghost_id in guide.ghost_ids, "เป้าหมายเดิมถูกลบไปแล้ว: นำทางหาผีตัวใหม่ได้ ไม่ค้าง")
+	guide.stop()
+
+	# แถบเมนูใต้แผนที่ย่อ: ย่อ/กางได้ และจำค่าไว้
+	check(not hud.menu_collapsed and hud.menu_buttons["bag"].visible and hud.menu_toggle.kind == "fold", "แถบเมนูกางอยู่ตอนเริ่ม มีปุ่มย่อ")
+	var tclick := InputEventMouseButton.new()
+	tclick.button_index = MOUSE_BUTTON_LEFT
+	tclick.pressed = true
+	tclick.position = hud.menu_toggle.get_global_rect().get_center()
+	hud.menu_toggle._input(tclick)
+	var tup := InputEventMouseButton.new()
+	tup.button_index = MOUSE_BUTTON_LEFT
+	hud.menu_toggle._input(tup)
+	var all_hidden := true
+	for key in hud.menu_buttons:
+		all_hidden = all_hidden and not hud.menu_buttons[key].visible
+	check(hud.menu_collapsed and all_hidden and hud.menu_toggle.visible and hud.menu_toggle.kind == "menu", "กดปุ่มย่อ: ซ่อนปุ่มเมนูทั้งหมด เหลือปุ่มเมนูปุ่มเดียว")
+	player.state["skill_points"] += 1
+	hud.refresh()
+	check(hud.menu_toggle.badge, "ย่ออยู่แต่มีแต้มสกิล: ปุ่มเมนูขึ้นจุดแดง")
+	var cfg := ConfigFile.new()
+	cfg.load(load("res://client/hud.gd").config_path)
+	check(cfg.get_value("ui", "menu_collapsed", false) == true, "จำว่าย่อแถบเมนูไว้ (เปิดเกมครั้งหน้ายังย่ออยู่)")
+	hud.menu_toggle._input(tclick)
+	hud.menu_toggle._input(tup)
+	check(not hud.menu_collapsed and hud.menu_buttons["bag"].visible and not hud.menu_toggle.badge, "กดอีกครั้ง: กางแถบเมนูกลับมา")
 
 	# หน้าต่างบังปุ่มบนจอ: กดที่หน้าต่างต้องไม่ทะลุไปกดปุ่มโจมตีข้างหลัง
 	var btn: Control = hud.attack_button

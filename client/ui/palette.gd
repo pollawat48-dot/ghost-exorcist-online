@@ -236,6 +236,16 @@ static func draw_icon(ci: CanvasItem, kind: String, c: Vector2, s: float) -> voi
 			ci.draw_arc(c + Vector2(-s * 0.22, s * 0.24), s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
 			ci.draw_circle(c + Vector2(s * 0.16, s * 0.14), s * 0.12, SKY)
 			ci.draw_arc(c + Vector2(s * 0.16, s * 0.14), s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
+		"menu":
+			# สามขีด = กางแถบเมนู
+			for k in 3:
+				var y := (k - 1) * s * 0.24
+				ci.draw_line(c + Vector2(-s * 0.3, y), c + Vector2(s * 0.3, y), OUTLINE, 4.0, true)
+		"fold":
+			# ลูกศรคู่ชี้ขวา = ย่อแถบเมนูเก็บ
+			for k in 2:
+				var x := (k - 0.5) * s * 0.26
+				ci.draw_polyline(PackedVector2Array([c + Vector2(x - s * 0.12, -s * 0.26), c + Vector2(x + s * 0.12, 0), c + Vector2(x - s * 0.12, s * 0.26)]), OUTLINE, 3.5, true)
 		_:
 			pass
 

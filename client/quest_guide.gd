@@ -139,9 +139,11 @@ func _go_to_giver(p: Node3D) -> void:
 
 
 func _hunt(p: Node3D) -> void:
-	var cur: Node3D = p.attack_target
-	if cur != null and is_instance_valid(cur) and cur.alive:
-		return
+	# ผีที่ตีอยู่อาจถูกลบไปแล้ว (ตายแล้วหายไป) ห้ามเก็บลงตัวแปรแบบมีชนิดก่อนเช็ก
+	if is_instance_valid(p.attack_target):
+		if p.attack_target.alive:
+			return
+	p.attack_target = null
 	if loot_item != "":
 		var drop := _nearest_drop(p)
 		if drop != null:

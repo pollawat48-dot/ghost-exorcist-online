@@ -40,6 +40,7 @@ const SLOT_EMPTY := Color(1, 1, 1, 0.5)
 ## จุดกลางปุ่มโจมตี (นับจากมุมขวาล่าง) และช่องสกิล 2 วงล้อมรอบ: [รัศมี, ขนาดช่อง, มุมแต่ละช่อง (องศา)]
 const ATTACK_CENTER := Vector2(-100, -104)
 const SLOT_RINGS := [[120.0, 62.0, [180.0, 210.0, 240.0, 270.0]], [196.0, 58.0, [180.0, 202.5, 225.0, 247.5, 270.0]]]
+const MENU_X := -458.0  ## ปุ่มเมนูใต้แผนที่ย่อ (ปุ่มสุดท้ายทางขวาคือปุ่มย่อ/กาง)
 const SIDE_X := -372.0  ## แถวปุ่มยา/ออโต้/ตกปลา ทางซ้ายของวงสกิล
 
 var player: Node3D
@@ -50,6 +51,9 @@ var title_label: Label
 var info_label: Label
 var bars: Control
 var menu_buttons := {}
+var menu_toggle: Control  ## ปุ่มย่อ/กางแถบเมนูใต้แผนที่ย่อ
+var menu_collapsed := false
+static var config_path := "user://settings.cfg"  ## จำว่าย่อแถบเมนูไว้หรือไม่ [ui] menu_collapsed
 var windows := {}
 var announce_panel: PanelContainer
 var announce_label: Label
@@ -152,12 +156,23 @@ func _ready() -> void:
 		b.kind = m[1]
 		b.fill = m[3]
 		b.caption = m[2]
-		b.position = Vector2(-402 + i * 56, 166)
+		b.position = Vector2(MENU_X + i * 56, 166)
 		b.size = Vector2(50, 50)
 		var key: String = m[0]
 		b.pressed.connect(func(): toggle_window(key))
 		top_right.add_child(b)
 		menu_buttons[key] = b
+	menu_toggle = TouchButton.new()
+	menu_toggle.fill = Color(1, 1, 1, 0.9)
+	menu_toggle.position = Vector2(MENU_X + menus.size() * 56, 166)
+	menu_toggle.size = Vector2(50, 50)
+	menu_toggle.pressed.connect(func():
+		set_menu_collapsed(not menu_collapsed)
+		Sound.play(self, "click"))
+	top_right.add_child(menu_toggle)
+	var cfg := ConfigFile.new()
+	cfg.load(config_path)
+	set_menu_collapsed(bool(cfg.get_value("ui", "menu_collapsed", false)), false)
 
 	# ---- ประกาศ (บอสเกิด ฯลฯ) ----
 	announce_panel = PanelContainer.new()
@@ -460,6 +475,33 @@ func _set_badge(key: String, on: bool) -> void:
 	if b.badge != on:
 		b.badge = on
 		b.queue_redraw()
+	_refresh_menu_toggle()
+
+
+## ย่อแถบเมนูเหลือปุ่มเดียว (กดอีกครั้งเพื่อกาง) จำค่าไว้ครั้งหน้า คีย์ลัด C K I J P ยังใช้ได้
+func set_menu_collapsed(on: bool, save: bool = true) -> void:
+	menu_collapsed = on
+	for key in menu_buttons:
+		menu_buttons[key].visible = not on
+	_refresh_menu_toggle()
+	if save:
+		var cfg := ConfigFile.new()
+		cfg.load(config_path)
+		cfg.set_value("ui", "menu_collapsed", on)
+		cfg.save(config_path)
+
+
+func _refresh_menu_toggle() -> void:
+	if menu_toggle == null:
+		return
+	menu_toggle.kind = "menu" if menu_collapsed else "fold"
+	menu_toggle.caption = "เมนู" if menu_collapsed else "ย่อ"
+	var any_badge := false
+	for key in menu_buttons:
+		any_badge = any_badge or menu_buttons[key].badge
+	# ย่ออยู่: ถ้ามีแต้มให้ใช้ ขึ้นจุดแดงที่ปุ่มเมนูแทน
+	menu_toggle.badge = menu_collapsed and any_badge
+	menu_toggle.queue_redraw()
 
 
 func track(cam: Camera3D, ghost_root: Node) -> void:

@@ -150,6 +150,8 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 		player.fish_count = 4
 		for i in 70:
 			main.tick(0.05)
+	elif mode == "menufold":
+		main.hud.set_menu_collapsed(true, false)
 	elif mode == "settings":
 		main.hud.toggle_window("settings")
 	elif mode == "partywin":
