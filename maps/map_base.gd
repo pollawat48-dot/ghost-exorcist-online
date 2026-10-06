@@ -33,6 +33,8 @@ var gloom_sky := Color(0.42, 0.38, 0.62)
 var gloom_horizon := Color(0.72, 0.66, 0.8)
 var gloom_fog := Color(0.5, 0.46, 0.66)
 ## จุดปากถ้ำ ใช้เมื่อแผนที่นี้ถูกสุ่มให้มีถ้ำ (Vector2.INF = แผนที่นี้ไม่มีที่ให้ถ้ำ)
+## แผนที่ที่ตกปลาได้ (ยืนริมน้ำแล้วกดตกปลา)
+var fishing := false
 var cave_spot := Vector2.INF
 ## เฉพาะในถ้ำ: ตำแหน่งก้อนหินแร่ และระดับถ้ำ (ยิ่งสูงแร่หายากยิ่งออกบ่อย)
 var ore_rocks: Array[Vector2] = []
@@ -47,6 +49,20 @@ var _rng := RandomNumberGenerator.new()
 
 func is_water(_p: Vector2) -> bool:
 	return false
+
+
+## จุดน้ำที่ใกล้ที่สุดในระยะ reach จาก p (Vector2.INF = ไม่มีน้ำใกล้ๆ) ใช้หาที่หย่อนเบ็ด
+func water_near(p: Vector2, reach: float) -> Vector2:
+	var best := Vector2.INF
+	var r := 16.0
+	while r <= reach and best == Vector2.INF:
+		for i in 24:
+			var a := TAU * i / 24.0
+			var q := p + Vector2(cos(a), sin(a)) * r
+			if is_water(q) and (best == Vector2.INF or p.distance_to(q) < p.distance_to(best)):
+				best = q
+		r += 16.0
+	return best
 
 
 func is_walkable(p: Vector2) -> bool:

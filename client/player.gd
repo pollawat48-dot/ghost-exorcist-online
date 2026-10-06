@@ -12,13 +12,18 @@ const ItemDB = preload("res://shared/data/items.gd")
 const Quests = preload("res://shared/data/quests.gd")
 const Crafting = preload("res://shared/data/crafting.gd")
 const World = preload("res://shared/data/world.gd")
+const Fishing = preload("res://shared/data/fishing.gd")
 const DamageText = preload("res://client/damage_text.gd")
 const Effect = preload("res://client/effect.gd")
+const Avatar = preload("res://client/avatar.gd")
 
 signal changed
 signal message(text: String)
 signal class_changed(class_id: String)
 signal open_refine(stone_id: String)  ## กดใช้หินตี+ จากกระเป๋า
+signal party_cast(fields: Dictionary)  ## ใช้บัฟ/ฮีลปาร์ตี้ ให้ main ส่งต่อไปเพื่อนผ่านเซิร์ฟเวอร์
+signal caught(item_id: String)  ## ตกปลาได้ของ
+signal sfx(id: String)  ## ขอเล่นเสียง (main ส่งต่อให้ระบบเสียง)
 
 const SPEED := 140.0
 const REGEN_INTERVAL := 3.0
@@ -31,6 +36,8 @@ const SP_POTIONS := ["nam_mon", "nam_mon_yai"]
 const POTION_COOLDOWN := 0.6
 const MINE_TIME := 1.2  ## วินาทีต่อการขุดหนึ่งครั้ง
 const MINE_REACH := 46.0
+const BUFF_EFFECTS := ["atk", "def", "aspd", "speed", "sp_regen"]
+const Protocol = preload("res://shared/net/protocol.gd")
 const SHOT_COLORS := {"neutral": Color(1, 0.95, 0.8), "holy": Color(0.6, 0.9, 1.0), "fire": Color(1.0, 0.55, 0.3)}
 
 var player_name := "ศิษย์วัด"
@@ -58,6 +65,13 @@ var guard_timer := 0.0  ## อาคมคงกระพัน
 var guard_bonus := 0.0
 var potion_cd := 0.0
 var mine_target: Node3D = null  ## ก้อนหินแร่ที่กำลังเดินไปขุด/กำลังขุด
+var buffs := {}  ## effect -> {"power", "time", "name", "from"} บัฟจากสกิลปาร์ตี้ (ตัวเองหรือเพื่อน)
+var fishing := false  ## กำลังตกปลาแบบ AFK
+var fish_spot := Vector2.ZERO  ## จุดในน้ำที่หย่อนเบ็ด
+var fish_timer := 0.0
+var fish_count := 0
+var look := {}  ## หน้าตาที่เลือกตอนสร้างตัวละคร {"gender", "hair", "skin"}
+var loaded := false  ## โหลดจากเซฟ (ไม่ต้องแจกของเริ่มต้น)
 var mine_timer := 0.0
 var regen_timer := 0.0
 var swing := 0.0
@@ -70,17 +84,18 @@ var body: Node3D
 var weapon: Node3D
 var aura: Node3D
 var name_label: Label3D
-var levelup_beam: MeshInstance3D
+var avatar: Node3D  ## โมเดลจิบิ (client/avatar.gd) ใช้ร่วมกับผู้เล่นคนอื่น
 
 
 func _ready() -> void:
 	recalc()
-	hp = stats["max_hp"]
-	sp = stats["max_sp"]
-	inventory[HERB_ITEM] = 5
-	inventory[SP_ITEM] = 3
+	if not loaded:
+		# ตัวละครใหม่: เลือดเต็ม + ยาติดตัว
+		hp = stats["max_hp"]
+		sp = stats["max_sp"]
+		inventory[HERB_ITEM] = 5
+		inventory[SP_ITEM] = 3
 	_build_model()
-	_build_fx()
 	_sync(0.0)
 
 
@@ -89,6 +104,13 @@ func recalc() -> void:
 	stats = Progression.derive(state)
 	if guard_timer > 0.0:
 		stats["def"] = int(stats["def"] * (1.0 + guard_bonus))
+	if buffs.has("atk"):
+		stats["atk"] = int(stats["atk"] * (1.0 + buffs["atk"]["power"]))
+		stats["matk"] = int(stats["matk"] * (1.0 + buffs["atk"]["power"]))
+	if buffs.has("def"):
+		stats["def"] = int(stats["def"] * (1.0 + buffs["def"]["power"]))
+	if buffs.has("aspd"):
+		stats["attack_interval"] = stats["attack_interval"] / (1.0 + buffs["aspd"]["power"])
 	hp = mini(hp, stats["max_hp"])
 	sp = mini(sp, stats["max_sp"])
 
@@ -97,156 +119,20 @@ func class_info() -> Dictionary:
 	return Classes.CLASSES[state["class"]]
 
 
-# ---------- รูปร่างตัวละคร (เปลี่ยนตามคลาส) ----------
+# ---------- รูปร่างตัวละคร (เปลี่ยนตามคลาส หน้าตา และของสวมใส่) ----------
 
+## สร้างโมเดลใหม่ (ตอนเริ่ม เปลี่ยนคลาส สวม/ถอดของ หรือตีบวกของที่สวมอยู่)
 func _build_model() -> void:
-	if model != null:
-		model.queue_free()
-	if name_label != null:
-		name_label.queue_free()
-	var look: Dictionary = class_info()["look"]
-	var tier: int = class_info()["tier"]
-	model = Node3D.new()
-	add_child(model)
-	body = Node3D.new()
-	model.add_child(body)
-	# ตัวจิบิ: หัวโต ตัวเล็ก ตาโตมีประกาย แก้มแดง
-	var robe := K.mat(look["robe"], 0.0, 0.8)
-	var sash := K.mat(look["sash"])
-	var skin := K.mat(Color(1.0, 0.86, 0.74), 0.0, 0.7)
-	var hair := K.mat(Color(0.36, 0.25, 0.24), 0.0, 0.6)
-	var eye := K.mat(Color(0.2, 0.13, 0.16), 0.0, 0.3, 0.0, false)
-	var shine := K.mat(Color(1, 1, 1), 1.5, 0.3, 0.0, false)
-	var blush := K.mat(Color(1.0, 0.6, 0.65), 0.3, 0.8, 0.0, false)
-	for x in [-0.1, 0.1]:
-		K.sphere(body, 0.09, Vector3(x, 0.07, 0.03), K.mat(Color(0.62, 0.42, 0.36)), 8, Vector3(1, 0.7, 1.3))
-	K.cyl(body, 0.17, 0.3, 0.55, Vector3(0, 0.38, 0), robe, 14)
-	K.beam(body, Vector3(-0.18, 0.62, 0.14), Vector3(0.2, 0.3, 0.17), 0.07, sash)
-	if tier >= 1:
-		# ขั้น 1 ขึ้นไป: เข็มขัดและปกเสื้อ
-		K.cyl(body, 0.27, 0.27, 0.07, Vector3(0, 0.33, 0), sash, 14)
-		K.cyl(body, 0.2, 0.2, 0.06, Vector3(0, 0.64, 0), K.mat(look["sash"].lightened(0.3)), 14)
-	if look["cape"]:
-		K.box(body, Vector3(0.5, 0.6, 0.05), Vector3(0, 0.36, -0.26), K.mat(look["sash"].darkened(0.15)), Vector3(0.18, 0, 0))
-	for x in [-0.27, 0.27]:
-		K.sphere(body, 0.08, Vector3(x, 0.42, 0.04), skin, 8)
-	var head := Node3D.new()
-	head.position = Vector3(0, 1.0, 0)
-	head.rotation.x = -0.25  # เงยหน้าเล็กน้อยให้เห็นหน้าจากกล้องมุมสูง
-	body.add_child(head)
-	K.sphere(head, 0.4, Vector3.ZERO, skin, 18)
-	K.sphere(head, 0.41, Vector3(0, 0.15, -0.11), hair, 18, Vector3(1.0, 0.78, 1.0))
-	for x in [-0.15, 0.15]:
-		K.sphere(head, 0.095, Vector3(x, 0.0, 0.34), eye, 10, Vector3(0.85, 1.25, 0.5))
-		K.sphere(head, 0.035, Vector3(x + 0.03, 0.06, 0.39), shine, 6)
-		K.sphere(head, 0.065, Vector3(x * 1.55, -0.11, 0.32), blush, 8, Vector3(1.2, 0.6, 0.4))
-	K.sphere(head, 0.03, Vector3(0, -0.15, 0.38), K.mat(Color(0.85, 0.4, 0.42), 0.0, 0.8, 0.0, false), 6, Vector3(1.4, 0.7, 0.6))
-	_build_hat(head, look)
-	weapon = Node3D.new()
-	body.add_child(weapon)
-	_build_weapon(look)
-	aura = null
-	if look["aura"]:
-		aura = Node3D.new()
-		model.add_child(aura)
-		var torus := TorusMesh.new()
-		torus.inner_radius = 0.6
-		torus.outer_radius = 0.7
-		var glow := K.mat(Color(look["sash"], 0.8), 2.5, 0.3, 0.0, false)
-		K.add(aura, torus, Vector3(0, 0.05, 0), glow)
-		for i in 3:
-			var a := i * TAU / 3.0
-			K.sphere(aura, 0.07, Vector3(cos(a) * 0.65, 0.6, sin(a) * 0.65), K.mat(look["sash"], 3.0, 0.3, 0.0, false), 6)
-	name_label = K.label(self, player_name, Vector3(0, 2.15 + (0.2 if look["hat"] == "crown" else 0.0), 0), Color(1, 0.97, 0.88), 36)
-
-
-func _build_hat(head: Node3D, look: Dictionary) -> void:
-	var hair := K.mat(Color(0.36, 0.25, 0.24), 0.0, 0.6)
-	match look["hat"]:
-		"":
-			K.sphere(head, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
-		"headband":
-			var band := TorusMesh.new()
-			band.inner_radius = 0.38
-			band.outer_radius = 0.44
-			K.add(head, band, Vector3(0, 0.14, -0.02), K.mat(look["sash"]), Vector3(-0.15, 0, 0))
-			K.box(head, Vector3(0.06, 0.28, 0.04), Vector3(0.1, 0.0, -0.42), K.mat(look["sash"]), Vector3(0.3, 0, 0.3))
-			K.box(head, Vector3(0.06, 0.24, 0.04), Vector3(-0.05, 0.0, -0.43), K.mat(look["sash"]), Vector3(0.3, 0, -0.2))
-		"hat_wide":
-			K.cyl(head, 0.05, 0.62, 0.26, Vector3(0, 0.42, -0.04), K.mat(Color(1.0, 0.86, 0.55)), 16)
-			K.cyl(head, 0.32, 0.32, 0.05, Vector3(0, 0.33, -0.04), K.mat(look["sash"]), 16)
-		"topknot":
-			K.sphere(head, 0.14, Vector3(0, 0.5, -0.1), hair, 10)
-			K.cyl(head, 0.015, 0.015, 0.4, Vector3(0, 0.55, -0.1), K.gold(), 4, Vector3(0, 0, PI / 2.0))
-			K.sphere(head, 0.05, Vector3(0.2, 0.55, -0.1), K.mat(look["sash"]), 6)
-		"hood":
-			K.sphere(head, 0.46, Vector3(0, 0.08, -0.08), K.mat(look["robe"].darkened(0.15)), 18, Vector3(1.0, 1.0, 1.0))
-			K.cyl(head, 0.01, 0.12, 0.25, Vector3(0, 0.55, -0.2), K.mat(look["robe"].darkened(0.15)), 8, Vector3(-0.6, 0, 0))
-		"crown":
-			# ชฎาทองแบบไทย ทรงสอบขึ้นเป็นยอดแหลม
-			K.sphere(head, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
-			K.cyl(head, 0.3, 0.34, 0.12, Vector3(0, 0.36, -0.03), K.gold(), 16)
-			K.cyl(head, 0.16, 0.26, 0.2, Vector3(0, 0.52, -0.03), K.gold(), 14)
-			K.cyl(head, 0.02, 0.15, 0.36, Vector3(0, 0.79, -0.03), K.gold(), 12)
-			K.sphere(head, 0.05, Vector3(0, 0.36, 0.31), K.mat(Color(1.0, 0.4, 0.5), 1.2), 6)
-
-
-func _build_weapon(look: Dictionary) -> void:
-	match look["weapon"]:
-		"staff", "orb_staff":
-			weapon.position = Vector3(0.3, 0.45, 0.06)
-			K.cyl(weapon, 0.03, 0.03, 1.1, Vector3(0, 0.25, 0), K.mat(Color(0.78, 0.55, 0.38)), 6)
-			if look["weapon"] == "orb_staff":
-				K.sphere(weapon, 0.17, Vector3(0, 0.95, 0), K.mat(look["sash"], 2.5, 0.3, 0.0, false), 12)
-				var ring := TorusMesh.new()
-				ring.inner_radius = 0.2
-				ring.outer_radius = 0.24
-				K.add(weapon, ring, Vector3(0, 0.95, 0), K.gold(), Vector3(PI / 2.0, 0, 0))
-			else:
-				K.sphere(weapon, 0.09, Vector3(0, 0.85, 0), K.gold(), 10)
-		"sword", "great_sword":
-			var big: bool = look["weapon"] == "great_sword"
-			var len := 1.0 if big else 0.75
-			weapon.position = Vector3(0.3, 0.42, 0.1)
-			K.cyl(weapon, 0.035, 0.035, 0.22, Vector3(0, -0.05, 0), K.mat(Color(0.6, 0.38, 0.32)), 6)
-			K.box(weapon, Vector3(0.28, 0.06, 0.08), Vector3(0, 0.08, 0), K.gold())
-			var blade := K.mat(Color(0.88, 0.92, 1.0), 1.0 if big else 0.0, 0.3)
-			K.box(weapon, Vector3(0.09 if big else 0.07, len, 0.025), Vector3(0, 0.1 + len / 2.0, 0), blade)
-			K.box(weapon, Vector3(0.05, 0.1, 0.025), Vector3(0, 0.14 + len, 0), blade, Vector3(0, 0, PI / 4.0))
-		"bow", "great_bow":
-			var big: bool = look["weapon"] == "great_bow"
-			var h := 0.75 if big else 0.6
-			weapon.position = Vector3(-0.32, 0.5, 0.08)
-			var wood := K.mat(Color(0.5, 0.35, 0.55) if big else Color(0.75, 0.52, 0.36))
-			var pts := [Vector3(0, -h, -0.05), Vector3(0, -h * 0.5, 0.12), Vector3(0, 0, 0.17), Vector3(0, h * 0.5, 0.12), Vector3(0, h, -0.05)]
-			for i in 4:
-				K.beam(weapon, pts[i], pts[i + 1], 0.05, wood)
-			K.beam(weapon, pts[0], pts[4], 0.012, K.mat(Color(1, 1, 1), 0.0, 0.8, 0.0, false))
-			if big:
-				for tip in [pts[0], pts[4]]:
-					K.sphere(weapon, 0.06, tip, K.mat(look["sash"], 3.0, 0.3, 0.0, false), 6)
-			# กระบอกลูกธนูที่หลัง
-			K.cyl(body, 0.08, 0.08, 0.45, Vector3(0.12, 0.6, -0.26), K.mat(Color(0.7, 0.5, 0.38)), 8, Vector3(0.3, 0, -0.3))
-		"book":
-			weapon.position = Vector3(0.38, 0.6, 0.12)
-			K.box(weapon, Vector3(0.28, 0.06, 0.34), Vector3.ZERO, K.mat(Color(0.75, 0.3, 0.35)), Vector3(0.4, 0, 0))
-			K.box(weapon, Vector3(0.24, 0.07, 0.3), Vector3(0, 0.01, 0), K.mat(Color(1.0, 0.96, 0.85)), Vector3(0.4, 0, 0))
-			for i in 2:
-				K.box(weapon, Vector3(0.1, 0.2, 0.01), Vector3(-0.1 + i * 0.2, 0.3, 0), K.mat(Color(1.0, 0.9, 0.5), 1.2, 0.5, 0.0, false), Vector3(0, 0, (i - 0.5) * 0.4))
-
-
-func _build_fx() -> void:
-	var beam_mesh := CylinderMesh.new()
-	beam_mesh.top_radius = 0.6
-	beam_mesh.bottom_radius = 0.9
-	beam_mesh.height = 6.0
-	levelup_beam = MeshInstance3D.new()
-	levelup_beam.mesh = beam_mesh
-	levelup_beam.position.y = 3.0
-	levelup_beam.material_override = K.mat(Color(1, 0.9, 0.5, 0.35), 2.5, 0.5, 0.0, false)
-	levelup_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	levelup_beam.visible = false
-	add_child(levelup_beam)
+	if avatar == null:
+		avatar = Avatar.new()
+		add_child(avatar)
+	avatar.build(state["class"], look, state["equipment"], player_name)
+	model = avatar.model
+	body = avatar.body
+	weapon = avatar.weapon
+	aura = avatar.aura
+	name_label = avatar.name_label
+	avatar.set_fishing(fishing)
 
 
 ## ขยับโมเดลให้ตรงกับตรรกะ: ตำแหน่ง, ทิศที่หัน, ท่าเดิน/ตี, เอฟเฟกต์
@@ -257,27 +143,19 @@ func _sync(delta: float) -> void:
 	var facing := move
 	if attack_target != null and is_instance_valid(attack_target):
 		facing = attack_target.pos - pos
-	if facing.length() > 0.001:
-		model.rotation.y = lerp_angle(model.rotation.y, atan2(facing.x, facing.y), 0.3)
-	if move.length() > 0.001:
-		walk_t += delta * 10.0
-		body.position.y = absf(sin(walk_t)) * 0.06
-		body.rotation.z = sin(walk_t) * 0.04
-	else:
-		body.position.y = lerpf(body.position.y, 0.0, 0.3)
-		body.rotation.z = 0.0
-	weapon.rotation.x = -sin((0.2 - swing) / 0.2 * PI) * 1.3 if swing > 0.0 else 0.0
-	if aura != null:
-		aura.rotation.y += delta * 1.5
-	levelup_beam.visible = levelup_fx > 0.0
-	if levelup_fx > 0.0:
-		levelup_beam.scale = Vector3(1, levelup_fx / 1.2, 1)
-	model.scale = Vector3.ONE * (1.08 if flash > 0.0 else 1.0)
+	elif fishing:
+		facing = fish_spot - pos
+	if avatar.fishing != fishing:
+		avatar.set_fishing(fishing)
+	avatar.animate(delta, move.length() > 0.001, facing, swing, flash > 0.0, levelup_fx)
+	if fishing and avatar.bobber != null:
+		avatar.bobber.position.y = sin(fish_timer * 3.0) * 0.04 - (0.12 if fish_timer > fish_time() - 0.6 else 0.0)
 
 
 # ---------- คำสั่งจากผู้เล่น ----------
 
 func command_move(dest: Vector2) -> void:
+	fishing = false
 	attack_target = null
 	mine_target = null
 	pending_skill = ""
@@ -287,6 +165,7 @@ func command_move(dest: Vector2) -> void:
 
 
 func command_attack(ghost: Node3D) -> void:
+	fishing = false
 	attack_target = ghost
 	mine_target = null
 	pending_skill = ""
@@ -307,6 +186,7 @@ func tick(delta: float) -> void:
 			recalc()
 			message.emit("อาคมคงกระพันหมดฤทธิ์")
 			changed.emit()
+	_tick_buffs(delta)
 	swing = maxf(0.0, swing - delta)
 	levelup_fx = maxf(0.0, levelup_fx - delta)
 	flash = maxf(0.0, flash - delta)
@@ -318,11 +198,12 @@ func tick(delta: float) -> void:
 	if mine_target != null and (not is_instance_valid(mine_target) or not mine_target.has_ore()):
 		mine_target = null
 	if stick.length() > 0.15:
+		fishing = false
 		attack_target = null
 		mine_target = null
 		pending_skill = ""
 		moving = false
-		_walk_dir(stick.limit_length(1.0) * SPEED * delta)
+		_walk_dir(stick.limit_length(1.0) * speed() * delta)
 	elif attack_target != null:
 		var reach: float = stats["range"]
 		if pending_skill != "":
@@ -346,6 +227,8 @@ func tick(delta: float) -> void:
 			_basic_attack(attack_target)
 	elif mine_target != null:
 		_tick_mining(delta)
+	elif fishing:
+		_tick_fishing(delta)
 	elif moving:
 		_follow_path(delta)
 	if model != null:
@@ -355,6 +238,7 @@ func tick(delta: float) -> void:
 func _basic_attack(ghost: Node3D) -> void:
 	swing = 0.2
 	var kind: String = stats["attack"]
+	sfx.emit({"ranged": "arrow", "magic": "magic"}.get(kind, "swing"))
 	var stat := "matk" if kind == "magic" else "atk"
 	_hit(ghost, stat, 1.0, "neutral")
 	if kind == "ranged":
@@ -368,6 +252,7 @@ func _hit(ghost: Node3D, stat: String, power: float, element: String) -> void:
 	var crit: bool = rng.randf() < stats["crit"]
 	var dmg := Combat.damage(stats[stat], ghost.data["def"], element, ghost.data["element"], rng, power * (1.5 if crit else 1.0))
 	ghost.take_damage(dmg, self, crit)
+	sfx.emit("crit" if crit else "hit")
 
 
 func _walk_dir(step: Vector2) -> void:
@@ -385,8 +270,12 @@ func _set_path(dest: Vector2) -> void:
 	moving = not path.is_empty()
 
 
+func speed() -> float:
+	return SPEED * (1.0 + (buffs["speed"]["power"] if buffs.has("speed") else 0.0))
+
+
 func _follow_path(delta: float) -> void:
-	var step := SPEED * delta
+	var step := speed() * delta
 	while step > 0.0 and path_index < path.size():
 		var waypoint := path[path_index]
 		var d := pos.distance_to(waypoint)
@@ -470,6 +359,7 @@ func use_skill(id: String, target: Node3D = null) -> bool:
 	swing = 0.2
 	var power := Skills.power(id, lv)
 	var color: Color = SHOT_COLORS.get(sk["element"], Color.WHITE)
+	sfx.emit({"buff": "buff", "party_buff": "buff", "heal": "heal", "party_heal": "heal"}.get(kind, {"fire": "fire", "holy": "holy"}.get(sk["element"], "magic")))
 	match kind:
 		"aoe_self":
 			var r := Skills.radius(id, lv)
@@ -502,8 +392,72 @@ func use_skill(id: String, target: Node3D = null) -> bool:
 			hp = mini(stats["max_hp"], hp + amount)
 			Effect.ring(get_parent(), position, 1.2, Color(0.5, 1.0, 0.6))
 			DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "+%d" % amount, Color(0.4, 1, 0.4))
+		"party_buff":
+			var duration: float = sk["duration"]
+			apply_buff(sk["effect"], power, duration, sk["name"])
+			Effect.ring(get_parent(), position, Protocol.BUFF_RANGE / 32.0, Color(1.0, 0.85, 0.5), 0.6)
+			party_cast.emit({"t": "buff", "skill": id, "lv": lv, "power": power, "duration": duration, "effect": sk["effect"], "x": pos.x, "y": pos.y})
+		"party_heal":
+			var amount := int(stats["matk"] * power)
+			receive_heal(amount)
+			Effect.ring(get_parent(), position, Protocol.BUFF_RANGE / 32.0, Color(0.5, 1.0, 0.6), 0.6)
+			party_cast.emit({"t": "heal", "amount": amount, "x": pos.x, "y": pos.y})
 	changed.emit()
 	return true
+
+
+# ---------- บัฟปาร์ตี้ ----------
+
+## รับบัฟ (จากตัวเองหรือเพื่อน) ถ้ามีบัฟชนิดเดียวกันอยู่แล้วใช้ค่าที่แรงกว่าและต่อเวลาใหม่
+func apply_buff(effect: String, power: float, duration: float, buff_name: String, from: String = "") -> void:
+	if not effect in BUFF_EFFECTS:
+		return
+	var old: Dictionary = buffs.get(effect, {})
+	buffs[effect] = {"power": maxf(power, old.get("power", 0.0)), "time": maxf(duration, old.get("time", 0.0)), "name": buff_name, "from": from}
+	recalc()
+	if from != "":
+		message.emit("%s ใช้%sให้คุณ (%s)" % [from, buff_name, buff_text(effect)])
+		Effect.ring(get_parent(), position, 1.2, Color(1.0, 0.85, 0.5))
+		sfx.emit("buff")
+	changed.emit()
+
+
+func receive_heal(amount: int, from: String = "") -> void:
+	if hp <= 0 or amount <= 0:
+		return
+	hp = mini(stats["max_hp"], hp + amount)
+	DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "+%d" % amount, Color(0.4, 1, 0.4))
+	if from != "":
+		Effect.ring(get_parent(), position, 1.2, Color(0.5, 1.0, 0.6))
+		sfx.emit("heal")
+	changed.emit()
+
+
+## ข้อความสั้นของบัฟ เช่น "ATK +30%"
+func buff_text(effect: String) -> String:
+	var p: float = buffs[effect]["power"] if buffs.has(effect) else 0.0
+	match effect:
+		"sp_regen":
+			return "ฟื้น SP x%.1f" % (1.0 + p)
+		"speed":
+			return "เดินเร็ว +%d%%" % int(round(p * 100))
+		"aspd":
+			return "ตีเร็ว +%d%%" % int(round(p * 100))
+	return "%s +%d%%" % [effect.to_upper(), int(round(p * 100))]
+
+
+func _tick_buffs(delta: float) -> void:
+	var expired: Array = []
+	for effect in buffs:
+		buffs[effect]["time"] -= delta
+		if buffs[effect]["time"] <= 0.0:
+			expired.append(effect)
+	for effect in expired:
+		message.emit("%sหมดฤทธิ์" % buffs[effect]["name"])
+		buffs.erase(effect)
+	if not expired.is_empty():
+		recalc()
+		changed.emit()
 
 
 func _hit_area(center: Vector2, r: float, stat: String, power: float, element: String) -> int:
@@ -612,6 +566,8 @@ func equip(item_id: String) -> bool:
 	_remove_item(item_id)
 	state["equipment"][slot] = item_id
 	recalc()
+	if avatar != null:
+		_build_model()
 	message.emit("สวม %s" % ItemDB.display_name(item_id))
 	changed.emit()
 	return true
@@ -624,6 +580,8 @@ func unequip(slot: String) -> bool:
 	state["equipment"].erase(slot)
 	inventory[item_id] = inventory.get(item_id, 0) + 1
 	recalc()
+	if avatar != null:
+		_build_model()
 	changed.emit()
 	return true
 
@@ -668,8 +626,8 @@ func use_item(item_id: String) -> bool:
 	if hp <= 0 or inventory.get(item_id, 0) <= 0 or potion_cd > 0.0:
 		return false
 	var item: Dictionary = ItemDB.info(item_id)
-	if item["type"] == "refine":
-		open_refine.emit(item_id)
+	if item["type"] in ["refine", "amulet"]:
+		open_refine.emit(item_id if item["type"] == "refine" else "")
 		return true
 	if item["type"] != "consumable":
 		return false
@@ -679,6 +637,7 @@ func use_item(item_id: String) -> bool:
 		return false
 	_remove_item(item_id)
 	potion_cd = POTION_COOLDOWN
+	sfx.emit("potion")
 	if heal > 0:
 		heal += stats["max_hp"] / 10
 		hp = mini(stats["max_hp"], hp + heal)
@@ -705,6 +664,7 @@ func buy(item_id: String, count: int = 1) -> bool:
 		message.emit("เหรียญไม่พอ (ต้องใช้ %d)" % price)
 		return false
 	state["coins"] -= price
+	sfx.emit("coin")
 	inventory[item_id] = inventory.get(item_id, 0) + count
 	message.emit("ซื้อ %s x%d (-%d เหรียญ)" % [ItemDB.ITEMS[item_id]["name"], count, price])
 	changed.emit()
@@ -719,6 +679,7 @@ func sell(item_id: String, count: int = 1) -> bool:
 	for i in count:
 		_remove_item(item_id)
 	state["coins"] += each * count
+	sfx.emit("coin")
 	message.emit("ขาย %s x%d (+%d เหรียญ)" % [ItemDB.display_name(item_id), count, each * count])
 	changed.emit()
 	return true
@@ -804,7 +765,7 @@ func refine_stones_for(level: int) -> Array[String]:
 ## ตีบวกของหนึ่งชิ้น: ใช้หิน 1 ก้อน + เหรียญ ยิ่งขั้นสูงยิ่งแพงและติดยาก
 ## ตั้งแต่ +7 ขึ้นไป ถ้าพลาดจะลดขั้นลง 1–2 ขั้น
 ## คืน {"ok", "result": "success"/"fail"/"down"/"error", "key": คีย์ใหม่, "level"}
-func refine(key: String, stone_id: String, slot: String = "") -> Dictionary:
+func refine(key: String, stone_id: String, slot: String = "", amulet: String = "") -> Dictionary:
 	var err := {"ok": false, "result": "error", "key": key, "level": ItemDB.refine_of(key)}
 	var owned: bool = state["equipment"].get(slot, "") == key if slot != "" else inventory.get(key, 0) > 0
 	if not owned or not ItemDB.has(key) or ItemDB.info(key)["type"] != "equip":
@@ -820,11 +781,15 @@ func refine(key: String, stone_id: String, slot: String = "") -> Dictionary:
 	if state["coins"] < fee:
 		message.emit("เหรียญไม่พอ (ค่าตีบวก %d)" % fee)
 		return err
+	if amulet != "" and (inventory.get(amulet, 0) <= 0 or ItemDB.info(amulet)["type"] != "amulet"):
+		amulet = ""
 	_remove_item(stone_id)
+	if amulet != "":
+		_remove_item(amulet)
 	state["coins"] -= fee
 	var new_lv := lv
 	var result := "fail"
-	if rng.randf() < ItemDB.REFINE_CHANCE[lv]:
+	if rng.randf() < refine_chance(lv, amulet):
 		new_lv = lv + 1
 		result = "success"
 	elif lv >= ItemDB.REFINE_RISKY_FROM:
@@ -835,6 +800,8 @@ func refine(key: String, stone_id: String, slot: String = "") -> Dictionary:
 	if slot != "":
 		state["equipment"][slot] = new_key
 		recalc()
+		if avatar != null:
+			_build_model()
 	else:
 		_remove_item(key)
 		inventory[new_key] = inventory.get(new_key, 0) + 1
@@ -846,8 +813,24 @@ func refine(key: String, stone_id: String, slot: String = "") -> Dictionary:
 			message.emit("ตีบวกล้มเหลว... %s ลดเหลือ +%d" % [ItemDB.info(base)["name"], new_lv])
 		_:
 			message.emit("ตีบวกล้มเหลว (ของยังอยู่ +%d เสียหินและเหรียญ)" % lv)
+	sfx.emit({"success": "refine_ok", "down": "refine_down"}.get(result, "refine_fail"))
 	changed.emit()
 	return {"ok": result == "success", "result": result, "key": new_key, "level": new_lv}
+
+
+## โอกาสตีบวกสำเร็จจาก +level (รวมพระเครื่องที่ใช้ ถ้ามี) สูงสุด 100%
+func refine_chance(level: int, amulet: String = "") -> float:
+	var bonus: float = ItemDB.info(amulet).get("refine_bonus", 0.0) if amulet != "" and ItemDB.has(amulet) else 0.0
+	return minf(1.0, ItemDB.REFINE_CHANCE[level] + bonus)
+
+
+## พระเครื่องในกระเป๋า (ใช้เพิ่มโอกาสตีบวก)
+func amulets() -> Array[String]:
+	var result: Array[String] = []
+	for id in ["phra_din", "phra_phong", "phra_thong"]:
+		if inventory.get(id, 0) > 0:
+			result.append(id)
+	return result
 
 
 ## หลอมแร่เป็นหินตี+ ที่ร้านหลอม
@@ -868,6 +851,7 @@ func craft(recipe_id: String, count: int = 1) -> bool:
 
 ## เดินไปขุดหินแร่ในถ้ำ (ขุดต่อเนื่องจนหินหมด)
 func command_mine(rock: Node3D) -> void:
+	fishing = false
 	attack_target = null
 	pending_skill = ""
 	mine_target = rock
@@ -891,11 +875,66 @@ func _tick_mining(delta: float) -> void:
 	if mine_timer >= MINE_TIME:
 		mine_timer = 0.0
 		var ore: String = mine_target.mine(rng)
+		sfx.emit("mine")
 		if ore != "":
 			add_item(ore)
+			sfx.emit("ore")
 		if not mine_target.has_ore():
 			message.emit("หินแร่ก้อนนี้หมดแล้ว")
 			mine_target = null
+
+
+## คันเบ็ดที่ดีที่สุดในกระเป๋า ("" = ไม่มี)
+func best_rod() -> String:
+	for id in Fishing.RODS:
+		if inventory.get(id, 0) > 0:
+			return id
+	return ""
+
+
+## เริ่มตกปลาแบบ AFK ที่จุดน้ำ spot (ต้องมีคันเบ็ด และยืนใกล้น้ำ) ตกไปเรื่อยๆ จนกว่าจะเดินหรือสั่งอย่างอื่น
+func command_fish(spot: Vector2) -> bool:
+	if best_rod() == "":
+		message.emit("ต้องมีคันเบ็ดก่อน ซื้อได้ที่ร้านตาม่องริมลำธาร")
+		return false
+	if pos.distance_to(spot) > Fishing.REACH + 40.0:
+		message.emit("ต้องยืนริมน้ำถึงจะตกปลาได้")
+		return false
+	attack_target = null
+	mine_target = null
+	pending_skill = ""
+	moving = false
+	path.clear()
+	fishing = true
+	fish_spot = spot
+	fish_timer = 0.0
+	message.emit("เริ่มตกปลา (ปล่อยไว้ได้เลย ปลาจะติดเบ็ดเองเรื่อยๆ)")
+	sfx.emit("splash")
+	return true
+
+
+## เวลาต่อหนึ่งครั้งที่ปลาจะกินเบ็ด (คันเบ็ดดีขึ้นเร็วขึ้น)
+func fish_time() -> float:
+	var rod := best_rod()
+	return ItemDB.ITEMS[rod]["fish_time"] if rod != "" else 10.0
+
+
+func _tick_fishing(delta: float) -> void:
+	var rod := best_rod()
+	if rod == "":
+		fishing = false
+		return
+	fish_timer += delta
+	if fish_timer < fish_time():
+		return
+	fish_timer = 0.0
+	var item := Fishing.roll(rng, ItemDB.ITEMS[rod]["luck"])
+	fish_count += 1
+	add_item(item)
+	var rare: bool = ItemDB.ITEMS[item]["type"] == "amulet" or item == "pla_buek"
+	DamageText.spawn(get_parent(), position + Vector3(0, 2.6, 0), ItemDB.ITEMS[item]["name"] + "!", Color(1.0, 0.85, 0.3) if rare else Color(0.6, 0.9, 1.0))
+	sfx.emit("rare" if rare else "catch")
+	caught.emit(item)
 
 
 ## ค่าวาร์ปไปแผนที่นั้น (แผนที่ที่ยังไม่เคยไปวาร์ปไม่ได้)
@@ -919,11 +958,39 @@ func pay_warp(map_id: String) -> bool:
 	return true
 
 
+# ---------- บันทึก/โหลดตัวละคร (เซิร์ฟเวอร์หรือเครื่องตัวเองสำหรับ guest) ----------
+
+func save_data() -> Dictionary:
+	return {"state": state.duplicate(true), "inventory": inventory.duplicate(), "hp": hp, "sp": sp}
+
+
+## โหลดข้อมูลที่บันทึกไว้ (ข้อมูลว่าง = ตัวละครใหม่ ใช้ค่าเริ่มต้น)
+func apply_save(data: Dictionary) -> void:
+	if data.get("state") is Dictionary:
+		loaded = true
+		var fresh := Progression.new_state()
+		for key in fresh:
+			if not data["state"].has(key):
+				data["state"][key] = fresh[key]
+		state = data["state"]
+		if not Classes.CLASSES.has(state["class"]):
+			state["class"] = "novice"
+	if data.get("inventory") is Dictionary:
+		inventory = data["inventory"]
+	for key in inventory.keys():
+		if not ItemDB.has(key):
+			inventory.erase(key)
+	recalc()
+	hp = clampi(int(data.get("hp", stats["max_hp"])), 1, stats["max_hp"])
+	sp = clampi(int(data.get("sp", stats["max_sp"])), 0, stats["max_sp"])
+
+
 func take_damage(amount: int) -> void:
 	if hp <= 0:
 		return
 	hp = maxi(0, hp - amount)
 	flash = 0.15
+	sfx.emit("hurt")
 	DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), str(amount), Color(1, 0.45, 0.45))
 	if hp == 0:
 		message.emit("คุณสลบไป... ฟื้นคืนที่วัด")
@@ -933,12 +1000,16 @@ func take_damage(amount: int) -> void:
 
 func gain_exp(amount: int, coin_amount: int = 0) -> void:
 	var ups := Progression.add_exp(state, amount)
-	message.emit("+%d EXP · +%d เหรียญ" % [amount, coin_amount] if coin_amount > 0 else "+%d EXP" % amount)
+	if amount > 0:
+		message.emit("+%d EXP · +%d เหรียญ" % [amount, coin_amount] if coin_amount > 0 else "+%d EXP" % amount)
+	elif coin_amount > 0:
+		message.emit("+%d เหรียญ" % coin_amount)
 	if ups > 0:
 		recalc()
 		hp = stats["max_hp"]
 		sp = stats["max_sp"]
 		levelup_fx = 1.2
+		sfx.emit("levelup")
 		message.emit("เลเวลอัป! ตอนนี้เลเวล %d (แต้มสเตตัส %d)" % [state["level"], state["stat_points"]])
 		if class_level_reached() and state["level"] - ups < class_change_status()["level"]:
 			message.emit("ถึงเลเวลเปลี่ยนอาชีพแล้ว! ไปคุยกับครูใหญ่สำนักหน้าโบสถ์เพื่อรับบททดสอบ")
@@ -982,6 +1053,9 @@ func _regen(delta: float) -> void:
 	var old_hp := hp
 	var old_sp := sp
 	hp = mini(stats["max_hp"], hp + maxi(1, stats["max_hp"] / 40))
-	sp = mini(stats["max_sp"], sp + 1 + state["level"] / 4 + stats["int"] / 10)
+	var sp_gain: int = 1 + state["level"] / 4 + stats["int"] / 10
+	if buffs.has("sp_regen"):
+		sp_gain = int(round(sp_gain * (1.0 + buffs["sp_regen"]["power"])))
+	sp = mini(stats["max_sp"], sp + sp_gain)
 	if hp != old_hp or sp != old_sp:
 		changed.emit()

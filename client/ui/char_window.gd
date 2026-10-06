@@ -4,6 +4,7 @@ extends "res://client/ui/game_window.gd"
 const Progression = preload("res://shared/combat/progression.gd")
 const Classes = preload("res://shared/data/classes.gd")
 const ItemDB = preload("res://shared/data/items.gd")
+const ItemIcons = preload("res://client/ui/item_icons.gd")
 
 signal open_class_change
 
@@ -80,9 +81,12 @@ func _build() -> void:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 6)
 		right.add_child(r)
-		r.add_child(P.label("%s:" % ItemDB.SLOT_NAMES[slot], 14))
+		var slot_l := P.label("%s:" % ItemDB.SLOT_NAMES[slot], 14)
+		slot_l.custom_minimum_size.x = 78
+		r.add_child(slot_l)
 		if st["equipment"].has(slot):
 			var id: String = st["equipment"][slot]
+			r.add_child(ItemIcons.make(id, 34))
 			var l := P.label(ItemDB.display_name(id), 14, ItemDB.color_of(id).darkened(0.25))
 			l.tooltip_text = ItemDB.bonus_text(id)
 			l.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -92,6 +96,7 @@ func _build() -> void:
 			off.pressed.connect(func(): player.unequip(slot))
 			r.add_child(off)
 		else:
+			r.add_child(ItemIcons.make_empty(slot, 34))
 			r.add_child(P.label("-", 14, P.TEXT.lightened(0.4)))
 
 	section("คลาส")

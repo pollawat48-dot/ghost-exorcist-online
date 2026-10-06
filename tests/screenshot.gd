@@ -130,11 +130,30 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 		player.inventory["suea_kraphan"] = 1
 		player.inventory["hin_ti_2"] = 4
 		player.inventory["hin_ti_3"] = 2
+		player.inventory["phra_din"] = 3
+		player.inventory["phra_phong"] = 1
+		player.inventory["phra_thong"] = 1
 		player.recalc()
 		main.hud.open_refine("hin_ti_3")
 		var w: Control = main.hud.windows["refine"]
 		w.selected = {"key": "mitmo+7", "slot": ""}
+		w.amulet = "phra_phong"
 		w.refresh()
+	elif mode == "fishing":
+		# ยืนตกปลาบนท่าน้ำลำธาร ได้ของมาแล้วหลายอย่าง
+		player.add_item("bet_mai")
+		for id in ["pla_siew", "pla_nil", "pla_chon", "phra_din"]:
+			player.add_item(id)
+		var x := 1560.0
+		player.pos = Vector2(x, main.map.stream_y(x) + main.map.STREAM_R + 24.0)
+		main.start_fishing()
+		player.fish_count = 4
+		for i in 70:
+			main.tick(0.05)
+	elif mode == "settings":
+		main.hud.toggle_window("settings")
+	elif mode == "partywin":
+		main.hud.toggle_window("party")
 	elif mode == "bagall":
 		for id in ["hin_ti_1", "hin_ti_2", "ore_zinc", "ore_gold", "ore_diamond", "dab_krung+5"]:
 			player.add_item(id, 2)

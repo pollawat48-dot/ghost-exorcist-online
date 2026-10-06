@@ -1,11 +1,14 @@
 extends "res://client/ui/game_window.gd"
 ## หน้าต่างตีบวก (เปิดเมื่อกดใช้หินตี+ ในกระเป๋า): เลือกของสวมใส่ + หินตี+ แล้วจ่ายเหรียญ
 ## โอกาสสำเร็จลดลงตามขั้น ตั้งแต่ +7 ถ้าพลาดจะลดขั้น 1–2 ขั้น ตีได้สูงสุด +10
+## ใส่พระเครื่อง (ได้จากตกปลา) เพิ่มโอกาสสำเร็จได้ (ใช้แล้วหมดไปทั้งสำเร็จและล้มเหลว)
 
 const ItemDB = preload("res://shared/data/items.gd")
+const ItemIcons = preload("res://client/ui/item_icons.gd")
 
 var selected := {}  ## {"key", "slot"}
 var stone := ""
+var amulet := ""  ## พระเครื่องที่เลือก ("" = ไม่ใช้)
 var last_result := ""
 
 
@@ -44,7 +47,7 @@ func _build() -> void:
 	cols.add_child(left)
 	left.add_child(P.label("1. เลือกของ", 16, P.PINK_DEEP))
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(300, mini(320, 40 * items.size()))
+	scroll.custom_minimum_size = Vector2(300, mini(320, 42 * items.size()))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	left.add_child(scroll)
 	var list := VBoxContainer.new()
@@ -59,7 +62,11 @@ func _build() -> void:
 		b.pressed.connect(func():
 			selected = e
 			refresh())
-		list.add_child(b)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var line := HBoxContainer.new()
+		line.add_child(ItemIcons.make(key, 30))
+		line.add_child(b)
+		list.add_child(line)
 
 	var right := VBoxContainer.new()
 	right.custom_minimum_size.x = 360
@@ -67,7 +74,12 @@ func _build() -> void:
 	cols.add_child(right)
 	var key: String = selected["key"]
 	var lv := ItemDB.refine_of(key)
-	right.add_child(P.label(ItemDB.display_name(key), 18, ItemDB.color_of(key).darkened(0.3)))
+	var head := HBoxContainer.new()
+	head.add_child(ItemIcons.make(key, 44))
+	var title := P.label(ItemDB.display_name(key), 18, ItemDB.color_of(key).darkened(0.3))
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(title)
+	right.add_child(head)
 	right.add_child(P.label("ตอนนี้: " + ItemDB.bonus_text(key), 13))
 	if lv >= ItemDB.REFINE_MAX:
 		right.add_child(P.label("ตีถึง +%d สูงสุดแล้ว" % ItemDB.REFINE_MAX, 15, P.PINK_DEEP))
@@ -90,9 +102,30 @@ func _build() -> void:
 				stone = id
 				refresh())
 			srow.add_child(b)
+	var owned: Array[String] = player.amulets()
+	if not amulet in owned:
+		amulet = ""
+	right.add_child(P.label("3. พระเครื่อง (ไม่บังคับ) เพิ่มโอกาสสำเร็จ", 16, P.PINK_DEEP))
+	if owned.is_empty():
+		right.add_child(P.label("ไม่มีพระเครื่อง (ตกปลาที่ลำธารใสเย็นมีโอกาสได้)", 12, P.TEXT.lightened(0.25)))
+	else:
+		var arow := HBoxContainer.new()
+		right.add_child(arow)
+		var none := P.button("ไม่ใช้", P.LEMON if amulet == "" else Color(1, 1, 1, 0.9), 12)
+		none.pressed.connect(func():
+			amulet = ""
+			refresh())
+		arow.add_child(none)
+		for id in owned:
+			var b := P.button("%s +%d%% x%d" % [ItemDB.ITEMS[id]["name"].replace("พระเครื่อง", "พระ"), int(round(ItemDB.ITEMS[id]["refine_bonus"] * 100)), player.inventory[id]], P.LEMON if id == amulet else Color(1, 1, 1, 0.9), 12)
+			b.pressed.connect(func():
+				amulet = id
+				refresh())
+			arow.add_child(b)
 	var fee := ItemDB.refine_fee(lv)
-	var chance: float = ItemDB.REFINE_CHANCE[lv]
-	right.add_child(P.label("โอกาสสำเร็จ %d%% · ค่าตี %d เหรียญ (มี %d)" % [int(round(chance * 100)), fee, player.coins()], 14))
+	var chance: float = player.refine_chance(lv, amulet)
+	var extra := "" if amulet == "" else " (รวมพระเครื่อง +%d%%)" % int(round(ItemDB.ITEMS[amulet]["refine_bonus"] * 100))
+	right.add_child(P.label("โอกาสสำเร็จ %d%%%s · ค่าตี %d เหรียญ (มี %d)" % [int(round(chance * 100)), extra, fee, player.coins()], 14))
 	if lv >= ItemDB.REFINE_RISKY_FROM:
 		right.add_child(P.label("ระวัง! ตั้งแต่ +%d ถ้าล้มเหลวจะลดขั้น 1–2 ขั้น" % ItemDB.REFINE_RISKY_FROM, 13, Color(0.9, 0.35, 0.4)))
 	else:
@@ -110,7 +143,7 @@ func _result_line(parent: Control) -> void:
 
 
 func _do_refine() -> void:
-	var res: Dictionary = player.refine(selected["key"], stone, selected["slot"])
+	var res: Dictionary = player.refine(selected["key"], stone, selected["slot"], amulet)
 	match res["result"]:
 		"success":
 			last_result = "สำเร็จ! ได้ %s" % ItemDB.display_name(res["key"])

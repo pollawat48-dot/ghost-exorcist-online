@@ -2,6 +2,7 @@ extends "res://client/ui/game_window.gd"
 ## หน้าต่างกระเป๋า: ดูไอเทม สวมของ ใช้ยา
 
 const ItemDB = preload("res://shared/data/items.gd")
+const ItemIcons = preload("res://client/ui/item_icons.gd")
 
 
 func _ready() -> void:
@@ -13,7 +14,7 @@ func _build() -> void:
 		content.add_child(P.label("กระเป๋าว่างเปล่า", 15))
 		return
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(520, mini(380, 44 * player.inventory.size()))
+	scroll.custom_minimum_size = Vector2(520, mini(400, 46 * player.inventory.size()))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	content.add_child(scroll)
 	var list := VBoxContainer.new()
@@ -27,11 +28,7 @@ func _build() -> void:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 8)
 		list.add_child(r)
-		var dot := ColorRect.new()
-		dot.color = ItemDB.color_of(id)
-		dot.custom_minimum_size = Vector2(14, 14)
-		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		r.add_child(dot)
+		r.add_child(ItemIcons.make(id, 40))
 		var info := VBoxContainer.new()
 		info.add_theme_constant_override("separation", -2)
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -56,8 +53,14 @@ func _build() -> void:
 			r.add_child(b)
 		elif item["type"] == "ore":
 			info.add_child(P.label("แร่ ใช้หลอมหินตี+ ที่ร้านหลอมแร่ (ขายได้ %d)" % ItemDB.sell_price(id), 12, P.TEXT.lightened(0.2)))
+		elif item["type"] == "tool":
+			info.add_child(P.label("ใช้ตกปลาที่ลำธาร", 12, P.TEXT.lightened(0.2)))
+		elif item["type"] == "fish":
+			info.add_child(P.label("ขายได้ %d เหรียญ" % ItemDB.sell_price(id), 12, P.TEXT.lightened(0.2)))
+		elif item["type"] == "amulet":
+			info.add_child(P.label("ใช้ตอนตีบวก เพิ่มโอกาสสำเร็จ +%d%%" % int(round(float(item.get("refine_bonus", 0.0)) * 100.0)), 12, P.TEXT.lightened(0.2)))
 
 
 func _order(id: String) -> int:
-	var order := {"equip": 0, "consumable": 1, "refine": 2, "ore": 3, "soul": 4, "etc": 5}
+	var order := {"equip": 0, "consumable": 1, "tool": 2, "refine": 3, "amulet": 4, "ore": 5, "fish": 6, "soul": 7, "etc": 8}
 	return order.get(ItemDB.info(id)["type"], 9)

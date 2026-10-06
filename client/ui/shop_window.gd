@@ -2,6 +2,7 @@ extends "res://client/ui/game_window.gd"
 ## หน้าต่างร้านค้า: ซื้อของ (ยา หรือของสวมใส่ที่ร้านอาวุธ) ทางซ้าย และขายของทางขวา
 
 const ItemDB = preload("res://shared/data/items.gd")
+const ItemIcons = preload("res://client/ui/item_icons.gd")
 
 var npc := {}
 
@@ -28,11 +29,14 @@ func _build() -> void:
 
 	var stock: Array = npc.get("stock", [])
 	var gear_shop: bool = not stock.is_empty() and ItemDB.ITEMS[stock[0]]["type"] == "equip"
-	buy_col.add_child(P.label("ซื้อของสวมใส่" if gear_shop else "ซื้อยา", 16, P.PINK_DEEP))
+	var has_tool := false
+	for id in stock:
+		has_tool = has_tool or ItemDB.ITEMS[id]["type"] == "tool"
+	buy_col.add_child(P.label("ซื้อของสวมใส่" if gear_shop else ("ซื้อของ" if has_tool else "ซื้อยา"), 16, P.PINK_DEEP))
 	var buy_list: Control = buy_col
 	if gear_shop:
 		var bscroll := ScrollContainer.new()
-		bscroll.custom_minimum_size = Vector2(360, mini(360, 46 * stock.size()))
+		bscroll.custom_minimum_size = Vector2(360, mini(380, 48 * stock.size()))
 		bscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		buy_col.add_child(bscroll)
 		buy_list = VBoxContainer.new()
@@ -46,12 +50,19 @@ func _build() -> void:
 		if item["type"] == "equip":
 			_gear_row(r, id, item)
 			continue
-		r.add_child(icon(item.get("icon", "herb"), 28))
+		r.add_child(ItemIcons.make(id, 38))
 		var info := VBoxContainer.new()
 		info.add_theme_constant_override("separation", -2)
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		r.add_child(info)
 		info.add_child(P.label("%s  (มี %d)" % [item["name"], player.inventory.get(id, 0)], 14))
+		if item["type"] == "tool":
+			info.add_child(P.label("ใช้ตกปลาที่ลำธาร · %d เหรียญ" % item["buy"], 11, P.TEXT.lightened(0.2)))
+			var b := P.button("ซื้อ", P.MINT, 13)
+			b.disabled = player.coins() < item["buy"]
+			b.pressed.connect(func(): player.buy(id, 1))
+			r.add_child(b)
+			continue
 		info.add_child(P.label("%s · %d เหรียญ" % [ItemDB.use_text(id), item["buy"]], 11, P.TEXT.lightened(0.2)))
 		for n in [1, 10]:
 			var b := P.button("x%d" % n, P.MINT, 13)
@@ -81,7 +92,7 @@ func _build() -> void:
 		return
 	ids.sort_custom(func(a, b): return _order(a) < _order(b))
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(380, mini(330, 44 * ids.size()))
+	scroll.custom_minimum_size = Vector2(380, mini(340, 44 * ids.size()))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sell_col.add_child(scroll)
 	var list := VBoxContainer.new()
@@ -92,11 +103,7 @@ func _build() -> void:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 6)
 		list.add_child(r)
-		var dot := ColorRect.new()
-		dot.color = ItemDB.color_of(id)
-		dot.custom_minimum_size = Vector2(12, 12)
-		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		r.add_child(dot)
+		r.add_child(ItemIcons.make(id, 34))
 		var info := VBoxContainer.new()
 		info.add_theme_constant_override("separation", -2)
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -128,7 +135,7 @@ func _column(parent: Control, width: float) -> VBoxContainer:
 
 
 func _order(id: String) -> int:
-	var order := {"etc": 0, "ore": 1, "soul": 2, "equip": 3, "refine": 4, "consumable": 5}
+	var order := {"etc": 0, "fish": 1, "ore": 2, "soul": 3, "equip": 4, "amulet": 5, "refine": 6, "tool": 7, "consumable": 8}
 	return order.get(ItemDB.info(id)["type"], 9)
 
 
@@ -136,11 +143,7 @@ const LINE_NAMES := {"any": "ทุกสาย", "melee": "สายประ�
 
 
 func _gear_row(r: HBoxContainer, id: String, item: Dictionary) -> void:
-	var dot := ColorRect.new()
-	dot.color = ItemDB.color_of(id)
-	dot.custom_minimum_size = Vector2(14, 14)
-	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	r.add_child(dot)
+	r.add_child(ItemIcons.make(id, 38))
 	var info := VBoxContainer.new()
 	info.add_theme_constant_override("separation", -2)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL

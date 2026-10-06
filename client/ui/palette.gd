@@ -193,6 +193,49 @@ static func draw_icon(ci: CanvasItem, kind: String, c: Vector2, s: float) -> voi
 			ci.draw_circle(c, s * 0.36, LEMON)
 			ci.draw_arc(c, s * 0.36, 0, TAU, 24, OUTLINE, 2.0, true)
 			ci.draw_arc(c, s * 0.24, 0, TAU, 20, Color(0.85, 0.6, 0.2), 2.0, true)
+		"fish":
+			# ปลาตัวกลมกับเบ็ด (ปุ่มตกปลา)
+			var body := PackedVector2Array()
+			for i in 24:
+				var t := i * TAU / 24.0
+				body.append(c + Vector2(cos(t) * s * 0.28 - s * 0.04, sin(t) * s * 0.17 + s * 0.06))
+			ci.draw_colored_polygon(body, SKY)
+			ci.draw_polyline(body + PackedVector2Array([body[0]]), OUTLINE, 2.0, true)
+			var tail := PackedVector2Array([c + Vector2(s * 0.2, s * 0.06), c + Vector2(s * 0.42, -s * 0.08), c + Vector2(s * 0.42, s * 0.2)])
+			ci.draw_colored_polygon(tail, PINK)
+			ci.draw_polyline(tail + PackedVector2Array([tail[0]]), OUTLINE, 2.0, true)
+			ci.draw_circle(c + Vector2(-s * 0.16, s * 0.02), s * 0.04, OUTLINE)
+			ci.draw_line(c + Vector2(-s * 0.3, -s * 0.42), c + Vector2(-s * 0.3, -s * 0.06), OUTLINE, 1.5, true)
+			ci.draw_arc(c + Vector2(-s * 0.36, -s * 0.06), s * 0.06, 0, PI, 8, OUTLINE, 1.5, true)
+		"party":
+			# สองคนชิดกัน + หัวใจ
+			for k in 2:
+				var off := Vector2((k - 0.5) * s * 0.36, 0)
+				var col: Color = PINK if k == 0 else SKY
+				ci.draw_circle(c + off + Vector2(0, -s * 0.12), s * 0.15, col)
+				ci.draw_arc(c + off + Vector2(0, -s * 0.12), s * 0.15, 0, TAU, 20, OUTLINE, 2.0, true)
+				ci.draw_arc(c + off + Vector2(0, s * 0.36), s * 0.24, PI * 1.15, PI * 1.85, 16, OUTLINE, 3.0, true)
+			ci.draw_circle(c + Vector2(-s * 0.04, -s * 0.38), s * 0.07, PINK_DEEP)
+			ci.draw_circle(c + Vector2(s * 0.04, -s * 0.38), s * 0.07, PINK_DEEP)
+			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.11, -s * 0.35), c + Vector2(s * 0.11, -s * 0.35), c + Vector2(0, -s * 0.24)]), PINK_DEEP)
+		"chat":
+			var st2 := StyleBoxFlat.new()
+			st2.bg_color = Color.WHITE
+			st2.border_color = OUTLINE
+			st2.set_border_width_all(2)
+			st2.set_corner_radius_all(int(s * 0.18))
+			ci.draw_style_box(st2, Rect2(c + Vector2(-s * 0.36, -s * 0.3), Vector2(s * 0.72, s * 0.48)))
+			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.18, s * 0.16), c + Vector2(-s * 0.04, s * 0.16), c + Vector2(-s * 0.24, s * 0.36)]), OUTLINE)
+			for k in 3:
+				ci.draw_circle(c + Vector2((k - 1) * s * 0.18, -s * 0.06), s * 0.05, PINK_DEEP)
+		"music":
+			ci.draw_line(c + Vector2(-s * 0.12, s * 0.22), c + Vector2(-s * 0.12, -s * 0.3), OUTLINE, 3.0, true)
+			ci.draw_line(c + Vector2(s * 0.26, s * 0.12), c + Vector2(s * 0.26, -s * 0.38), OUTLINE, 3.0, true)
+			ci.draw_line(c + Vector2(-s * 0.12, -s * 0.3), c + Vector2(s * 0.26, -s * 0.38), OUTLINE, 5.0, true)
+			ci.draw_circle(c + Vector2(-s * 0.22, s * 0.24), s * 0.12, PINK)
+			ci.draw_arc(c + Vector2(-s * 0.22, s * 0.24), s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
+			ci.draw_circle(c + Vector2(s * 0.16, s * 0.14), s * 0.12, SKY)
+			ci.draw_arc(c + Vector2(s * 0.16, s * 0.14), s * 0.12, 0, TAU, 16, OUTLINE, 2.0, true)
 		_:
 			pass
 
@@ -234,3 +277,25 @@ static func label(text: String, font_size: int = 15, color: Color = TEXT) -> Lab
 	l.add_theme_font_size_override("font_size", font_size)
 	l.add_theme_color_override("font_color", color)
 	return l
+
+
+## ช่องพิมพ์ข้อความสีพาสเทล (ชื่อ ไอดี รหัส แชท)
+static func line_edit(placeholder: String = "", font_size: int = 15) -> LineEdit:
+	var e := LineEdit.new()
+	e.placeholder_text = placeholder
+	e.add_theme_font_size_override("font_size", font_size)
+	e.add_theme_color_override("font_color", TEXT)
+	e.add_theme_color_override("font_placeholder_color", Color(TEXT, 0.45))
+	e.add_theme_color_override("caret_color", PINK_DEEP)
+	for state in ["normal", "focus", "read_only"]:
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(1, 1, 1, 0.95)
+		st.border_color = PINK_DEEP if state == "focus" else LAVENDER
+		st.set_border_width_all(2)
+		st.set_corner_radius_all(10)
+		st.content_margin_left = 10
+		st.content_margin_right = 10
+		st.content_margin_top = 4
+		st.content_margin_bottom = 4
+		e.add_theme_stylebox_override(state, st)
+	return e

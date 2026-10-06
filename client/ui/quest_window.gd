@@ -2,6 +2,8 @@ extends "res://client/ui/game_window.gd"
 ## หน้าต่างเควส: คุยกับ NPC เพื่อรับ/ส่งเควส หรือเปิดจากเมนูเพื่อดูเควสที่กำลังทำ
 
 const Quests = preload("res://shared/data/quests.gd")
+const ItemIcons = preload("res://client/ui/item_icons.gd")
+const ItemDB = preload("res://shared/data/items.gd")
 
 var npc := {}  ## ว่าง = สมุดเควส (ดูเควสที่รับไว้ทั้งหมด)
 
@@ -35,7 +37,7 @@ func _build() -> void:
 					continue
 			ids.append(id)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(580, mini(420, 96 * ids.size()))
+	scroll.custom_minimum_size = Vector2(580, mini(440, 116 * ids.size()))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	content.add_child(scroll)
 	var list := VBoxContainer.new()
@@ -86,10 +88,22 @@ func _quest_card(list: VBoxContainer, id: String) -> void:
 		goal = need
 	info.add_child(P.label("เป้าหมาย: " + goal, 13, P.PINK_DEEP if st == "ready" else P.TEXT))
 	info.add_child(P.label("รางวัล: " + Quests.reward_text(id, player.class_info()["line"]), 12, Color(0.7, 0.5, 0.15)))
+	var reward_items: Dictionary = Quests.reward(id, player.class_info()["line"]).get("items", {})
+	if not reward_items.is_empty():
+		var icons := HBoxContainer.new()
+		icons.add_theme_constant_override("separation", 4)
+		info.add_child(icons)
+		for item_id in reward_items:
+			var ic := ItemIcons.make(item_id, 28)
+			ic.tooltip_text = ItemDB.display_name(item_id)
+			ic.mouse_filter = Control.MOUSE_FILTER_PASS
+			icons.add_child(ic)
+			icons.add_child(P.label("x%d" % reward_items[item_id], 12, Color(0.7, 0.5, 0.15)))
 	match st:
 		"available":
 			var b := P.button("รับเควส", P.MINT, 15)
 			b.pressed.connect(func(): player.accept_quest(id))
+			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			h.add_child(b)
 		"ready":
 			var b := P.button("ส่งเควส", P.LEMON, 15)
@@ -98,8 +112,10 @@ func _quest_card(list: VBoxContainer, id: String) -> void:
 			if npc.is_empty():
 				b.text = "กลับไปส่ง"
 				b.disabled = true
+			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			h.add_child(b)
 		"active":
 			var b := P.button("ยกเลิก", P.PINK, 13)
 			b.pressed.connect(func(): player.abandon_quest(id))
+			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			h.add_child(b)
