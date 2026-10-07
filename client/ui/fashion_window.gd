@@ -4,6 +4,7 @@ extends "res://client/ui/game_window.gd"
 const ItemDB = preload("res://shared/data/items.gd")
 const ItemIcons = preload("res://client/ui/item_icons.gd")
 const Fashion = preload("res://shared/data/fashion.gd")
+const Quests = preload("res://shared/data/quests.gd")
 
 var selected := {}  ## แฟชั่นที่เลือกตีบวก {"key", "slot"}
 var last_result := ""
@@ -100,10 +101,8 @@ func _build_pet(col: VBoxContainer) -> void:
 	var need: int = Fashion.EVOLVE_LEVEL[d["stage"]]
 	var fee: int = Fashion.EVOLVE_FEE[d["stage"]]
 	col.add_child(P.label("ร่างต่อไป: %s · ต้อง Lv.%d · ค่าพัฒนา %d เหรียญ" % [Fashion.pet_name(sp, d["stage"] + 1), need, fee], 12, Color(0.3, 0.55, 0.4) if d["lv"] >= need else P.TEXT))
-	var evo := P.button("พัฒนาร่าง", P.MINT, 15)
-	evo.disabled = not player.can_evolve_pet()
-	evo.pressed.connect(func(): player.evolve_pet())
-	col.add_child(evo)
+	var trial := "ผ่านบททดสอบแล้ว" if player.pet_trial_passed() else "ต้องผ่านบททดสอบ \"%s\"" % Quests.QUESTS[player.pet_trial_quest()]["name"]
+	col.add_child(P.label("%s · พัฒนาร่างได้ที่ครูฝึกสัตว์ หมู่บ้านริมคลอง" % trial, 12, P.PINK_DEEP))
 
 
 func _build_bag(col: VBoxContainer) -> void:

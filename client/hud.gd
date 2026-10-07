@@ -17,6 +17,7 @@ const CharWindow = preload("res://client/ui/char_window.gd")
 const SkillWindow = preload("res://client/ui/skill_window.gd")
 const BagWindow = preload("res://client/ui/bag_window.gd")
 const ClassWindow = preload("res://client/ui/class_window.gd")
+const PetTrainerWindow = preload("res://client/ui/pet_trainer_window.gd")
 const ShopWindow = preload("res://client/ui/shop_window.gd")
 const QuestWindow = preload("res://client/ui/quest_window.gd")
 const AutoWindow = preload("res://client/ui/auto_window.gd")
@@ -312,7 +313,7 @@ func _ready() -> void:
 	var kinds := {"char": CharWindow, "skills": SkillWindow, "bag": BagWindow, "class": ClassWindow,
 		"shop": ShopWindow, "quest": QuestWindow, "questlog": QuestWindow, "auto": AutoWindow,
 		"warp": WarpWindow, "smith": SmithWindow, "refine": RefineWindow, "party": PartyWindow, "settings": SettingsWindow,
-		"fashion": FashionWindow, "ccshop": CcShopWindow}
+		"fashion": FashionWindow, "ccshop": CcShopWindow, "pettrainer": PetTrainerWindow}
 	for key in kinds:
 		var w: Control = kinds[key].new()
 		add_child(w)
@@ -321,7 +322,7 @@ func _ready() -> void:
 	windows["auto"].toggle_requested.connect(func(): action.emit("auto"))
 	windows["warp"].warp_requested.connect(func(id: String): action.emit("warp:" + id))
 	windows["smith"].open_refine_requested.connect(func(): open_refine(""))
-	for key in ["quest", "questlog"]:
+	for key in ["quest", "questlog", "pettrainer"]:
 		windows[key].guide_requested.connect(func(id: String): quest_clicked.emit(id))
 	windows["party"].request.connect(func(what: String): party_request.emit(what))
 	windows["settings"].logout_requested.connect(func(): action.emit("logout"))
@@ -449,7 +450,7 @@ func _input(event: InputEvent) -> void:
 ## เปิดหน้าต่างของ NPC ที่คุยด้วย (ร้านค้า หรือรายการเควส)
 func open_npc(npc: Dictionary) -> void:
 	close_windows()
-	var w: Control = windows[{"shop": "shop", "class": "class", "warp": "warp", "smith": "smith"}.get(npc["role"], "quest")]
+	var w: Control = windows[{"shop": "shop", "class": "class", "warp": "warp", "smith": "smith", "pet": "pettrainer"}.get(npc["role"], "quest")]
 	w.open_for(npc)
 
 

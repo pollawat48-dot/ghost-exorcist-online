@@ -8,6 +8,7 @@ extends RefCounted
 
 const GhostDB = preload("res://shared/data/ghosts.gd")
 const ItemDB = preload("res://shared/data/items.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 const QUESTS := {
 	# ---- ครูใหญ่สำนัก: บททดสอบเปลี่ยนอาชีพ (ส่งแล้วจ่ายค่าครูเพื่อเลื่อนขั้นได้) ----
@@ -28,6 +29,21 @@ const QUESTS := {
 		"min_level": 100, "requires": "q_trial_2", "repeatable": false, "trial": 3,
 		"desc": "บททดสอบสุดท้าย ปราบพญาเปรตแห่งป่าช้าวัดร้าง แล้วกลับมารับตำแหน่งขั้นสูงสุด",
 		"reward": {"exp": 30000, "coins": 0, "items": {}},
+	},
+	# ---- ครูฝึกสัตว์ (หมู่บ้านริมคลอง): บททดสอบก่อนพัฒนาร่างสัตว์เลี้ยง ----
+	# pet_stage = ร่างที่จะพัฒนาไป รับได้เมื่อสัตว์เลี้ยงที่ออกมาอยู่ร่างก่อนหน้าและถึงเลเวล (Fashion.EVOLVE_LEVEL)
+	# ส่งแล้วสัตว์เลี้ยงตัวนั้นได้สิทธิ์พัฒนาร่าง (pets[species]["trial"]) รับซ้ำได้สำหรับสัตว์เลี้ยงตัวอื่น
+	"q_pet_1": {
+		"giver": "khru_fuek_sat", "name": "บททดสอบคู่หู: ล่าผีตายโหง", "type": "kill", "target": "phi_tai_hong", "count": 20,
+		"min_level": 1, "requires": "", "repeatable": true, "pet_stage": 1,
+		"desc": "สัตว์เลี้ยงจะพัฒนาร่างได้ต้องผ่านศึกจริงกับเจ้าของ พามันไปปราบผีตายโหงที่กรุงเก่าร้าง 20 ตน",
+		"reward": {"exp": 3000, "coins": 0, "items": {}},
+	},
+	"q_pet_2": {
+		"giver": "khru_fuek_sat", "name": "บททดสอบเทพอสูร: ผีกะ", "type": "kill", "target": "phi_ka", "count": 25,
+		"min_level": 1, "requires": "", "repeatable": true, "pet_stage": 2,
+		"desc": "ร่างสุดท้ายต้องใจกล้ากว่าผีทั้งปวง พาสัตว์เลี้ยงไปปราบผีกะที่ดอยผีปันน้ำ 25 ตน แล้วกลับมาหาครู",
+		"reward": {"exp": 15000, "coins": 0, "items": {}},
 	},
 	# ---- หลวงตาเมือง (หมู่บ้านริมคลอง) ----
 	"q_krasue": {
@@ -236,6 +252,8 @@ static func for_giver(npc_id: String) -> Array[String]:
 static func status(state: Dictionary, inventory: Dictionary, id: String) -> String:
 	var q: Dictionary = QUESTS[id]
 	if state["quests"].has(id):
+		if q.has("pet_stage") and pet_lock(state, id) != "":
+			return "active"  # ทำครบแล้วแต่ต้องพาสัตว์เลี้ยงตัวที่จะพัฒนามาส่งด้วย
 		return "ready" if progress(state, inventory, id) >= q["count"] else "active"
 	if state["quests_done"].has(id) and not q["repeatable"]:
 		return "done"
@@ -243,7 +261,39 @@ static func status(state: Dictionary, inventory: Dictionary, id: String) -> Stri
 		return "locked"
 	if q["requires"] != "" and not state["quests_done"].has(q["requires"]):
 		return "locked"
+	if q.has("pet_stage") and pet_lock(state, id) != "":
+		return "locked"
 	return "available"
+
+
+## เควสพัฒนาร่าง: ต้องมีสัตว์เลี้ยงออกมา อยู่ร่างก่อนหน้า ถึงเลเวล และยังไม่เคยผ่านบททดสอบนี้
+## คืนเหตุผลที่ยังรับ/ส่งไม่ได้ ("" = ได้)
+static func pet_lock(state: Dictionary, id: String) -> String:
+	var stage: int = QUESTS[id]["pet_stage"]
+	var key: String = state.get("fashion", {}).get("pet", "")
+	var sp := Fashion.pet_of(key)
+	if sp == "":
+		return "ต้องพาสัตว์เลี้ยงออกมาด้วย"
+	var d := Fashion.pet_data(state, sp)
+	if int(d.get("trial", 0)) >= stage and d["stage"] == stage - 1:
+		return "ผ่านแล้ว พัฒนาร่างได้เลย"
+	if d["stage"] != stage - 1:
+		return "สำหรับสัตว์เลี้ยงร่างที่ %d Lv.%d ขึ้นไป" % [stage, Fashion.EVOLVE_LEVEL[stage - 1]]
+	if d["lv"] < Fashion.EVOLVE_LEVEL[stage - 1]:
+		return "สัตว์เลี้ยงต้อง Lv.%d" % Fashion.EVOLVE_LEVEL[stage - 1]
+	return ""
+
+
+## ข้อความบอกว่าทำไมเควสยังล็อก
+static func lock_text(state: Dictionary, id: String) -> String:
+	var q: Dictionary = QUESTS[id]
+	if state["level"] < q["min_level"]:
+		return "ต้องเลเวล %d" % q["min_level"]
+	if q["requires"] != "" and not state["quests_done"].has(q["requires"]):
+		return "ต้องทำ \"%s\" ก่อน" % QUESTS[q["requires"]]["name"]
+	if q.has("pet_stage"):
+		return pet_lock(state, id)
+	return ""
 
 
 static func progress(state: Dictionary, inventory: Dictionary, id: String) -> int:
@@ -329,6 +379,8 @@ static func reward_text(id: String, line: String = "any") -> String:
 		parts.append("%d เหรียญ" % r["coins"])
 	if QUESTS[id].has("trial"):
 		parts.append("สิทธิ์เปลี่ยนอาชีพขั้น %d" % QUESTS[id]["trial"])
+	if QUESTS[id].has("pet_stage"):
+		parts.append("สิทธิ์พัฒนาสัตว์เลี้ยงเป็นร่างที่ %d" % (QUESTS[id]["pet_stage"] + 1))
 	for item in r["items"]:
 		parts.append("%s x%d" % [ItemDB.ITEMS[item]["name"], r["items"][item]])
 	return " · ".join(parts)

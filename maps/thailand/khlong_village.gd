@@ -71,6 +71,8 @@ func _init() -> void:
 		{"id": "lung_lek", "name": "ลุงเหล็ก ร้านอาวุธ", "role": "shop", "sign": "ร้านอาวุธ", "pos": Vector2(940, 1075),
 			"look": {"robe": Color(0.72, 0.62, 0.55), "sash": Color(0.95, 0.6, 0.4), "hat": "farmer"},
 			"stock": ["maipai_staff", "suea_yant", "pha_khat_hua", "saisin", "mitmo", "khan_thanu", "khamphi_yant", "suea_kraphan", "mongkhon", "takrut", "phra_khrueang"]},
+		{"id": "khru_fuek_sat", "name": "ครูฝึกสัตว์ (พัฒนาร่าง)", "role": "pet", "pos": Vector2(580, 1060),
+			"look": {"robe": Color(0.6, 0.85, 0.65), "sash": Color(1.0, 0.75, 0.4), "hat": "farmer"}},
 		{"id": "chang_lom", "name": "ช่างหลอมแร่", "role": "smith", "pos": Vector2(1060, 925),
 			"look": {"robe": Color(0.55, 0.52, 0.6), "sash": Color(1.0, 0.6, 0.35), "hat": "headband"}},
 	]

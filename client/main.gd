@@ -602,7 +602,7 @@ func _refresh_npc_markers() -> void:
 		if n.role() in ["shop", "warp", "smith"]:
 			n.set_marker(n.role())
 			continue
-		var mark := "ready" if n.role() == "class" and player.can_change_class() else ""
+		var mark := "ready" if (n.role() == "class" and player.can_change_class()) or (n.role() == "pet" and player.can_evolve_pet()) else ""
 		for id in Quests.for_giver(n.npc_id()):
 			if mark == "ready":
 				break
@@ -612,8 +612,8 @@ func _refresh_npc_markers() -> void:
 				break
 			if st == "available":
 				mark = "available"
-		if mark == "" and n.role() == "class":
-			mark = "class"
+		if mark == "" and n.role() in ["class", "pet"]:
+			mark = n.role()
 		n.set_marker(mark)
 
 

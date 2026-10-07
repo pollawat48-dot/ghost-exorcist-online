@@ -195,6 +195,18 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 		for id in ["f_hu_maeo", "f_pik_phisuea", "pet_krathai"]:
 			player.inventory[id] = 1
 		main.hud.toggle_window("fashion")
+	elif mode == "pettrial":
+		# ผ่านบททดสอบครูฝึกสัตว์ของร่างถัดไปแล้ว (ใช้คู่กับ pet:... และ pettrainer)
+		var qid: String = player.pet_trial_quest()
+		player.accept_quest(qid)
+		for i in 40:
+			player.reward_kill(load("res://shared/data/quests.gd").QUESTS[qid]["target"], 0, 0)
+		player.complete_quest(qid)
+		player.state["coins"] = 5000
+	elif mode == "pettrainer":
+		for n in main.npcs.get_children():
+			if n.npc_id() == "khru_fuek_sat":
+				main.hud.open_npc(n.data)
 	elif mode == "ccshop":
 		player.state["cc"] = 340
 		player.rng.seed = 21

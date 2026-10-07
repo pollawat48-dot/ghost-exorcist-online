@@ -342,7 +342,7 @@ func _test_world() -> void:
 	var hud: CanvasLayer = main.hud
 
 	# ---- ร้านค้า ----
-	check(main.npcs.get_child_count() == 6, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ และช่างหลอมแร่")
+	check(main.npcs.get_child_count() == 7, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ ช่างหลอมแร่ และครูฝึกสัตว์")
 	for n in main.npcs.get_children():
 		if n.role() == "class":
 			player.pos = n.pos + Vector2(0, 40)
@@ -837,9 +837,43 @@ func _test_fashion_pets() -> void:
 	d["lv"] = 29
 	player.state["coins"] = 100000
 	check(not player.can_evolve_pet() and not player.evolve_pet(), "เลเวลไม่ถึงพัฒนาร่างไม่ได้")
+	check(player.quest_status("q_pet_1") == "locked" and Quests.pet_lock(player.state, "q_pet_1").contains("Lv.30"), "บททดสอบครูฝึกสัตว์ล็อกจนสัตว์เลี้ยงถึง Lv.30")
+	check(player.quest_status("q_pet_2") == "locked", "บททดสอบร่าง 3 ยังรับไม่ได้ตอนอยู่ร่างแรก")
 	d["lv"] = 30
+	check(not player.can_evolve_pet() and not player.evolve_pet() and d["stage"] == 0, "ถึงเลเวลแล้วแต่ยังไม่ผ่านบททดสอบ พัฒนาร่างไม่ได้")
+	# ---- NPC ครูฝึกสัตว์ ในหมู่บ้านริมคลอง ----
+	if main.map.map_id != "khlong_village":
+		main.load_map("khlong_village")
+		await process_frame
+	var trainer: Node3D = null
+	for n in main.npcs.get_children():
+		if n.npc_id() == "khru_fuek_sat":
+			trainer = n
+	check(trainer != null and trainer.role() == "pet" and main.map.is_walkable(trainer.pos), "มี NPC ครูฝึกสัตว์ในหมู่บ้านริมคลอง (ยืนบนพื้นที่เดินได้)")
+	main._refresh_npc_markers()
+	check(trainer != null and trainer.marker_state == "available", "ครูฝึกสัตว์มีเครื่องหมาย ! เมื่อสัตว์เลี้ยงถึงเลเวล")
+	main.hud.open_npc(trainer.data)
+	check(main.hud.windows["pettrainer"].visible, "คุยกับครูฝึกสัตว์เปิดหน้าต่างพัฒนาร่าง")
+	check(player.accept_quest("q_pet_1"), "รับบททดสอบพัฒนาร่าง 1")
+	for i in Quests.QUESTS["q_pet_1"]["count"]:
+		player.reward_kill(Quests.QUESTS["q_pet_1"]["target"], 0, 0)
+	check(player.quest_status("q_pet_1") == "ready" and player.complete_quest("q_pet_1"), "ปราบครบแล้วส่งบททดสอบได้")
+	check(player.pet_trial_passed() and player.can_evolve_pet(), "ผ่านบททดสอบแล้วพัฒนาร่างได้")
+	main._refresh_npc_markers()
+	check(trainer.marker_state == "ready", "ครูฝึกสัตว์ขึ้น ? เมื่อพัฒนาร่างได้")
 	check(player.evolve_pet() and d["stage"] == 1 and player.pet.atk() > Fashion.pet_atk("maa", 30, 0), "Lv.30 พัฒนาเป็น %s" % Fashion.pet_name("maa", 1))
+	check(player.quest_status("q_pet_1") == "locked", "บททดสอบร่าง 2 ใช้ซ้ำกับตัวเดิมไม่ได้")
+	main.hud.windows["pettrainer"].refresh()
+	main.hud.close_windows()
 	d["lv"] = 60
+	check(not player.evolve_pet() and player.quest_status("q_pet_2") == "available", "ร่าง 3 ต้องทำบททดสอบที่ 2 ก่อน")
+	player.accept_quest("q_pet_2")
+	for i in Quests.QUESTS["q_pet_2"]["count"]:
+		player.reward_kill(Quests.QUESTS["q_pet_2"]["target"], 0, 0)
+	player.remove_fashion("pet")
+	check(player.quest_status("q_pet_2") == "active", "ต้องพาสัตว์เลี้ยงตัวที่จะพัฒนามาส่งบททดสอบ")
+	player.wear_fashion("pet_maa")
+	check(player.complete_quest("q_pet_2"), "พาสัตว์เลี้ยงมาแล้วส่งบททดสอบที่ 2 ได้")
 	check(player.evolve_pet() and d["stage"] == 2 and not player.evolve_pet(), "Lv.60 พัฒนาเป็น %s (สูงสุด 2 ขั้น)" % Fashion.pet_name("maa", 2))
 	player.remove_fashion("pet")
 	await process_frame

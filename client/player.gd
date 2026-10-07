@@ -806,6 +806,9 @@ func complete_quest(id: String) -> bool:
 			_remove_item(q["target"])
 	state["quests"].erase(id)
 	state["quests_done"][id] = state["quests_done"].get(id, 0) + 1
+	if q.has("pet_stage"):
+		# ผ่านบททดสอบครูฝึกสัตว์: สัตว์เลี้ยงตัวที่ออกมาได้สิทธิ์พัฒนาร่าง
+		Fashion.pet_data(state, pet_species())["trial"] = q["pet_stage"]
 	var r := Quests.reward(id, class_info()["line"])
 	state["coins"] += r["coins"]
 	message.emit("ส่งเควส %s สำเร็จ! +%d เหรียญ" % [q["name"], r["coins"]])
@@ -1231,7 +1234,29 @@ func can_evolve_pet() -> bool:
 	if sp == "":
 		return false
 	var d := Fashion.pet_data(state, sp)
-	return d["stage"] < 2 and d["lv"] >= Fashion.EVOLVE_LEVEL[d["stage"]] and state["coins"] >= Fashion.EVOLVE_FEE[d["stage"]]
+	return d["stage"] < 2 and d["lv"] >= Fashion.EVOLVE_LEVEL[d["stage"]] and pet_trial_passed() \
+		and state["coins"] >= Fashion.EVOLVE_FEE[d["stage"]]
+
+
+## สัตว์เลี้ยงที่ออกมาผ่านบททดสอบของครูฝึกสัตว์สำหรับร่างถัดไปแล้วหรือยัง
+func pet_trial_passed() -> bool:
+	var sp := pet_species()
+	if sp == "":
+		return false
+	var d := Fashion.pet_data(state, sp)
+	return int(d.get("trial", 0)) >= d["stage"] + 1
+
+
+## id เควสบททดสอบของครูฝึกสัตว์สำหรับร่างถัดไปของสัตว์เลี้ยงที่ออกมา ("" = ไม่มี)
+func pet_trial_quest() -> String:
+	var sp := pet_species()
+	if sp == "":
+		return ""
+	var stage: int = Fashion.pet_data(state, sp)["stage"] + 1
+	for id in Quests.for_giver("khru_fuek_sat"):
+		if Quests.QUESTS[id]["pet_stage"] == stage:
+			return id
+	return ""
 
 
 ## พัฒนาร่างสัตว์เลี้ยงที่ออกมาอยู่ (ได้อีก 2 ขั้น) ต้องถึงเลเวลและจ่ายเหรียญ
@@ -1247,6 +1272,9 @@ func evolve_pet() -> bool:
 	var fee: int = Fashion.EVOLVE_FEE[d["stage"]]
 	if d["lv"] < need:
 		message.emit("สัตว์เลี้ยงต้องถึง Lv.%d ก่อนพัฒนาร่าง" % need)
+		return false
+	if not pet_trial_passed():
+		message.emit("ต้องผ่านบททดสอบของครูฝึกสัตว์ (หมู่บ้านริมคลอง) ก่อน")
 		return false
 	if state["coins"] < fee:
 		message.emit("เหรียญไม่พอ (ค่าพัฒนาร่าง %d)" % fee)
