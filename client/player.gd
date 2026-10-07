@@ -14,6 +14,7 @@ const Crafting = preload("res://shared/data/crafting.gd")
 const World = preload("res://shared/data/world.gd")
 const Fishing = preload("res://shared/data/fishing.gd")
 const DamageText = preload("res://client/damage_text.gd")
+const BuffAura = preload("res://client/buff_aura.gd")
 const Effect = preload("res://client/effect.gd")
 const Avatar = preload("res://client/avatar.gd")
 const Fashion = preload("res://shared/data/fashion.gd")
@@ -80,6 +81,8 @@ var mine_timer := 0.0
 var regen_timer := 0.0
 var swing := 0.0
 var levelup_fx := 0.0
+var buff_aura: Node3D  ## ออร่ารอบตัวตอนติดบัฟ
+var _swing_side := 1.0
 var flash := 0.0
 var walk_t := 0.0
 var rng := RandomNumberGenerator.new()
@@ -133,6 +136,8 @@ func _build_model() -> void:
 	if avatar == null:
 		avatar = Avatar.new()
 		add_child(avatar)
+		buff_aura = BuffAura.new()
+		add_child(buff_aura)
 	avatar.build(state["class"], look, look_items(), player_name)
 	model = avatar.model
 	body = avatar.body
@@ -164,9 +169,21 @@ func _sync(delta: float) -> void:
 	if avatar.fishing != fishing:
 		avatar.set_fishing(fishing)
 	avatar.dead = hp <= 0
+	buff_aura.show_buffs(active_buff_fx() if hp > 0 else [])
 	avatar.animate(delta, move.length() > 0.001, facing, swing, flash > 0.0, levelup_fx)
 	if fishing and avatar.bobber != null:
 		avatar.bobber.position.y = sin(fish_timer * 3.0) * 0.04 - (0.12 if fish_timer > fish_time() - 0.6 else 0.0)
+
+
+## บัฟที่ติดอยู่ (ไว้แสดงออร่ารอบตัว) อาคมคงกระพันนับเป็น "guard"
+func active_buff_fx() -> Array:
+	var out := []
+	if guard_timer > 0.0:
+		out.append("guard")
+	for e in BUFF_EFFECTS:
+		if buffs.has(e):
+			out.append(e)
+	return out
 
 
 # ---------- คำสั่งจากผู้เล่น ----------
@@ -261,19 +278,42 @@ func _basic_attack(ghost: Node3D) -> void:
 	var kind: String = stats["attack"]
 	sfx.emit({"ranged": "arrow", "magic": "magic"}.get(kind, "swing"))
 	var stat := "matk" if kind == "magic" else "atk"
-	_hit(ghost, stat, 1.0, "neutral")
-	if kind == "ranged":
-		Effect.shot(get_parent(), position + Vector3(0, 0.8, 0), ghost.global_position + Vector3(0, 1.2, 0), "arrow", SHOT_COLORS["neutral"])
-	elif kind == "magic":
-		Effect.shot(get_parent(), position + Vector3(0, 1.0, 0), ghost.global_position + Vector3(0, 1.2, 0), "orb", Color(0.85, 0.6, 1.0))
+	var crit := _hit(ghost, stat, 1.0, "neutral")
+	var parent := get_parent()
+	var at: Vector3 = ghost.global_position + Vector3(0, 1.1, 0)
+	match kind:
+		"ranged":
+			Effect.shot(parent, position + Vector3(0, 0.9, 0), at, "arrow", weapon_fx_color(Color(1.0, 0.9, 0.6)), crit)
+		"magic":
+			Effect.shot(parent, position + Vector3(0, 1.1, 0), at, "orb", weapon_fx_color(Color(0.85, 0.6, 1.0)), crit)
+		_:
+			# ฟันเป็นเสี้ยวพระจันทร์ผ่านตัวผี สลับทิศฟันซ้าย/ขวา
+			var c := weapon_fx_color(Color(1.0, 0.95, 0.8))
+			_swing_side = -_swing_side
+			Effect.slash(parent, position + Vector3(0, 1.0, 0), _yaw_to(ghost.pos), c, 1.25 if crit else 1.05, _swing_side * rng.randf_range(0.25, 0.6))
+			Effect.impact(parent, at, c, 1.0, crit)
+
+
+## สีเอฟเฟกต์ตามอาวุธ: ตีบวก +4 ขึ้นไปใช้สีออร่าของขั้นตีบวก
+func weapon_fx_color(base: Color) -> Color:
+	var key: String = state["equipment"].get("weapon", "")
+	var lv := ItemDB.refine_of(key) if key != "" else 0
+	return Avatar.refine_color(lv) if lv >= 4 else base
+
+
+## มุมหันจากตัวผู้เล่นไปจุดหมาย (ใช้หมุนรอยฟัน)
+func _yaw_to(target_pos: Vector2) -> float:
+	var d := target_pos - pos
+	return atan2(-d.x, -d.y)
 
 
 ## ดาเมจใส่ผีหนึ่งตัว มีโอกาสคริติคอลตาม LUK
-func _hit(ghost: Node3D, stat: String, power: float, element: String) -> void:
+func _hit(ghost: Node3D, stat: String, power: float, element: String) -> bool:
 	var crit: bool = rng.randf() < stats["crit"]
 	var dmg := Combat.damage(stats[stat], ghost.data["def"], element, ghost.data["element"], rng, power * (1.5 if crit else 1.0))
 	ghost.take_damage(dmg, self, crit)
 	sfx.emit("crit" if crit else "hit")
+	return crit
 
 
 func _walk_dir(step: Vector2) -> void:
@@ -430,50 +470,133 @@ func use_skill(id: String, target: Node3D = null) -> bool:
 	var power := Skills.power(id, lv)
 	var color: Color = SHOT_COLORS.get(sk["element"], Color.WHITE)
 	sfx.emit({"buff": "buff", "party_buff": "buff", "heal": "heal", "party_heal": "heal"}.get(kind, {"fire": "fire", "holy": "holy"}.get(sk["element"], "magic")))
+	var parent := get_parent()
+	Effect.cast(parent, position, color, 1.1)
 	match kind:
 		"aoe_self":
 			var r := Skills.radius(id, lv)
 			var hit := _hit_area(pos, r, sk["stat"], power, sk["element"])
-			Effect.ring(get_parent(), position, r / 32.0, color)
+			_fx_aoe_self(sk, r / 32.0, color)
 			message.emit("%s! โดนผี %d ตัว" % [sk["name"], hit])
 		"single":
-			_hit(target, sk["stat"], power, sk["element"])
+			var crit := _hit(target, sk["stat"], power, sk["element"])
 			attack_target = target
-			var shot_kind := "arrow" if stats["attack"] == "ranged" else "orb"
-			if sk["range"] > 60.0:
-				Effect.shot(get_parent(), position + Vector3(0, 0.9, 0), target.global_position + Vector3(0, 1.2, 0), shot_kind, color)
-			Effect.ring(get_parent(), target.global_position, 0.8, color, 0.3)
+			_fx_single(sk, target, color, crit)
 		"aoe_target":
 			var r := Skills.radius(id, lv)
 			var center: Vector2 = target.pos
 			var hit := _hit_area(center, r, sk["stat"], power, sk["element"])
 			attack_target = target
-			Effect.pillar(get_parent(), K.to3d(center), 0.8, color)
-			Effect.ring(get_parent(), K.to3d(center), r / 32.0, color)
+			_fx_aoe_target(sk, K.to3d(center), r / 32.0, color)
 			message.emit("%s! โดนผี %d ตัว" % [sk["name"], hit])
 		"buff":
 			guard_bonus = power
 			guard_timer = sk["duration"]
 			recalc()
-			Effect.ring(get_parent(), position, 1.2, Color(1.0, 0.85, 0.4))
+			_fx_buff(BuffAura.color_of("guard"), 1.2)
 			message.emit("%s! DEF เพิ่ม %d%%" % [sk["name"], int(power * 100)])
 		"heal":
 			var amount := int(stats["matk"] * power)
 			hp = mini(stats["max_hp"], hp + amount)
-			Effect.ring(get_parent(), position, 1.2, Color(0.5, 1.0, 0.6))
-			DamageText.spawn(get_parent(), position + Vector3(0, 2.4, 0), "+%d" % amount, Color(0.4, 1, 0.4))
+			_fx_buff(Color(0.5, 1.0, 0.6), 1.2)
+			DamageText.spawn(parent, position + Vector3(0, 2.4, 0), "+%d" % amount, Color(0.4, 1, 0.4))
 		"party_buff":
 			var duration: float = sk["duration"]
 			apply_buff(sk["effect"], power, duration, sk["name"])
-			Effect.ring(get_parent(), position, Protocol.BUFF_RANGE / 32.0, Color(1.0, 0.85, 0.5), 0.6)
+			_fx_buff(BuffAura.color_of(sk["effect"]), Protocol.BUFF_RANGE / 32.0)
 			party_cast.emit({"t": "buff", "skill": id, "lv": lv, "power": power, "duration": duration, "effect": sk["effect"], "x": pos.x, "y": pos.y})
 		"party_heal":
 			var amount := int(stats["matk"] * power)
 			receive_heal(amount)
-			Effect.ring(get_parent(), position, Protocol.BUFF_RANGE / 32.0, Color(0.5, 1.0, 0.6), 0.6)
+			_fx_buff(Color(0.5, 1.0, 0.6), Protocol.BUFF_RANGE / 32.0)
 			party_cast.emit({"t": "heal", "amount": amount, "x": pos.x, "y": pos.y})
 	changed.emit()
 	return true
+
+
+# ---------- เอฟเฟกต์สกิล (ภาพอย่างเดียว) ----------
+
+## สกิลรอบตัว: ดาบหมุนวน = ใบดาบหมุน, โปรยน้ำมนต์ = หยดน้ำกระจาย
+func _fx_aoe_self(sk: Dictionary, r: float, c: Color) -> void:
+	var parent := get_parent()
+	var ground := Vector3(position.x, 0.05, position.z)
+	if sk["icon"] == "storm":
+		Effect.whirl(parent, position, maxf(1.2, r * 0.7), c.lerp(Color.WHITE, 0.2))
+		Effect.burst(parent, position + Vector3(0, 0.9, 0), c, 26, 6.0, 0.07, 0.6, -3.0)
+	else:
+		Effect.burst(parent, position + Vector3(0, 1.0, 0), c, 34, 5.5, 0.09, 0.9, -9.0, true)
+		Effect.flash(parent, position + Vector3(0, 1.0, 0), c, 1.2, 0.3)
+	Effect.shockwave(parent, ground, r, c, 0.5)
+	Effect.ring(parent, ground, r, c, 0.55)
+	Effect.rune(parent, ground, r * 0.8, c, 0.6)
+
+
+## สกิลเป้าเดียว: ประชิด = ฟันไขว้ + แสงวาบ, ไกล = ลูกธนู/ลูกพลังใหญ่ (ยิงซ้อน 3 ดอก, สกิลแรงมีฟ้าผ่าตาม)
+func _fx_single(sk: Dictionary, g: Node3D, c: Color, crit: bool) -> void:
+	var parent := get_parent()
+	var at: Vector3 = g.global_position + Vector3(0, 1.1, 0)
+	if sk["range"] <= 60.0:
+		var yaw := _yaw_to(g.pos)
+		Effect.slash(parent, position + Vector3(0, 1.0, 0), yaw, c, 1.5, 0.75, 0.32)
+		Effect.slash(parent, position + Vector3(0, 1.0, 0), yaw, Color.WHITE.lerp(c, 0.5), 1.5, -0.75, 0.36)
+		Effect.impact(parent, at, c, 1.8, crit)
+		Effect.shockwave(parent, Vector3(at.x, 0.05, at.z), 1.4, c, 0.35)
+		if sk["element"] == "holy":
+			Effect.pillar(parent, Vector3(at.x, 0, at.z), 0.5, c)
+		return
+	var shot_kind := "arrow" if stats["attack"] == "ranged" else "orb"
+	if sk["icon"] == "arrow":
+		for dy in [0.7, 1.0, 1.3]:
+			Effect.shot(parent, position + Vector3(0, dy, 0), at + Vector3(0, dy - 1.0, 0) * 0.4, shot_kind, c, true)
+	else:
+		Effect.shot(parent, position + Vector3(0, 1.0, 0), at, shot_kind, c, true)
+	if sk["power"] >= 3.0:
+		Effect.fall(parent, Vector3(at.x, 0.05, at.z), "bolt", c, 1.2, 0.2)
+	if sk["element"] == "fire":
+		Effect.explosion(parent, Vector3(at.x, 0.05, at.z), 1.3, c)
+
+
+## สกิลวงกว้างที่เป้า: วงเวทบนพื้น แล้วแต่ละสกิลมีของตกจากฟ้าต่างกัน
+func _fx_aoe_target(sk: Dictionary, center: Vector3, r: float, c: Color) -> void:
+	var parent := get_parent()
+	var ground := Vector3(center.x, 0.05, center.z)
+	Effect.rune(parent, ground, r, c, 1.0)
+	var spots := func(n: int) -> Array:
+		var out := []
+		for i in n:
+			var a := rng.randf() * TAU
+			var d := sqrt(rng.randf()) * r * 0.85
+			out.append(ground + Vector3(cos(a) * d, 0, sin(a) * d))
+		return out
+	if sk["element"] == "fire":
+		Effect.fall(parent, ground, "meteor", c, 1.6, 0.0, 0.35)
+		for p in spots.call(3):
+			Effect.fall(parent, p, "meteor", c, 0.8, rng.randf_range(0.1, 0.35), 0.3)
+	elif sk["icon"] == "star":
+		Effect.fall(parent, ground, "bolt", c, 1.5, 0.15)
+		for p in spots.call(4):
+			Effect.fall(parent, p, "bolt", c, 0.9, 0.2, rng.randf_range(0.15, 0.3))
+		Effect.pillar(parent, Vector3(center.x, 0, center.z), r * 0.4, c)
+		Effect.explosion(parent, ground, r, c)
+	elif sk["icon"] == "storm":
+		for p in spots.call(14):
+			Effect.fall(parent, p, "arrow", c, 1.0, rng.randf_range(0.0, 0.45), 0.22)
+		Effect.shockwave(parent, ground, r, c, 0.7)
+	else:
+		for p in spots.call(16):
+			Effect.fall(parent, p, "drop", c, 1.0, rng.randf_range(0.0, 0.5), 0.3)
+		Effect.pillar(parent, Vector3(center.x, 0, center.z), r * 0.3, c)
+		Effect.shockwave(parent, ground, r, c, 0.7)
+
+
+## บัฟ/ฮีล: เสาแสงสีของบัฟ วงเวทกว้าง ประกายลอยขึ้น
+func _fx_buff(c: Color, r: float) -> void:
+	var parent := get_parent()
+	var ground := Vector3(position.x, 0.05, position.z)
+	Effect.pillar(parent, Vector3(position.x, 0, position.z), 0.9, c)
+	Effect.rune(parent, ground, r, c, 0.9)
+	Effect.ring(parent, ground, r, c, 0.6)
+	Effect.burst(parent, position + Vector3(0, 0.3, 0), c, 26, 3.5, 0.07, 1.0, 2.0, true)
 
 
 # ---------- บัฟปาร์ตี้ ----------
@@ -487,7 +610,8 @@ func apply_buff(effect: String, power: float, duration: float, buff_name: String
 	recalc()
 	if from != "":
 		message.emit("%s ใช้%sให้คุณ (%s)" % [from, buff_name, buff_text(effect)])
-		Effect.ring(get_parent(), position, 1.2, Color(1.0, 0.85, 0.5))
+		Effect.pillar(get_parent(), Vector3(position.x, 0, position.z), 0.8, BuffAura.color_of(effect))
+		Effect.burst(get_parent(), position + Vector3(0, 0.3, 0), BuffAura.color_of(effect), 18, 3.0, 0.07, 0.9, 2.0, true)
 		sfx.emit("buff")
 	changed.emit()
 
@@ -715,6 +839,7 @@ func use_item(item_id: String) -> bool:
 		potion_cd = POTION_COOLDOWN
 		apply_buff(b["effect"], b["power"], b["duration"], item["name"])
 		Effect.ring(get_parent(), position, 1.4, Color(0.95, 0.97, 1.0))
+		Effect.burst(get_parent(), position + Vector3(0, 1.2, 0), Color(0.95, 0.97, 1.0), 22, 3.0, 0.06, 0.8, -6.0, true)
 		sfx.emit("buff")
 		message.emit("โปรย%s! %s" % [item["name"], ItemDB.use_text(item_id)])
 		changed.emit()

@@ -54,6 +54,35 @@ func _shoot() -> void:
 	main.set_process(true)
 	for i in 30:
 		await process_frame
+	# fx:<สกิล|basic>:<วินาทีเกมก่อนถ่าย> ร่ายหลังฉากพร้อมแล้ว จับภาพกลางเอฟเฟกต์
+	for part in mode.split(",", false):
+		if part.begins_with("fx:"):
+			var bits := part.split(":")
+			var g: Node3D = load("res://client/ghost.gd").new()
+			g.setup(bits[3] if bits.size() > 3 else "phi_takiang", player.pos + Vector2(45, -15), player, 999)
+			main.ghosts.add_child(g)
+			g.data = g.data.duplicate()
+			g.data["atk"] = 0
+			g.hp = 999999
+			for i in 3:
+				await process_frame
+			player.sp = 99999
+			# เฟรมตอนถ่ายภาพช้า: ชะลอเวลาเกมให้จับภาพกลางเอฟเฟกต์ได้ตรงจังหวะ
+			# ร่ายรอบแรกเพื่อคอมไพล์ shader ก่อน (เฟรมแรกค้างนานจนเอฟเฟกต์จบไปแล้ว) แล้วค่อยร่ายรอบจริง
+			Engine.time_scale = 0.2
+			for round in 2:
+				if round == 1:
+					await create_timer(1.0).timeout
+				player.sp = 99999
+				g.hp = 999999
+				if bits[1] == "basic":
+					player._basic_attack(g)
+				else:
+					player.state["skills"][bits[1]] = 5
+					player.skill_cd.erase(bits[1])
+					player.use_skill(bits[1], g)
+			player.attack_target = null
+			await create_timer(float(bits[2]) if bits.size() > 2 else 0.2).timeout
 	root.get_texture().get_image().save_png(out)
 	print("saved ", out)
 	quit()
@@ -203,6 +232,11 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 			player.reward_kill(load("res://shared/data/quests.gd").QUESTS[qid]["target"], 0, 0)
 		player.complete_quest(qid)
 		player.state["coins"] = 5000
+	elif mode == "buffs":
+		player.apply_buff("atk", 0.2, 600.0, "ปลุกพลังกล้า")
+		player.apply_buff("speed", 0.2, 600.0, "ลมพัดไว")
+		player.guard_timer = 600.0
+		player.recalc()
 	elif mode == "pettrainer":
 		for n in main.npcs.get_children():
 			if n.npc_id() == "khru_fuek_sat":

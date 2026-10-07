@@ -913,7 +913,65 @@ func _test_fashion_pets() -> void:
 		if c is CPUParticles3D:
 			particles += 1
 	check(player.avatar._weapon_aura != null and player.avatar._sparkles != null and particles == 1 and player.avatar._foot_aura != null, "+10: แสงหุ้ม ประกายวน ละอองแสง และวงออร่าใต้เท้า")
+	await _test_attack_fx(main, player)
 	main.free()
+
+
+## เอฟเฟกต์ตีปกติ สกิลทุกตัว และออร่าบัฟ: สร้างได้ ไม่มี error และหายไปเอง
+func _test_attack_fx(main: Node3D, player: Node3D) -> void:
+	var Effect = load("res://client/effect.gd")
+	var world: Node = player.get_parent()
+	var count_fx := func() -> int:
+		var n := 0
+		for c in world.get_children():
+			if c.get_script() == Effect:
+				n += 1
+		return n
+	for g in main.alive_ghosts():
+		g.free()
+	var g: Node3D = load("res://client/ghost.gd").new()
+	g.setup("phi_takiang", player.pos + Vector2(40, 0), player, 999)
+	main.ghosts.add_child(g)
+	g.data = g.data.duplicate()
+	g.data["atk"] = 0
+	g.hp = 999999
+	var before: int = count_fx.call()
+	for cls in ["nak_rob", "phran", "mo_phi"]:
+		player.state["class"] = cls
+		player.recalc()
+		player._basic_attack(g)
+	check(count_fx.call() > before + 3, "ตีปกติมีเอฟเฟกต์ (ฟัน/ธนู/ลูกพลัง + ประกาย)")
+	var skill_fx := true
+	for id in Skills.SKILLS:
+		player.state["skills"][id] = 1
+		player.skill_cd.erase(id)
+		player.sp = 99999
+		player.hp = player.stats["max_hp"]
+		g.hp = 999999
+		var n0: int = count_fx.call()
+		player.use_skill(id, g)
+		if count_fx.call() < n0 + 3:
+			skill_fx = false
+			print("    สกิล %s มีเอฟเฟกต์น้อย" % id)
+	check(skill_fx, "สกิลทุกตัวมีเอฟเฟกต์หลายชั้น (วงเวท + ของตกจากฟ้า/ฟัน/ระเบิด)")
+	await create_timer(1.8).timeout
+	check(count_fx.call() <= before + 2, "เอฟเฟกต์หายไปเองหลังเล่นจบ (เหลือ %d)" % (count_fx.call() - before))
+	# ---- ออร่าบัฟรอบตัว ----
+	player.buffs.clear()
+	player.guard_timer = 0.0
+	player._sync(0.0)
+	check(player.buff_aura.active.is_empty(), "ไม่มีบัฟไม่มีออร่า")
+	player.apply_buff("atk", 0.2, 30.0, "ทดสอบ")
+	player.guard_timer = 10.0
+	player._sync(0.0)
+	await process_frame
+	check(player.buff_aura.active == ["guard", "atk"] and player.buff_aura.shield != null and player.buff_aura.sparks != null, "ติดบัฟแล้วมีวงเวท ลูกแก้ว ประกาย และโล่อาคมรอบตัว")
+	player.buffs.clear()
+	player.guard_timer = 0.0
+	player._sync(0.0)
+	check(player.buff_aura.active.is_empty(), "บัฟหมดออร่าหายไป")
+	if is_instance_valid(g):
+		g.free()
 
 
 func _test_quest_guide() -> void:
