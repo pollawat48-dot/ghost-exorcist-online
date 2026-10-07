@@ -186,6 +186,20 @@ static func convex_mesh(faces: Array[PackedVector3Array]) -> ArrayMesh:
 	return st.commit()
 
 
+## แคปซูล (ทรงยาวหัวท้ายมน) ใช้ทำแขน ขา ลำตัว: h = ความยาวรวมทั้งหัวท้าย
+static func capsule(parent: Node3D, r: float, h: float, pos: Vector3, material: Variant, rot := Vector3.ZERO, scl := Vector3.ONE, segs: int = 12) -> MeshInstance3D:
+	segs = _smooth(segs)
+	var key := "cap%s|%s|%s" % [r, h, segs]
+	if not _meshes.has(key):
+		var m := CapsuleMesh.new()
+		m.radius = r
+		m.height = maxf(h, r * 2.0)
+		m.radial_segments = segs
+		m.rings = maxi(2, segs / 3)
+		_meshes[key] = m
+	return add(parent, _meshes[key], pos, material, rot, scl)
+
+
 ## แท่งยาวระหว่างจุด a กับ b (ใช้ทำคานเฉียง ขอบหลังคา ราก ฯลฯ)
 static func beam(parent: Node3D, a: Vector3, b: Vector3, thickness: float, material: Variant) -> MeshInstance3D:
 	var mid := (a + b) / 2.0
