@@ -18,10 +18,25 @@ func _shoot() -> void:
 	var player: Node3D = main.player
 	var mode := args[7] if args.size() > 7 else ""
 	for part in mode.split(",", false):
-		if part == "allcaves":
-			player.state["caves"] = load("res://shared/data/world.gd").CAVE_CANDIDATES.duplicate()
-			for id in load("res://shared/data/world.gd").ORDER:
+		if part == "allcaves" or part == "allcaves_cn":
+			var W = load("res://shared/data/world.gd")
+			player.state["caves"] = W.CAVE_CANDIDATES.duplicate()
+			if part == "allcaves_cn":
+				player.state["caves"].append_array(W.CHINA_CAVE_CANDIDATES)
+			for id in W.ORDER:
 				player.state["visited"][id] = true
+		if part == "strong":
+			# ดันเลเวล/คลาสให้สุดก่อนเริ่มล่าผี (ใช้กับแผนที่จีนที่ผีเลเวลสูง)
+			var chain: Array[String] = load("res://shared/data/classes.gd").lineage("khun_phaen")
+			player.gain_exp(50000000)
+			for id in chain.slice(1):
+				player.state["quests_done"][player.class_change_status()["quest"]] = 1
+				player.state["coins"] += player.class_change_status()["fee"]
+				player.change_class(id)
+			for id in player.available_skills():
+				player.state["skills"][id] = 5
+			player.recalc()
+			player.hp = player.stats["max_hp"]
 		if part.begins_with("map:"):
 			main.load_map(part.substr(4))
 	player.pos = Vector2(float(args[1]), float(args[2])) if args.size() > 2 else Vector2(1050, 700)
@@ -237,6 +252,22 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 		player.apply_buff("speed", 0.2, 600.0, "ลมพัดไว")
 		player.guard_timer = 600.0
 		player.recalc()
+	elif mode == "boat":
+		# หน้าต่างไต้ก๋งเรือสำเภา (ผ่านเควสเรือครบแล้ว เลเวลถึงเกณฑ์)
+		var World = load("res://shared/data/world.gd")
+		player.state["level"] = World.BOAT_LEVEL
+		for qid in ["q_boat_1", "q_boat_2", "q_boat_3"]:
+			player.state["quests_done"][qid] = 1
+		player.recalc()
+		for n in main.npcs.get_children():
+			if n.role() == "boat":
+				main.hud.open_npc(n.data)
+	elif mode == "boatnpc":
+		# ยืนข้างไต้ก๋งที่ท่าไม้ริมคลอง
+		for n in main.npcs.get_children():
+			if n.role() == "boat":
+				player.pos = n.pos + Vector2(-20, 90)
+				main.camera_rig.snap()
 	elif mode == "pettrainer":
 		for n in main.npcs.get_children():
 			if n.npc_id() == "khru_fuek_sat":

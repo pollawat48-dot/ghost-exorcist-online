@@ -56,6 +56,7 @@ var bounds := Rect2()
 var spawn_point := Vector2.ZERO
 var ghosts: Node
 var nav: Node3D  ## แผนที่ที่มี find_path()
+var current_map := ""  ## แผนที่ที่ยืนอยู่ (ใช้จำกัดการวาร์ปให้อยู่ในประเทศเดียวกัน)
 
 var stick := Vector2.ZERO  ## ทิศจากจอยบนจอ (มือถือ) หรือคีย์บอร์ด ในหน่วยพื้นราบ ยาวไม่เกิน 1
 var path := PackedVector2Array()
@@ -1158,11 +1159,19 @@ func warp_fee(map_id: String) -> int:
 	return World.MAPS[map_id]["fee"]
 
 
+## ร่างทรงวาร์ปได้แค่ในประเทศเดียวกัน ข้ามประเทศต้องขึ้นเรือสำเภากับนายท้ายเรือ
+func same_country(map_id: String) -> bool:
+	return current_map == "" or World.country_of(map_id) == World.country_of(current_map)
+
+
 func can_warp(map_id: String) -> bool:
-	return state["visited"].has(map_id) and state["coins"] >= warp_fee(map_id)
+	return state["visited"].has(map_id) and state["coins"] >= warp_fee(map_id) and same_country(map_id)
 
 
 func pay_warp(map_id: String) -> bool:
+	if not same_country(map_id):
+		message.emit("ข้าม%sต้องขึ้นเรือสำเภาที่ท่าเรือ วาร์ปไม่ได้" % World.COUNTRY_NAMES[World.country_of(map_id)])
+		return false
 	if not state["visited"].has(map_id):
 		message.emit("ต้องเดินทางไป%sด้วยตัวเองก่อนหนึ่งครั้ง" % World.map_name(map_id))
 		return false

@@ -12,6 +12,8 @@ const CANAL_WATER := 62.0
 const CANAL_BANK := 80.0
 const BRIDGE_Y := 1000.0
 const BRIDGE_HALF := 40.0
+## ท่าไม้ของไต้ก๋งเรือสำเภา (เว้นมะพร้าวริมคลองช่วงนี้ไว้ให้เห็นเรือ)
+const DOCK_Y := 1040.0
 const COURTYARD := Rect2(200, 460, 680, 620)
 const PADDY := Rect2(1450, 150, 1150, 640)
 const PLOT := Vector2(230, 160)
@@ -45,10 +47,10 @@ func _init() -> void:
 	spawn_point = Vector2(560, 1000)
 	path_segs = PATH_SEGS
 	spawns = [
-		{"id": "krasue_noi", "count": 4, "rect": PADDY.grow(-40)},
-		{"id": "krasue_noi", "count": 3, "rect": Rect2(2550, 1150, 400, 350)},
-		{"id": "phi_takiang", "count": 3, "rect": GROVE.grow(-40)},
-		{"id": "phi_takiang", "count": 2, "rect": Rect2(2650, 720, 400, 260)},
+		{"id": "krasue_noi", "count": 6, "rect": PADDY.grow(-40)},
+		{"id": "krasue_noi", "count": 5, "rect": Rect2(2550, 1150, 400, 350)},
+		{"id": "phi_takiang", "count": 5, "rect": GROVE.grow(-40)},
+		{"id": "phi_takiang", "count": 3, "rect": Rect2(2650, 720, 400, 260)},
 	]
 	# จุดที่บอสประจำถิ่น (นางพญากระสือ) สุ่มเกิด
 	boss_id = "krasue_queen"
@@ -73,11 +75,13 @@ func _init() -> void:
 			"stock": ["maipai_staff", "suea_yant", "pha_khat_hua", "saisin", "mitmo", "khan_thanu", "khamphi_yant", "suea_kraphan", "mongkhon", "takrut", "phra_khrueang"]},
 		{"id": "khru_fuek_sat", "name": "ครูฝึกสัตว์ (พัฒนาร่าง)", "role": "pet", "pos": Vector2(580, 1060),
 			"look": {"robe": Color(0.6, 0.85, 0.65), "sash": Color(1.0, 0.75, 0.4), "hat": "farmer"}},
+		{"id": "tai_kong", "name": "ไต้ก๋งเรือสำเภา (ข้ามประเทศ)", "role": "boat", "pos": Vector2(1085, 1040),
+			"look": {"robe": Color(0.5, 0.62, 0.75), "sash": Color(1.0, 0.72, 0.38), "hat": "farmer"}},
 		{"id": "chang_lom", "name": "ช่างหลอมแร่", "role": "smith", "pos": Vector2(1060, 925),
 			"look": {"robe": Color(0.55, 0.52, 0.6), "sash": Color(1.0, 0.6, 0.35), "hat": "headband"}},
 	]
 	portals = [
-		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 12+)"},
+		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 10+)"},
 		{"pos": PORTAL_SOUTH, "to": "lam_than", "to_pos": Vector2(260, 1000), "name": "ลำธารใสเย็น (ตกปลา)"},
 	]
 
@@ -139,7 +143,7 @@ func build_props() -> Node3D:
 	_build_village_details()
 	# มะพร้าวริมคลองทั้งสองฝั่ง
 	for y in range(120, 1950, 150):
-		if absf(y - BRIDGE_Y) > 120:
+		if absf(y - BRIDGE_Y) > 120 and absf(y - DOCK_Y) > 150:
 			_add("palm", Vector2(canal_center(y) - CANAL_BANK - 40 - _rng.randf() * 30, y))
 			_add("palm", Vector2(canal_center(y + 70) + CANAL_BANK + 40 + _rng.randf() * 30, y + 70))
 	_scatter("palm", Rect2(40, 80, 1000, 1850), 10, false)

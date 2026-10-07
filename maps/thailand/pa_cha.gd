@@ -1,5 +1,5 @@
 extends "res://maps/map_base.gd"
-## ประเทศไทย แผนที่ 2: ป่าช้าวัดร้าง (ผีเลเวล 12–26 + บอสพญาเปรต)
+## ประเทศไทย แผนที่ 2: ป่าช้าวัดร้าง (ผีเลเวล 10–18 + บอสพญาเปรต Lv 24)
 ## ทางเข้าฝั่งตะวันตกเป็นแคมป์ของตาสัปเหร่อ เดินตามทางดินไปทางตะวันออก
 ## ทางแยกเหนือไปลานเมรุร้าง ทางแยกใต้ไปลานเจดีย์บรรจุอัฐิ สุดทางตะวันออกเป็นป่าไผ่และดงเปรต
 
@@ -42,12 +42,12 @@ func _init() -> void:
 	firefly_color = Color(0.55, 0.95, 1.0)
 	cave_spot = Vector2(560, 1820)
 	spawns = [
-		{"id": "phi_khamot", "count": 4, "rect": Rect2(560, 380, 380, 380)},
-		{"id": "phi_khamot", "count": 4, "rect": Rect2(560, 1250, 420, 420)},
-		{"id": "phi_pop", "count": 4, "rect": OSSUARY_FIELD.grow(-40)},
-		{"id": "phi_pop", "count": 3, "rect": Rect2(1050, 760, 600, 180)},
-		{"id": "phi_pret", "count": 3, "rect": Rect2(2120, 360, 440, 420)},
-		{"id": "phi_pret", "count": 3, "rect": Rect2(2150, 1280, 440, 420)},
+		{"id": "phi_khamot", "count": 6, "rect": Rect2(560, 380, 380, 380)},
+		{"id": "phi_khamot", "count": 6, "rect": Rect2(560, 1250, 420, 420)},
+		{"id": "phi_pop", "count": 6, "rect": OSSUARY_FIELD.grow(-40)},
+		{"id": "phi_pop", "count": 5, "rect": Rect2(1050, 760, 600, 180)},
+		{"id": "phi_pret", "count": 5, "rect": Rect2(2120, 360, 440, 420)},
+		{"id": "phi_pret", "count": 5, "rect": Rect2(2150, 1280, 440, 420)},
 	]
 	boss_id = "pret_king"
 	boss_spawns = [
@@ -66,7 +66,7 @@ func _init() -> void:
 	]
 	portals = [
 		{"pos": PORTAL_WEST, "to": "khlong_village", "to_pos": Vector2(3040, 1100), "name": "หมู่บ้านริมคลอง"},
-		{"pos": PORTAL_EAST, "to": "krung_kao", "to_pos": Vector2(260, 1000), "name": "กรุงเก่าร้าง (Lv 32+)"},
+		{"pos": PORTAL_EAST, "to": "krung_kao", "to_pos": Vector2(260, 1000), "name": "กรุงเก่าร้าง (Lv 21+)"},
 	]
 
 

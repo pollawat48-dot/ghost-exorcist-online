@@ -40,6 +40,8 @@ func _run_all() -> void:
 	await _test_world()
 	print("== แผนที่ถึง Lv150 ถ้ำ หลอมแร่ ตีบวก วาร์ป ==")
 	_test_data()
+	print("== สมดุลใหม่ + ประเทศจีน ==")
+	_test_china()
 	await _test_expansion()
 	print("== ตกปลา พระเครื่อง บัฟปาร์ตี้ ==")
 	await _test_fishing_buffs()
@@ -80,7 +82,8 @@ func _test_combat() -> void:
 
 func _test_progression() -> void:
 	var state := {"level": 1, "exp": 0}
-	check(Progression.add_exp(state, 19) == 0 and state["level"] == 1, "EXP ไม่พอยังไม่อัป")
+	var need1 := Progression.exp_to_next(1)
+	check(Progression.add_exp(state, need1 - 1) == 0 and state["level"] == 1, "EXP ไม่พอยังไม่อัป")
 	check(Progression.add_exp(state, 1) == 1 and state["level"] == 2 and state["exp"] == 0, "EXP ครบแล้วอัปเลเวล")
 	check(Progression.add_exp(state, 1000) >= 2, "EXP เยอะอัปหลายเลเวลในครั้งเดียว")
 
@@ -111,7 +114,7 @@ func _test_gameplay() -> void:
 		return
 
 	check(player.hp == player.stats["max_hp"], "ผู้เล่นเริ่มด้วย HP เต็ม")
-	check(main.alive_ghosts().size() == 12, "ผีเกิดครบ 12 ตัว")
+	check(main.alive_ghosts().size() == 19, "ผีเกิดครบ 19 ตัว")
 
 	var dest: Vector2 = player.pos + Vector2(100, 0)
 	player.command_move(dest)
@@ -156,7 +159,7 @@ func _test_gameplay() -> void:
 	check(player.state["level"] >= 3, "ล่าผีจนถึงเลเวล 3 (เวลาในเกม %d วินาที, ใช้สกิล %d ครั้ง)" % [time, casts])
 
 	_run(main, 9.0)
-	check(main.alive_ghosts().size() == 12, "ผีที่ตายแล้วเกิดใหม่ครบ")
+	check(main.alive_ghosts().size() == 19, "ผีที่ตายแล้วเกิดใหม่ครบ")
 
 	var drop: Node3D = null
 	for d in main.drops.get_children():
@@ -282,22 +285,23 @@ func _test_character(main: Node3D) -> void:
 
 	player.add_item("mitmo")
 	var atk_plain: int = player.stats["atk"]
-	check(player.equip("mitmo") and player.stats["atk"] == atk_plain + 18 + 2 * 2, "สวมมีดหมอแล้ว ATK เพิ่ม")
+	var mitmo_bonus: Dictionary = ItemDB.bonus_of("mitmo")
+	check(player.equip("mitmo") and player.stats["atk"] == atk_plain + mitmo_bonus["atk"] + mitmo_bonus["str"] * 2, "สวมมีดหมอแล้ว ATK เพิ่ม")
 	player.add_item("khan_thanu")
 	check(not player.equip("khan_thanu"), "สายประชิดสวมธนูไม่ได้")
 	check(player.unequip("weapon") and player.inventory.get("mitmo", 0) == 1, "ถอดอาวุธกลับเข้ากระเป๋า")
 
 	player.gain_exp(50000000)
 	check(player.state["level"] == 150, "เลเวลตันที่ 150")
-	check(not player.change_class("nak_dab"), "ขั้น 2 ต้องปราบนางพญากระสือก่อน")
+	check(not player.change_class("nak_dab"), "ขั้น 2 ต้องปราบพญามัจจุราชก่อน")
 	player.state["coins"] = 100000
-	for pair in [["q_trial_2", "krasue_queen"], ["q_trial_3", "pret_king"]]:
+	for pair in [["q_trial_2", "matchurat"], ["q_trial_3", "yan_wang"]]:
 		player.accept_quest(pair[0])
 		player.reward_kill(pair[1], 0, 0)
 		player.complete_quest(pair[0])
 		if pair[0] == "q_trial_2":
-			check(player.change_class("nak_dab"), "ปราบนางพญากระสือ + จ่ายค่าครู แล้วเลื่อนขั้น 2")
-	check(player.change_class("khun_phaen") and player.coins() == 100000 - 5000 - 30000, "ปราบพญาเปรต + จ่ายค่าครู แล้วเลื่อนขั้น 3 ครบ")
+			check(player.change_class("nak_dab"), "ปราบพญามัจจุราช + จ่ายค่าครู แล้วเลื่อนขั้น 2")
+	check(player.change_class("khun_phaen") and player.coins() == 100000 - 5000 - 30000, "ปราบพญายมราชจีน + จ่ายค่าครู แล้วเลื่อนขั้น 3 ครบ")
 	check(not player.can_change_class(), "ขั้นสุดท้ายแล้วเลื่อนต่อไม่ได้")
 
 	# บอสประจำถิ่น
@@ -342,7 +346,7 @@ func _test_world() -> void:
 	var hud: CanvasLayer = main.hud
 
 	# ---- ร้านค้า ----
-	check(main.npcs.get_child_count() == 7, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ ช่างหลอมแร่ และครูฝึกสัตว์")
+	check(main.npcs.get_child_count() == 8, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ ช่างหลอมแร่ ครูฝึกสัตว์ และไต้ก๋งเรือ")
 	for n in main.npcs.get_children():
 		if n.role() == "class":
 			player.pos = n.pos + Vector2(0, 40)
@@ -458,7 +462,7 @@ func _test_world() -> void:
 	var min_level := 999
 	for g in main.alive_ghosts():
 		min_level = mini(min_level, g.data["level"])
-	check(main.alive_ghosts().size() == 21 and min_level >= 12, "ป่าช้ามีผีเลเวลสูงขึ้น (ต่ำสุด Lv %d)" % min_level)
+	check(main.alive_ghosts().size() == 33 and min_level >= 10, "ป่าช้ามีผีเลเวลสูงขึ้น (ต่ำสุด Lv %d)" % min_level)
 	check(main.npcs.get_child_count() == 3 and main.map.props_root.get_child_count() > 150, "ป่าช้ามี NPC และฉากครบ (สิ่งของ %d ชิ้น)" % main.map.props_root.get_child_count())
 	var route: PackedVector2Array = main.map.find_path(main.map.spawn_point, Vector2(2550, 1000))
 	check(route.size() > 0 and route[route.size() - 1].distance_to(Vector2(2550, 1000)) < 40.0, "เดินจากทางเข้าไปสุดป่าช้าได้")
@@ -505,7 +509,7 @@ func _test_data() -> void:
 			if not ItemDB.ITEMS.has(d["item"]):
 				missing.append(d["item"])
 	check(missing.is_empty(), "ของที่ผีดรอปมีอยู่ในฐานข้อมูลครบ %s" % str(missing))
-	check(max_level == 150, "มีผีถึงเลเวล 150")
+	check(max_level == 90, "ผีแรงสุดคือพญายมจีน Lv 90")
 	for id in World.MAPS:
 		if World.MAPS[id].get("safe", false):
 			continue
@@ -566,6 +570,80 @@ func _test_data() -> void:
 	check(ItemDB.display_name("mitmo+7") == "+7 มีดหมอลงอาคม" and ItemDB.base_id("mitmo+7") == "mitmo" and ItemDB.sell_price("mitmo+7") > ItemDB.sell_price("mitmo"), "ของตีบวกมีชื่อ +N และขายได้แพงขึ้น")
 
 
+## สมดุลใหม่: ผีไทยไม่เกิน Lv 50 ผีจีน 55–90 ตีผีไม่ได้เงิน และเควสขึ้นเรือข้ามประเทศ
+func _test_china() -> void:
+	var th_max := 0
+	var cn_min := 999
+	var cn_max := 0
+	var coin_drop := 0
+	for gid in GhostDB.GHOSTS:
+		var g: Dictionary = GhostDB.GHOSTS[gid]
+		coin_drop += int(g.get("coins", 0))
+		if gid.begins_with("cave_china") or gid in CHINA_GHOSTS:
+			cn_min = mini(cn_min, g["level"])
+			cn_max = maxi(cn_max, g["level"])
+		else:
+			th_max = maxi(th_max, g["level"])
+	check(th_max == 50, "ผีไทยเลเวลสูงสุด 50 (ได้ %d)" % th_max)
+	check(cn_min == 55 and cn_max == 90, "ผีจีนเลเวล %d–%d" % [cn_min, cn_max])
+	check(coin_drop == 0, "ตีผีไม่ได้เหรียญแล้ว (รวม %d)" % coin_drop)
+	# หลอด EXP ยาวขึ้น ต้องใช้เวลาเล่นมากขึ้น
+	check(Progression.exp_to_next(50) >= 30000, "เลเวล 50 ต้องใช้ EXP %d ถึงจะขึ้นเลเวล" % Progression.exp_to_next(50))
+	var kills: int = ceili(float(Progression.exp_to_next(20)) / float(GhostDB.GHOSTS["phi_pret"]["exp"]))
+	check(kills > 40, "เลเวล 20 ต้องตีผีราว %d ตัวถึงจะขึ้นเลเวล" % kills)
+	# ของสวมใส่ดรอปยากขึ้น และของจีนดีกว่าของไทย
+	var gear_rate := 0.0
+	var best_th := 0
+	var best_cn := 0
+	for gid in GhostDB.GHOSTS:
+		var g: Dictionary = GhostDB.GHOSTS[gid]
+		var cn: bool = gid.begins_with("cave_china") or gid in CHINA_GHOSTS
+		for d in g["drops"]:
+			var it: Dictionary = ItemDB.ITEMS[d["item"]]
+			if it["type"] != "equip":
+				continue
+			if not g.get("boss", false):
+				gear_rate = maxf(gear_rate, d["chance"])
+			if it.get("slot", "") == "weapon":
+				if cn:
+					best_cn = maxi(best_cn, it["bonus"].get("atk", 0))
+				else:
+					best_th = maxi(best_th, it["bonus"].get("atk", 0))
+	check(gear_rate <= 0.01, "ผีธรรมดาดรอปของสวมใส่ยากมาก โอกาสสูงสุด %.2f%%" % (gear_rate * 100.0))
+	check(best_cn > best_th, "อาวุธที่ผีจีนดรอปแรงกว่าของไทย (ATK %d vs %d)" % [best_cn, best_th])
+	# แผนที่จีน 5 แผนที่ เรียงเลเวลต่อจากไทย และวาร์ปข้ามประเทศไม่ได้
+	var cn_maps: Array[String] = []
+	for id in World.ORDER:
+		if World.country_of(id) == "cn":
+			cn_maps.append(id)
+	check(cn_maps.size() == 5 and cn_maps[0] == "china_harbor" and cn_maps[4] == "china_fengdu", "ประเทศจีนมี 5 แผนที่ %s" % str(cn_maps))
+	check(World.country_of("khlong_village") == "th" and World.PORTS["cn"] == "china_harbor", "ท่าเรือสองฝั่ง: หมู่บ้านริมคลอง ↔ ท่าเรือเฉวียนโจว")
+	# เควสขึ้นเรือ: ต้อง Lv 50 ขึ้นไป ทำครบ 3 ขั้นถึงได้สิทธิ์
+	var st := Progression.new_state()
+	check(not Quests.has_boat_pass(st), "เริ่มเกมยังขึ้นเรือไม่ได้")
+	for qid in ["q_boat_1", "q_boat_2", "q_boat_3"]:
+		check(Quests.QUESTS[qid]["min_level"] >= World.BOAT_LEVEL and Quests.QUESTS[qid]["giver"] == "tai_kong", "%s ต้องเลเวล %d ขึ้นไป" % [Quests.QUESTS[qid]["name"], Quests.QUESTS[qid]["min_level"]])
+		st["quests_done"][qid] = 1
+	check(Quests.has_boat_pass(st), "ทำเควสเตรียมเรือครบแล้วได้สิทธิ์ขึ้นเรือ")
+	# ถ้ำจีน: ลึกกว่าถ้ำไทย และมีหินพิเศษที่ให้แร่ดีขึ้น
+	check(World.CAVE_TIER["china_fengdu"] > World.CAVE_TIER["yom_lok"], "ถ้ำจีนลึกกว่าถ้ำไทย (ขั้น %d)" % World.CAVE_TIER["china_fengdu"])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	var plain := 0
+	var special := 0
+	for i in 20000:
+		if World.roll_ore(World.CAVE_TIER["china_fengdu"], rng) == "ore_diamond":
+			plain += 1
+		if World.roll_ore(World.CAVE_TIER["china_fengdu"] + World.SPECIAL_ROCK_BONUS, rng) == "ore_diamond":
+			special += 1
+	check(special > plain, "หินพิเศษในถ้ำจีนออกเพชรบ่อยกว่าหินปกติ (%d vs %d)" % [special, plain])
+
+
+const CHINA_GHOSTS := ["jiangshi", "shui_gui", "jiangshi_wang", "huli_jing", "diao_si_gui", "nu_gui", "jiuwei_hu",
+	"bingmayong", "hua_pi", "han_ba", "qin_gui_di", "wutou_bing", "e_gui", "baigu_yao", "baigu_jing",
+	"niu_tou", "ma_mian", "hei_bai", "yan_wang"]
+
+
 func _test_expansion() -> void:
 	var main: Node3D = load("res://main.tscn").instantiate()
 	root.add_child(main)
@@ -573,11 +651,11 @@ func _test_expansion() -> void:
 	main.set_process(false)
 	var player: Node3D = main.player
 	var hud: CanvasLayer = main.hud
-	check(player.state["caves"].size() == World.CAVE_COUNT, "เริ่มโลกใหม่สุ่มแผนที่ที่มีถ้ำ %s" % str(player.state["caves"]))
+	check(player.state["caves"].size() == World.CAVE_COUNT * 2, "เริ่มโลกใหม่สุ่มแผนที่ที่มีถ้ำ %s" % str(player.state["caves"]))
 
 	# ---- แผนที่ใหม่ทุกแผนที่โหลดได้ มีผีตามช่วงเลเวล มีทางเดินถึงประตูถัดไป ----
 	player.state["caves"] = ["krung_kao", "doi_phi", "yom_lok"]
-	var expected := {"krung_kao": [32, 50], "doi_phi": [62, 85], "nong_naga": [96, 122], "yom_lok": [132, 148]}
+	var expected := {"krung_kao": [21, 28], "doi_phi": [30, 36], "nong_naga": [37, 43], "yom_lok": [45, 50]}
 	for id in expected:
 		main.load_map(id)
 		await process_frame
@@ -600,9 +678,67 @@ func _test_expansion() -> void:
 			has_cave = has_cave or w.data.get("style", "") == "cave"
 		check(has_cave == (id in player.state["caves"]), "%s: %s" % [main.map.map_name, "มีปากถ้ำ (ถูกสุ่ม)" if has_cave else "ไม่มีถ้ำ"])
 		var boss: Node3D = main.spawn_boss(0)
-		check(boss != null and boss.is_boss() and boss.data["level"] >= 70, "%s: บอส %s Lv %d" % [main.map.map_name, boss.data["name"], boss.data["level"]])
+		check(boss != null and boss.is_boss() and boss.data["level"] >= 24, "%s: บอส %s Lv %d" % [main.map.map_name, boss.data["name"], boss.data["level"]])
 		_run(main, 1.0)
 	check(main.map.portals.size() >= 1 and main.map.portals[0]["to"] == "nong_naga", "ยมโลกเป็นแผนที่สุดท้าย มีประตูกลับบึงนาคา")
+
+	# ---- ประเทศจีน: 5 แผนที่ ถ้ำลึกกว่า หินพิเศษ และขึ้นเรือข้ามประเทศ ----
+	var cn_expected := {"china_harbor": [55, 58], "china_bamboo": [61, 67], "china_tomb": [69, 75], "china_wall": [77, 83], "china_fengdu": [85, 89]}
+	player.state["caves"] = ["china_fengdu"]
+	for id in cn_expected:
+		main.load_map(id)
+		await process_frame
+		var lo := 999
+		var hi := 0
+		for g in main.alive_ghosts():
+			lo = mini(lo, g.data["level"])
+			hi = maxi(hi, g.data["level"])
+		check(lo == cn_expected[id][0] and hi == cn_expected[id][1] and main.alive_ghosts().size() >= 15, "%s: ผี %d ตัว Lv %d–%d" % [main.map.map_name, main.alive_ghosts().size(), lo, hi])
+		var roles := []
+		for n in main.npcs.get_children():
+			roles.append(n.role())
+		check("quest" in roles and "shop" in roles and "warp" in roles, "%s: แคมป์มี NPC เควส ร้านยา และวาร์ป" % main.map.map_name)
+		check(main.map.props_root.get_child_count() > 100, "%s: ฉากเมืองจีนครบ (สิ่งของ %d ชิ้น)" % [main.map.map_name, main.map.props_root.get_child_count()])
+		_run(main, 0.5)
+	# ท่าเรือมีไต้ก๋งและร้านอาวุธจีน ไม่มีประตูฝั่งตะวันตก (เป็นทะเล)
+	main.load_map("china_harbor")
+	await process_frame
+	var harbor_roles := []
+	for n in main.npcs.get_children():
+		harbor_roles.append(n.role())
+	check("boat" in harbor_roles, "ท่าเรือเฉวียนโจวมีนายท้ายเรือสำเภา")
+	var gear_stock := []
+	for n in main.map.npcs:
+		if n["id"] == "china_harbor_gear":
+			gear_stock = n["stock"]
+	var gear_ok := gear_stock.size() >= 5
+	for item in gear_stock:
+		gear_ok = gear_ok and ItemDB.ITEMS.has(item) and ItemDB.ITEMS[item]["type"] == "equip"
+	check(gear_ok, "ร้านอาวุธท่าเรือขายของจีน %d ชิ้น" % gear_stock.size())
+	# หินพิเศษในถ้ำจีน
+	main.load_map("cave:china_fengdu")
+	await process_frame
+	var specials := 0
+	for r in main.rocks.get_children():
+		if r.special:
+			specials += 1
+	check(main.rocks.get_child_count() == 14 and specials > 0, "ถ้ำจีนมีหินแร่ 14 ก้อน เป็นหินหยกวิญญาณ %d ก้อน" % specials)
+	# ขึ้นเรือ: ยังไม่ทำเควสขึ้นไม่ได้ / วาร์ปข้ามประเทศไม่ได้
+	main.load_map("khlong_village")
+	await process_frame
+	player.state["coins"] = 100000
+	player.state["visited"]["china_harbor"] = true
+	check(not player.can_warp("china_harbor") and not main.warp_to("china_harbor"), "วาร์ปข้ามประเทศไม่ได้ ต้องขึ้นเรือ")
+	check(not main.sail_to("china_harbor"), "ยังไม่ทำเควสเตรียมเรือ ขึ้นเรือไม่ได้")
+	for qid in ["q_boat_1", "q_boat_2", "q_boat_3"]:
+		player.state["quests_done"][qid] = 1
+	player.state["level"] = World.BOAT_LEVEL
+	check(main.sail_to("china_harbor") and main.map.map_id == "china_harbor", "ทำเควสครบ + Lv 50 ขึ้นเรือข้ามไปท่าเรือจีนได้")
+	var back := false
+	for n in main.npcs.get_children():
+		if n.role() == "boat":
+			back = main.sail_to("khlong_village")
+	check(back and main.map.map_id == "khlong_village", "นั่งเรือกลับเมืองไทยได้")
 
 	# ---- วาร์ป ----
 	player.state["coins"] = 100000
@@ -682,6 +818,7 @@ func _test_expansion() -> void:
 	hud.close_windows()
 
 	# ---- ถ้ำ: ผีพิเศษ + ขุดแร่ ----
+	player.state["caves"] = ["krung_kao", "doi_phi", "yom_lok"]
 	main.load_map("krung_kao")
 	await process_frame
 	var cave_gate: Node3D = null
@@ -696,7 +833,7 @@ func _test_expansion() -> void:
 	var special := true
 	for g in main.alive_ghosts():
 		special = special and g.ghost_id == "cave_krung_kao"
-	check(special and main.alive_ghosts().size() == 11, "ในถ้ำมีผีพิเศษ (%s)" % GhostDB.GHOSTS["cave_krung_kao"]["name"])
+	check(special and main.alive_ghosts().size() == 18, "ในถ้ำมีผีพิเศษ (%s)" % GhostDB.GHOSTS["cave_krung_kao"]["name"])
 	check(main.rocks.get_child_count() == 14, "ในถ้ำมีหินแร่ 14 ก้อน")
 	for g in main.alive_ghosts():
 		g.free()
@@ -1013,6 +1150,7 @@ func _test_quest_guide() -> void:
 	hud.close_windows()
 
 	# ส่งจากต่างแผนที่: อยู่ป่าช้า เควสหาของครบ กดแล้วเดินกลับหมู่บ้านไปส่ง
+	player.gain_exp(2000)  # หลอด EXP ยาวขึ้นแล้ว ต้องดันเลเวลให้ถึงเกณฑ์เควสถัดไป
 	player.accept_quest("q_shard")
 	player.add_item("spirit_shard", 10)
 	main.load_map("pa_cha")

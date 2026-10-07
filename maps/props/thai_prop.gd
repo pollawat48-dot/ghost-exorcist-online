@@ -4,6 +4,7 @@ extends Node3D
 
 const K = preload("res://maps/props/mesh_kit.gd")
 const M = preload("res://maps/props/model_lib.gd")
+const ChinaProp = preload("res://maps/props/china_prop.gd")
 
 ## โทนพาสเทลแบบการ์ตูน
 const WHITE := Color(1.0, 0.96, 0.9)
@@ -93,6 +94,7 @@ func _ready() -> void:
 	t = variant * 0.37
 	if not has_meta("keep_rotation"):
 		rotation.y = 0.0
+	var animated := false
 	match kind:
 		"ubosot": _ubosot()
 		"chedi": _chedi(false)
@@ -142,11 +144,14 @@ func _ready() -> void:
 		_:
 			if MODEL_KINDS.has(kind):
 				_model_kind()
-	set_process(kind in SWAYING)
+			else:
+				# ของธีมจีน (maps/props/china_prop.gd)
+				animated = ChinaProp.build(self, kind, variant)
+	set_process(kind in SWAYING or animated)
 
 
 func footprint() -> Rect2:
-	return FOOTPRINTS.get(kind, Rect2())
+	return FOOTPRINTS.get(kind, ChinaProp.footprint(kind))
 
 
 func _process(delta: float) -> void:

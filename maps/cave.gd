@@ -40,10 +40,10 @@ func configure(parent_map: String, parent_exit: Vector2) -> void:
 	gloom_fog = Color(0.18, 0.16, 0.26)
 	var ghost_id := "cave_" + parent_map
 	spawns = [
-		{"id": ghost_id, "count": 3, "rect": Rect2(450, 180, 340, 260)},
-		{"id": ghost_id, "count": 3, "rect": Rect2(840, 1000, 320, 300)},
-		{"id": ghost_id, "count": 2, "rect": Rect2(1250, 160, 320, 260)},
-		{"id": ghost_id, "count": 3, "rect": Rect2(1480, 900, 280, 300)},
+		{"id": ghost_id, "count": 5, "rect": Rect2(450, 180, 340, 260)},
+		{"id": ghost_id, "count": 5, "rect": Rect2(840, 1000, 320, 300)},
+		{"id": ghost_id, "count": 3, "rect": Rect2(1250, 160, 320, 260)},
+		{"id": ghost_id, "count": 5, "rect": Rect2(1480, 900, 280, 300)},
 	]
 	boss_id = ""
 	boss_spawns = []

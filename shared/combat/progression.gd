@@ -21,8 +21,9 @@ const START_COINS := 200
 const SKILL_POINT_EVERY := 3
 
 
+## หลอด EXP ยาวขึ้นเรื่อยๆ ตามเลเวล (ยิ่งสูงยิ่งต้องเล่นนาน): เลเวล 10 ราว 1.1 พัน, 50 ราว 3.1 หมื่น, 90 ราว 1.2 แสน
 static func exp_to_next(level: int) -> int:
-	return int(round(20.0 * pow(level, 1.6)))
+	return int(round(20.0 * pow(level, 1.6) * (1.0 + level / 25.0)))
 
 
 ## สร้างข้อมูลตัวละครใหม่ (ศิษย์วัด เลเวล 1)

@@ -32,6 +32,10 @@ var grass_tip := Color(0.68, 0.74, 0.6)
 var grass_count := 3000
 var mist_color := Color(0.82, 0.8, 0.92, 0.14)
 var seed_value := 1
+## ของประจำแคมป์ (แผนที่จีนเปลี่ยนเป็นศาลาจีน โคมแดง ศาลเจ้าที่)
+var camp_hall := "sala"
+var camp_lamp := "lantern"
+var camp_shrine := "spirit_house"
 
 
 func _ready() -> void:
@@ -77,11 +81,11 @@ func build_props() -> Node3D:
 	super.build_props()
 	# แคมป์ทางเข้า: กองไฟ ศาลา ตะเกียง (เหมือนกันทุกแผนที่ให้จำได้ว่าเป็นที่ปลอดภัย)
 	_add("campfire", Vector2(420, 930))
-	_add("sala", Vector2(170, 830))
+	_add(camp_hall, Vector2(170, 830))
 	for p in [Vector2(150, 1140), Vector2(470, 860), Vector2(470, 1160), Vector2(200, 900)]:
-		_add("lantern", p)
+		_add(camp_lamp, p)
 		lanterns.append(p)
-	_add("spirit_house", Vector2(140, 1210))
+	_add(camp_shrine, Vector2(140, 1210))
 	for lm in landmarks:
 		var node := _add(lm[0], lm[1])
 		if lm.size() > 2:

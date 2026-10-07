@@ -14,6 +14,11 @@ const MAPS := {
 	"nong_naga": preload("res://maps/thailand/nong_naga.gd"),
 	"yom_lok": preload("res://maps/thailand/yom_lok.gd"),
 	"lam_than": preload("res://maps/thailand/lam_than.gd"),
+	"china_harbor": preload("res://maps/china/china_harbor.gd"),
+	"china_bamboo": preload("res://maps/china/china_bamboo.gd"),
+	"china_tomb": preload("res://maps/china/china_tomb.gd"),
+	"china_wall": preload("res://maps/china/china_wall.gd"),
+	"china_fengdu": preload("res://maps/china/china_fengdu.gd"),
 }
 const CaveMap = preload("res://maps/cave.gd")
 const OreRock = preload("res://client/ore_rock.gd")
@@ -155,10 +160,12 @@ func _ready() -> void:
 	_bind_net()
 
 	# โลกใหม่: สุ่มว่าแผนที่ไหนมีถ้ำ (ทุกโลกไม่เหมือนกัน)
+	var cave_rng := RandomNumberGenerator.new()
+	cave_rng.randomize()
 	if player.state["caves"].is_empty():
-		var cave_rng := RandomNumberGenerator.new()
-		cave_rng.randomize()
 		player.state["caves"] = World.pick_caves(cave_rng)
+	else:
+		World.ensure_china_caves(player.state["caves"], cave_rng)
 	var data: Dictionary = session.get("data", {})
 	var start: String = data.get("map", START_MAP)
 	if not MAPS.has(start):
@@ -207,6 +214,7 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 	ambience.tick(0.0)
 	fader.setup(camera_rig.camera, player, map.props_root)
 
+	player.current_map = map.map_id
 	player.pos = map.spawn_point if entry == Vector2.INF else entry
 	player.spawn_point = map.spawn_point
 	player.bounds = map.world_rect
@@ -225,7 +233,9 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 		portals.add_child(w)
 	for p in map.ore_rocks:
 		var r := OreRock.new()
-		r.setup(p, map.cave_tier, rocks.get_child_count())
+		# ถ้ำจีนมีโอกาสเจอหินพิเศษ (หินหยกวิญญาณ) ที่ให้แร่ดีกว่า
+		var special: bool = World.country_of(map_id) == "cn" and rng.randf() < World.SPECIAL_ROCK_CHANCE
+		r.setup(p, map.cave_tier, rocks.get_child_count(), special)
 		rocks.add_child(r)
 	boss_timer = rng.randf_range(BOSS_FIRST_DELAY.x, BOSS_FIRST_DELAY.y)
 	for i in map.spawns.size():
@@ -310,7 +320,9 @@ func do_action(name: String) -> void:
 			save_now()
 			logout_requested.emit()
 		_:
-			if name.begins_with("warp:"):
+			if name.begins_with("sail:"):
+				sail_to(name.substr(5))
+			elif name.begins_with("warp:"):
 				warp_to(name.substr(5))
 			elif name.begins_with("skill:"):
 				player.use_skill(name.substr(6))
@@ -340,6 +352,20 @@ func toggle_auto() -> void:
 
 
 ## ร่างทรงนำทาง: จ่ายค่าวาร์ปแล้วไปจุดเริ่มของแผนที่นั้น
+## ขึ้นเรือสำเภาข้ามประเทศ (ไทย ↔ จีน) ไม่เสียค่าวาร์ป แต่ต้องทำเควสขึ้นเรือครบก่อน
+func sail_to(map_id: String) -> bool:
+	if not Quests.has_boat_pass(player.state) or player.state["level"] < World.BOAT_LEVEL:
+		hud.add_log("ยังขึ้นเรือไม่ได้: ต้องเลเวล %d ขึ้นไป และทำเควสเตรียมเรือให้ครบ" % World.BOAT_LEVEL)
+		return false
+	guide.stop()
+	auto.set_enabled(false)
+	hud.refresh_auto()
+	load_map(map_id)
+	Sound.play(self, "warp")
+	hud.add_log("เรือสำเภาเทียบท่า%s แล้ว" % map.map_name)
+	return true
+
+
 func warp_to(map_id: String) -> bool:
 	if map_id == map.map_id or not player.pay_warp(map_id):
 		return false
@@ -612,7 +638,7 @@ func _refresh_npc_markers() -> void:
 				break
 			if st == "available":
 				mark = "available"
-		if mark == "" and n.role() in ["class", "pet"]:
+		if mark == "" and n.role() in ["class", "pet", "boat"]:
 			mark = n.role()
 		n.set_marker(mark)
 
