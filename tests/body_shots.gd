@@ -93,6 +93,45 @@ func _run() -> void:
 	cam.fov = 22
 	cam.look_at_from_position(Vector3(0, 1.75, 3.6), Vector3(0, 1.0, 0))
 	await _save("body_face.png")
+	for n in list:
+		n.queue_free()
+
+	# ---- ตัวละครในเกมจริง (avatar.gd ใช้ร่างใหม่) ใส่ชุด/อาวุธ/หมวกตามรายการใน avatar_shots ----
+	var lineup: Array = load("res://tests/avatar_shots.gd").LINEUP
+	cam.fov = 30
+	for page in 2:
+		for back in [false, true]:
+			list.clear()
+			for i in 6:
+				var e: Array = lineup[page * 6 + i]
+				var a: Node3D = Avatar.new()
+				world.add_child(a)
+				a.build(e[1], e[2], e[3], e[0])
+				if e[4]:
+					a.set_fishing(true)
+				a.position = Vector3(-4.0 + i * 1.6, 0, 0)
+				a.animate(0.3, false, Vector2(0, 1) if not back else Vector2(0.8, -0.7), 0.0, false, 0.0)
+				a.model.rotation.y = 0.0 if not back else atan2(0.8, -0.7)
+				list.append(a)
+			cam.look_at_from_position(Vector3(0, 3.6, 10.5), Vector3(0, 0.9, 0))
+			await _save("game_%d%s.png" % [page + 1, "_back" if back else ""])
+			for n in list:
+				n.queue_free()
+
+	# ---- ท่าในเกม: เดิน 2 จังหวะ + ท่าฟัน 4 จังหวะ (swing 0.2 -> 0) ----
+	list.clear()
+	var poses := [[true, 0.0, 0.4], [true, 0.0, 2.0], [false, 0.17, 0.0], [false, 0.13, 0.0], [false, 0.08, 0.0], [false, 0.03, 0.0]]
+	for i in poses.size():
+		var a: Node3D = Avatar.new()
+		world.add_child(a)
+		a.build("nak_dab", {"gender": "m" if i % 2 == 0 else "f", "hair": i % 5, "skin": 0}, {"weapon": "dab_krung+5", "armor": "suea_yant"}, "")
+		a.position = Vector3(-4.0 + i * 1.6, 0, 0)
+		a.walk_t = poses[i][2] / 0.8
+		a.animate(0.0, poses[i][0], Vector2(1, 0.4), poses[i][1], false, 0.0)
+		a.model.rotation.y = 1.0
+		list.append(a)
+	cam.look_at_from_position(Vector3(0, 3.0, 10.0), Vector3(0, 0.9, 0))
+	await _save("game_pose.png")
 	quit()
 
 

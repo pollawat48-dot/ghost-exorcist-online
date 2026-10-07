@@ -49,6 +49,7 @@ var shoulder_x := SHOULDER_X
 var hip_x := HIP_X
 var arm_r := 0.05  ## รัศมีปลายแขน
 var _t := 0.0
+var hair_hidden := false  ## ใส่หมวกเหล็กคลุมหัว: ไม่ต้องสร้างผม
 
 
 ## look = {"gender": "m"/"f", "hair": index, "skin": index} แบบเดียวกับ avatar.gd
@@ -63,6 +64,7 @@ func build(look: Dictionary, colors: Dictionary) -> void:
 	knees.clear()
 	feet.clear()
 	female = str(look.get("gender", "m")) == "f"
+	hair_hidden = bool(look.get("hair_hidden", false))
 	skin_c = colors.get("skin", skin_c)
 	hair_c = colors.get("hair", hair_c)
 	shirt_c = colors.get("shirt", shirt_c)
@@ -246,7 +248,8 @@ func _build_head() -> void:
 		K.sphere(head, 0.07, Vector3(x * 0.385, -0.03, 0.0), skin, 10, Vector3(0.5, 1.0, 0.8))
 		K.sphere(head, 0.035, Vector3(x * 0.4, -0.03, 0.01), K.mat(skin_c.darkened(0.12)), 6, Vector3(0.4, 0.8, 0.6))
 	_build_face()
-	_build_hair(hair)
+	if not hair_hidden:
+		_build_hair(hair)
 
 
 func _build_face() -> void:
