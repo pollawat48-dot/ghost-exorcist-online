@@ -310,84 +310,154 @@ func _build_face() -> void:
 			K.beam(mouth, pts[i], pts[i + 1], 0.018, lip)
 
 
-## ผม: ฐานผมครอบหัว + หน้าม้าเป็นปอยๆ + ปอยข้างแก้ม + ผมชี้บนหัว
+## ผม: หนังศีรษะเป็นฐาน แล้วคลุมด้วยปอยผมเรียวที่ไหลจากขวัญกลางหัวลงมาตามผิวหัว (แบบผมอนิเมะ)
+## ปอยแต่ละเส้นสร้างด้วย _lock วางเป็นวงรอบขวัญ ให้เส้นขอบการ์ตูนแบ่งปอยชัดๆ
+const CAP_C := Vector3(0, 0.06, -0.045)
+const CAP_R := 0.42
+## ทิศขวัญ (จุดที่ผมแตกออก) อยู่บนหัวค่อนไปด้านหลัง
+const CROWN := Vector3(0, 0.958, -0.287)
+
+
 func _build_hair(hair: Material) -> void:
-	# ฐานผมด้านบนและด้านหลัง (เปิดหน้าผาก)
-	K.sphere(head, 0.425, Vector3(0, 0.06, -0.045), hair, 22, Vector3(1.03, 0.97, 1.02))
-	# หน้าม้า: ปอยแหลมแนบหน้าผาก ปลายชี้ลงมาถึงคิ้ว
-	var bangs := [[-0.3, 0.17, 0.35], [-0.16, 0.2, 0.12], [0.0, 0.21, -0.05], [0.15, 0.2, -0.18], [0.29, 0.17, -0.38]]
-	for b in bangs:
-		var p := Node3D.new()
-		var a: float = b[0] * 1.3
-		var up := 0.0 if female else 0.07
-		p.position = Vector3(sin(a) * 0.37, b[1] + up, cos(a) * 0.37 - 0.03 - up * 0.3)
-		p.rotation = Vector3(-0.22 - (0.0 if female else 0.25), a, b[2] * (1.0 if female else 1.6))
-		head.add_child(p)
-		K.sphere(p, 0.085 if female else 0.08, Vector3(0, 0.0, 0.0), hair, 12, Vector3(1.0, 1.3, 0.42))
-		var tip := K.cyl(p, 0.05, 0.0, 0.1 if female else 0.07, Vector3(0, -0.13 if female else -0.11, 0.005), hair, 8)
-		tip.scale = Vector3(1.0, 1.0, 0.45)
-	# ปอยข้างแก้มทั้งสองข้าง ยาวลงมาถึงขากรรไกร
-	for x in [-1.0, 1.0]:
-		var s := Node3D.new()
-		s.position = Vector3(x * 0.36, 0.0, 0.12)
-		s.rotation = Vector3(0.15, 0, x * 0.12)
-		head.add_child(s)
-		if not female:
-			# ผู้ชาย: จอนสั้นแค่ระดับหู
-			K.sphere(s, 0.075, Vector3(0, 0.02, -0.02), hair, 10, Vector3(0.7, 1.3, 0.8))
-			K.cyl(s, 0.045, 0.0, 0.09, Vector3(0, -0.12, -0.01), hair, 8)
-			continue
-		K.sphere(s, 0.09, Vector3(0, 0.0, 0), hair, 10, Vector3(0.75, 1.6, 0.8))
-		K.cyl(s, 0.06, 0.0, 0.14, Vector3(0, -0.19, 0.01), hair, 8)
-		if female:
-			# ผู้หญิง: ปอยข้างยาวลงมาถึงไหล่
-			K.capsule(s, 0.05, 0.3, Vector3(0, -0.29, -0.03), hair, Vector3(0, 0, -x * 0.08), Vector3(0.9, 1.0, 0.5))
-			var end := K.cyl(s, 0.045, 0.0, 0.1, Vector3(-x * 0.012, -0.48, -0.03), hair, 8)
-			end.scale = Vector3(1.0, 1.0, 0.5)
-	# เส้นผมนูนบนกลางหัว ไล่จากหน้าผากไปท้ายทอย ให้ผมมีลอน ไม่เรียบเป็นลูกบอล
-	for a in [-0.5, -0.17, 0.17, 0.5]:
-		var st := Node3D.new()
-		st.rotation = Vector3(0, a, 0)
-		head.add_child(st)
-		K.capsule(st, 0.06, 0.42, Vector3(0, 0.36, -0.06), hair, Vector3(PI / 2.0 + 0.35, 0, 0), Vector3(1.0, 1.0, 0.6))
-	if not female:
-		# ผู้ชาย: ผมสั้นชี้ตั้งขึ้น ปัดไปด้านหลัง
-		var spikes := [[-0.22, 0.3, 0.16, -0.5], [0.0, 0.34, 0.2, -0.65], [0.22, 0.3, 0.16, -0.5], [-0.14, 0.38, -0.05, -0.9], [0.14, 0.38, -0.05, -0.9], [0.0, 0.33, -0.25, -1.3], [-0.3, 0.22, -0.12, -0.9], [0.3, 0.22, -0.12, -0.9]]
-		for sp in spikes:
-			var k := Node3D.new()
-			k.position = Vector3(sp[0], sp[1], sp[2])
-			k.rotation = Vector3(sp[3], 0, -sp[0] * 1.6)
-			head.add_child(k)
-			K.cyl(k, 0.0, 0.085, 0.22, Vector3(0, 0.09, 0), hair, 8)
+	# หนังศีรษะ (ปอยผมจะคลุมทับ)
+	K.sphere(head, CAP_R, CAP_C, hair, 22, Vector3(1.02, 0.97, 1.02))
+	if female:
+		_hair_female(hair)
 	else:
-		# ผู้หญิง: โบว์ใหญ่สีเดียวกับผ้าคาด ติดผมด้านขวา + กิ๊บดาว
-		var bow_m := K.mat(sash_c, 0.0, 0.6)
-		var bw := Node3D.new()
-		bw.position = Vector3(-0.33, 0.35, 0.1)
-		bw.rotation = Vector3(0.2, -0.6, 0.5)
-		head.add_child(bw)
-		for x in [-1.0, 1.0]:
-			K.sphere(bw, 0.075, Vector3(x * 0.075, 0, 0), bow_m, 10, Vector3(1.2, 0.85, 0.5))
-			K.cyl(bw, 0.025, 0.0, 0.1, Vector3(x * 0.03, -0.07, -0.01), bow_m, 6, Vector3(0, 0, x * 0.4))
-		K.sphere(bw, 0.035, Vector3(0, 0, 0.02), K.mat(sash_c.darkened(0.15)), 8)
-		K.sphere(head, 0.03, Vector3(0.24, 0.2, 0.3), K.gold(), 6, Vector3(1.0, 1.0, 0.5))
+		_hair_male(hair)
 	# ผมชี้บนหัว (อาโฮเกะ)
 	var ah := Node3D.new()
-	ah.position = Vector3(0.02, 0.4, 0.02)
-	ah.rotation = Vector3(0.5, 0, -0.25)
+	ah.position = CAP_C + CROWN * (CAP_R - 0.01) + Vector3(0, 0, 0.08)
+	ah.rotation = Vector3(PI - 0.3, 0, 0.25)
 	head.add_child(ah)
-	K.cyl(ah, 0.0, 0.035, 0.16, Vector3(0, 0.08, 0), hair, 6)
-	K.cyl(ah, 0.0, 0.025, 0.1, Vector3(0.03, 0.15, 0.04), hair, 6, Vector3(1.2, 0, -0.4))
-	if female:
-		# ผมยาวด้านหลังถึงกลางหลัง + ปลายผมงอนออก
-		K.sphere(head, 0.36, Vector3(0, -0.18, -0.2), hair, 18, Vector3(1.15, 1.25, 0.75))
-		K.sphere(head, 0.25, Vector3(0, -0.5, -0.24), hair, 14, Vector3(1.25, 1.0, 0.6))
-		for x in [-1.0, 1.0]:
-			K.cyl(head, 0.08, 0.0, 0.16, Vector3(x * 0.2, -0.68, -0.25), hair, 8, Vector3(0, 0, x * 0.5))
-	else:
-		# ผมท้ายทอยสั้นเป็นปอยๆ
-		for x in [-0.16, 0.0, 0.16]:
-			K.cyl(head, 0.07, 0.0, 0.14, Vector3(x, -0.3, -0.3), hair, 8, Vector3(-0.5, 0, x * 2.0))
+	_lock(ah, hair, 0.22, 0.035, 22.0, -2.0, 0.5)
+
+
+## ผู้ชาย: ปอยหนาสั้น ปลายดีดออกเป็นหนามแหลม หน้าม้าจบเหนือคิ้ว จอนสั้นแค่หู
+func _hair_male(hair: Material) -> void:
+	# วงใน: ปอยหลักไหลจากขวัญลงทุกทิศ ด้านหน้าเป็นหน้าม้า ด้านข้างถึงหู ด้านหลังถึงท้ายทอย
+	_ring(hair, 0.3, 13, func(phi): return 0.52 if absf(phi) < 0.5 else (0.46 if absf(phi) < 1.9 else 0.5), 0.12, 1.1, -0.3, 0.42, 0.0)
+	# วงนอกด้านหลังและข้าง: ปอยสั้นปลายดีดออก ทำทรงผมหนาฟู
+	_ring(hair, 1.0, 9, func(phi): return 0.32, 0.11, 1.0, -1.2, 0.45, 1.5)
+
+
+## ผู้หญิง: หน้าม้าบางยาวถึงเหนือตา ปอยข้างแก้มยาวถึงอก ผมด้านหลังยาวถึงกลางหลัง + โบว์
+func _hair_female(hair: Material) -> void:
+	# วงใน: หน้าม้าและผมคลุมหัว เรียบลู่ตามหัว ปลายงอเข้า
+	_ring(hair, 0.3, 14, func(phi): return 0.6 if absf(phi) < 0.6 else 0.62, 0.11, 0.95, 0.75, 0.38, 0.0, 0.01)
+	# ผมยาวด้านหลัง: ปอยเรียวห้อยจากท้ายทอยลงถึงกลางหลัง ปลายงอนออกนิดๆ
+	K.sphere(head, 0.34, Vector3(0, -0.15, -0.2), hair, 18, Vector3(1.12, 1.2, 0.72))
+	for i in 7:
+		var a := (i - 3) * 0.3
+		var n := Node3D.new()
+		n.position = Vector3(sin(a) * 0.38, 0.0, -cos(a) * 0.36 - 0.05)
+		n.rotation = Vector3(0.12, a, -a * 0.12)
+		head.add_child(n)
+		_lock(n, hair, 0.82 - absf(i - 3) * 0.05, 0.13, 0.4, -1.6, 0.45)
+	# ปอยข้างแก้ม: สองปอยต่อข้าง ห้อยลงมาถึงอก ปลายม้วนเข้าหาหน้า
+	for x in [-1.0, 1.0]:
+		for j in 2:
+			var n := Node3D.new()
+			n.position = Vector3(x * (0.37 + j * 0.03), 0.1, 0.16 - j * 0.12)
+			n.rotation = Vector3(-0.05, 0, x * (0.08 + j * 0.08))
+			head.add_child(n)
+			_lock(n, hair, 0.55, 0.085, 0.0, -2.5, 0.5, -x * 0.3)
+	# โบว์ใหญ่สีเดียวกับผ้าคาด ติดผมด้านซ้ายบน + กิ๊บสีทอง
+	var bow_m := K.mat(sash_c, 0.0, 0.6)
+	var bw := Node3D.new()
+	bw.position = Vector3(-0.34, 0.36, 0.1)
+	bw.rotation = Vector3(0.2, -0.6, 0.5)
+	head.add_child(bw)
+	for x in [-1.0, 1.0]:
+		K.sphere(bw, 0.075, Vector3(x * 0.075, 0, 0), bow_m, 10, Vector3(1.2, 0.85, 0.5))
+		K.cyl(bw, 0.025, 0.0, 0.1, Vector3(x * 0.03, -0.07, -0.01), bow_m, 6, Vector3(0, 0, x * 0.4))
+	K.sphere(bw, 0.035, Vector3(0, 0, 0.02), K.mat(sash_c.darkened(0.15)), 8)
+	K.sphere(head, 0.03, Vector3(0.27, 0.25, 0.32), K.gold(), 6, Vector3(1.0, 1.0, 0.5))
+
+
+## วงปอยผมรอบขวัญ: theta = มุมห่างจากขวัญ (เรเดียน), count = จำนวนปอย
+## length_of(phi) = ความยาวปอยตามทิศ (phi = 0 คือด้านหน้า, ±PI คือด้านหลัง)
+## k0..k1 = ความโค้งตามหัวจากโคนถึงปลาย (1 = แนบหัวพอดี, ติดลบ = ดีดออก)
+## min_phi = ข้ามทิศที่ |phi| น้อยกว่านี้ (เว้นด้านหน้า), lift = ยกโคนให้ลอยจากหัว
+func _ring(hair: Material, theta: float, count: int, length_of: Callable, width: float, k0: float, k1: float, flat: float, min_phi: float, lift := 0.0) -> void:
+	var u := (Vector3(0, 0, 1) - CROWN * CROWN.z).normalized()
+	var v := CROWN.cross(u)
+	for i in count:
+		var phi := -PI + (i + 0.5) * TAU / count
+		if absf(phi) < min_phi:
+			continue
+		var n := (CROWN * cos(theta) + (u * cos(phi) + v * sin(phi)) * sin(theta)).normalized()
+		var t := (n * CROWN.dot(n) - CROWN).normalized()
+		if theta < 0.1:
+			t = (u * cos(phi) + v * sin(phi))
+		var node := Node3D.new()
+		node.position = CAP_C + n * (CAP_R + lift)
+		var y := -t
+		node.basis = Basis(y.cross(n), y, n)
+		head.add_child(node)
+		_lock(node, hair, length_of.call(phi), width, k0 / CAP_R, k1 / CAP_R, flat)
+
+
+static var _lock_meshes := {}
+
+
+## ปอยผมเรียวโค้งเป็นชิ้นเดียว (ผิวเรียบ ไม่เป็นข้อๆ): ชี้ไปตามแกน -y ของ base
+## k0..k1 = ความโค้งรอบแกน x จากโคนถึงปลาย (เรเดียนต่อเมตร, บวก = โค้งเข้าหาหัว/แกน -z)
+## sweep = มุมปัดไปด้านข้างรวมทั้งเส้น, flat = ความแบน (หนา/กว้าง)
+func _lock(base: Node3D, hair: Material, length: float, width: float, k0: float, k1: float, flat: float, sweep := 0.0) -> MeshInstance3D:
+	var key := "%.3f|%.3f|%.2f|%.2f|%.2f|%.2f" % [length, width, k0, k1, flat, sweep]
+	if not _lock_meshes.has(key):
+		_lock_meshes[key] = _make_lock_mesh(length, width, k0, k1, flat, sweep)
+	return K.add(base, _lock_meshes[key], Vector3.ZERO, hair)
+
+
+static func _make_lock_mesh(length: float, width: float, k0: float, k1: float, flat: float, sweep: float) -> ArrayMesh:
+	const RINGS := 12
+	const SIDES := 10
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# เดินตามแนวกระดูกปอยผม หมุนกรอบทีละช่วงตามความโค้ง
+	var frame := Basis.IDENTITY
+	var p := Vector3.ZERO
+	var ds := length / RINGS
+	var rings := []
+	for i in RINGS + 1:
+		var t := float(i) / RINGS
+		# ความกว้าง: โคนมน กว้างสุดช่วงต้น แล้วเรียวแหลมที่ปลาย
+		var w := width * (0.75 + 0.25 * sin(minf(t * 5.0, 1.0) * PI / 2.0)) * pow(1.0 - t, 0.85)
+		if i == 0:
+			w = width * 0.55
+		var ring := []
+		for j in SIDES:
+			var a := TAU * j / SIDES
+			ring.append(p + frame.x * cos(a) * w + frame.z * sin(a) * w * flat)
+		rings.append(ring)
+		var k := lerpf(k0, k1, t)
+		frame = frame.rotated(frame.x, k * ds).rotated(frame.z, sweep / RINGS)
+		p += -frame.y * ds
+	# ปิดโคนด้วยจุดยอดยื่นขึ้นเล็กน้อย
+	var root := Vector3(0, width * 0.35, 0)
+	for j in SIDES:
+		var j2 := (j + 1) % SIDES
+		st.add_vertex(root)
+		st.add_vertex(rings[0][j])
+		st.add_vertex(rings[0][j2])
+	for i in RINGS:
+		for j in SIDES:
+			var j2 := (j + 1) % SIDES
+			var a: Vector3 = rings[i][j]
+			var b: Vector3 = rings[i][j2]
+			var c: Vector3 = rings[i + 1][j]
+			var d: Vector3 = rings[i + 1][j2]
+			# Godot ใช้ด้านหน้าแบบตามเข็มนาฬิกา
+			st.add_vertex(a)
+			st.add_vertex(c)
+			st.add_vertex(b)
+			st.add_vertex(b)
+			st.add_vertex(c)
+			st.add_vertex(d)
+	st.generate_normals()
+	return st.commit()
 
 
 # ---------- ท่าทาง ----------
