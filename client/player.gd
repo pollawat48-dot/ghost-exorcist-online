@@ -749,6 +749,16 @@ func can_equip(item_id: String) -> bool:
 	return item["line"] == "any" or item["line"] == class_info()["line"]
 
 
+## ค่าสถานะก่อน/หลังสวมของชิ้นนี้ (ไว้โชว์เทียบในกระเป๋าก่อนกดติดตั้ง)
+## คืน {"slot", "current": id ที่ใส่อยู่ ("" = ช่องว่าง), "before": stats, "after": stats}
+func preview_equip(item_id: String) -> Dictionary:
+	var slot: String = ItemDB.info(item_id)["slot"]
+	var trial := state.duplicate()
+	trial["equipment"] = state["equipment"].duplicate()
+	trial["equipment"][slot] = item_id
+	return {"slot": slot, "current": state["equipment"].get(slot, ""), "before": Progression.derive(state), "after": Progression.derive(trial)}
+
+
 func equip(item_id: String) -> bool:
 	if inventory.get(item_id, 0) <= 0:
 		return false

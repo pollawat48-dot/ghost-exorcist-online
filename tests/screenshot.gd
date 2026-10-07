@@ -204,6 +204,15 @@ func _apply_mode(main: Node3D, mode: String) -> void:
 		for id in ["hin_ti_1", "hin_ti_2", "ore_zinc", "ore_gold", "ore_diamond", "dab_krung+5"]:
 			player.add_item(id, 2)
 		main.hud.toggle_window("bag")
+	elif mode == "bagcompare":
+		# หน้าเทียบของก่อนสวม: ใส่ดาบธรรมดาไว้ แล้วกดสวมดาบกรุงเก่า +5
+		player.add_item("mitmo")
+		player.equip("mitmo")
+		player.add_item("dab_krung+5")
+		main.hud.toggle_window("bag")
+		var bag: Node = main.hud.windows["bag"]
+		bag._compare = "dab_krung+5"
+		bag.refresh()
 	elif mode == "autoon":
 		main.toggle_auto()
 	elif mode == "quests":

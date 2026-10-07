@@ -285,6 +285,17 @@ func _test_character(main: Node3D) -> void:
 
 	player.add_item("mitmo")
 	var atk_plain: int = player.stats["atk"]
+	# กดสวมในกระเป๋า: โชว์หน้าเทียบก่อน ยังไม่สวมจนกว่าจะกดติดตั้ง
+	var pv: Dictionary = player.preview_equip("mitmo")
+	check(pv["current"] == "" and pv["after"]["atk"] > pv["before"]["atk"] and player.stats["atk"] == atk_plain, "เทียบของก่อนสวม: เห็น ATK ที่จะเพิ่ม แต่ยังไม่ได้สวมจริง")
+	var bag: Node = main.hud.windows["bag"]
+	main.hud.toggle_window("bag")
+	bag._compare = "mitmo"
+	bag.refresh()
+	var labels: Array = bag.find_children("*", "Label", true, false).map(func(l): return l.text)
+	check("ใส่อยู่ตอนนี้" in labels and "ของใหม่" in labels and not player.state["equipment"].has("weapon"), "หน้าต่างกระเป๋าโชว์การ์ดเทียบของ ยังไม่สวมก่อนกดติดตั้ง")
+	bag._compare = ""
+	main.hud.toggle_window("bag")
 	var mitmo_bonus: Dictionary = ItemDB.bonus_of("mitmo")
 	check(player.equip("mitmo") and player.stats["atk"] == atk_plain + mitmo_bonus["atk"] + mitmo_bonus["str"] * 2, "สวมมีดหมอแล้ว ATK เพิ่ม")
 	player.add_item("khan_thanu")
