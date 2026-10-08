@@ -44,6 +44,12 @@ static func level() -> String:
 		_level = str(cfg.get_value("graphics", "level", default_level()))
 		if not _level in LEVELS:
 			_level = default_level()
+		# มือถือที่เคยตั้งระดับสูงไว้จากรุ่นก่อน (ก่อนมีระดับประหยัด) รีเซ็ตกลับเป็นค่าเริ่มต้นหนึ่งครั้ง
+		if OS.has_feature("mobile") and int(cfg.get_value("graphics", "mobile_reset", 0)) < 1:
+			_level = default_level()
+			cfg.set_value("graphics", "level", _level)
+			cfg.set_value("graphics", "mobile_reset", 1)
+			cfg.save(config_path)
 		K.detail = PRESETS[_level]["detail"]
 	return _level
 
