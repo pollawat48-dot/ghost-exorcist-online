@@ -197,6 +197,16 @@ func _tuft_mesh(blades: int, height: float, spread: float, base: Color, tip: Col
 
 
 func _foliage(mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color], name_: String) -> void:
+	if K.detail < 1.0:
+		# ระดับภาพต่ำ (มือถือ): หญ้า/ต้นข้าวเหลือราว 60% กระจายเท่าเดิม
+		var keep_t: Array[Transform3D] = []
+		var keep_c: Array[Color] = []
+		for i in transforms.size():
+			if i % 5 < 3:
+				keep_t.append(transforms[i])
+				keep_c.append(colors[i])
+		transforms = keep_t
+		colors = keep_c
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true

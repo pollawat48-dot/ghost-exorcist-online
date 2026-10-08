@@ -9,7 +9,7 @@ const S := 1.0 / 32.0
 const OUTLINE_COLOR := Color(0.36, 0.24, 0.26)
 
 ## ตัวคูณความละเอียดของทรงกลม/ทรงกระบอก (ตั้งจาก client/graphics.gd ตามระดับคุณภาพภาพ)
-## ทรงที่ตั้งใจให้เป็นเหลี่ยม (น้อยกว่า 8 ด้าน เช่น อัญมณี) คงเดิม
+## ทรงที่ตั้งใจให้เป็นเหลี่ยม (น้อยกว่า 8 ด้าน เช่น อัญมณี) คงเดิม ระดับต่ำ (<1) ลดเหลี่ยมแต่ไม่ต่ำกว่า 8
 static var detail := 1.0
 
 static var _materials := {}
@@ -109,8 +109,15 @@ static func cyl(parent: Node3D, r_top: float, r_bottom: float, h: float, pos: Ve
 	return add(parent, _meshes[key], pos, material, rot)
 
 
+## ความถี่ของจุดบนพื้นแผนที่ (พื้นยุบเป็นคลอง/ทางเดินด้วย shader) ระดับต่ำใช้จุดน้อยลง
+static func ground_detail() -> float:
+	return minf(1.0, detail)
+
+
 static func _smooth(n: int) -> int:
-	return n if n < 8 or detail <= 1.0 else int(round(n * detail))
+	if n < 8 or detail == 1.0:
+		return n
+	return maxi(8, int(round(n * detail)))
 
 
 static func sphere(parent: Node3D, r: float, pos: Vector3, material: Variant, segs: int = 12, scl := Vector3.ONE) -> MeshInstance3D:

@@ -39,6 +39,11 @@ func _shoot() -> void:
 			player.hp = player.stats["max_hp"]
 		if part.begins_with("map:"):
 			main.load_map(part.substr(4))
+		if part.begins_with("gfx:"):
+			# ระดับภาพ (เช่น gfx:low = แบบมือถือ) เก็บค่าไว้ไฟล์แยก ไม่ทับค่าตั้งของเครื่อง
+			var G = load("res://client/graphics.gd")
+			G.config_path = "user://screenshot_settings.cfg"
+			G.set_level(main.get_tree(), part.substr(4))
 	player.pos = Vector2(float(args[1]), float(args[2])) if args.size() > 2 else Vector2(1050, 700)
 	if args.size() > 3:
 		main.ambience.time_of_day = float(args[3])

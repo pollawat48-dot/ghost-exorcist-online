@@ -2,6 +2,7 @@ extends Node3D
 ## สิ่งของในฉากธีมไทยแบบ 3D low-poly สร้างจากรูปทรงพื้นฐาน (จุดอ้างอิงอยู่ที่ฐาน, ด้านหน้าหันไปทาง +z)
 ## ภายหลังเปลี่ยนเป็นโมเดลจริง (.glb) ทีละชนิดได้โดยใช้ kind เดิม
 
+const Batcher = preload("res://maps/props/prop_batcher.gd")
 const K = preload("res://maps/props/mesh_kit.gd")
 const M = preload("res://maps/props/model_lib.gd")
 const ChinaProp = preload("res://maps/props/china_prop.gd")
@@ -148,6 +149,12 @@ func _ready() -> void:
 				# ของธีมจีน (maps/props/china_prop.gd)
 				animated = ChinaProp.build(self, kind, variant)
 	set_process(kind in SWAYING or animated)
+	# รวมชิ้นส่วนเป็น mesh เดียวต่อวัสดุ (ลดจำนวนการสั่งวาด ส่วนที่ขยับรวมแยกในโหนดของมัน)
+	var moving: Array = []
+	moving.append_array(_sway_nodes)
+	moving.append_array(_flames)
+	moving.append_array(_wisps)
+	Batcher.batch(self, moving)
 
 
 func footprint() -> Rect2:

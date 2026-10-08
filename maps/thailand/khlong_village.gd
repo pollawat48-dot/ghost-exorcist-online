@@ -310,10 +310,11 @@ func _build_ground() -> void:
 	var size := world_rect.size * K.S
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = int(size.x * 4)
-	plane.subdivide_depth = int(size.y * 4)
+	plane.subdivide_width = int(size.x * 4 * K.ground_detail())
+	plane.subdivide_depth = int(size.y * 4 * K.ground_detail())
 	var ground := MeshInstance3D.new()
 	ground.name = "Ground"
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # พื้นรับเงาอย่างเดียว ไม่ต้องวาดซ้ำในแผนที่เงา
 	ground.mesh = plane
 	ground.material_override = _terrain_material(GROUND_SHADER)
 	ground.position = Vector3(size.x / 2.0, 0, size.y / 2.0)

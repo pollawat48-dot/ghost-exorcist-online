@@ -10,9 +10,9 @@ const K = preload("res://maps/props/mesh_kit.gd")
 const LEVELS := ["low", "medium", "high", "ultra"]
 const NAMES := {"low": "ต่ำ", "medium": "กลาง", "high": "สูง", "ultra": "สูงสุด"}
 const PRESETS := {
-	"low": {"msaa": Viewport.MSAA_DISABLED, "fxaa": true, "scale": 0.8,
-		"shadow_size": 2048, "shadow_q": RenderingServer.SHADOW_QUALITY_SOFT_LOW, "splits": 2, "shadow_dist": 45.0,
-		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 1.0},
+	"low": {"msaa": Viewport.MSAA_DISABLED, "fxaa": false, "scale": 0.75,
+		"shadow_size": 2048, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 2, "shadow_dist": 32.0,
+		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.75},
 	"medium": {"msaa": Viewport.MSAA_2X, "fxaa": false, "scale": 1.0,
 		"shadow_size": 4096, "shadow_q": RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, "splits": 4, "shadow_dist": 55.0,
 		"ssao": true, "ssil": false, "ssr": false, "vol_fog": false, "detail": 1.5},
@@ -28,9 +28,9 @@ static var config_path := "user://settings.cfg"
 static var _level := ""
 
 
-## ระดับเริ่มต้น: มือถือ = กลาง, PC = สูง
+## ระดับเริ่มต้น: มือถือ = ต่ำ (จอมือถือความละเอียดสูง วาดหนักกว่า PC), PC = สูง
 static func default_level() -> String:
-	return "medium" if OS.has_feature("mobile") else "high"
+	return "low" if OS.has_feature("mobile") else "high"
 
 
 static func level() -> String:
@@ -71,7 +71,9 @@ static func apply_viewport(vp: Viewport) -> void:
 	vp.use_debanding = true
 	vp.scaling_3d_scale = p["scale"]
 	# ความละเอียดต่ำกว่าจอ: ขยายด้วย FSR แล้วเพิ่มความคมกลับ
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if p["scale"] < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
+	# มือถือใช้ตัวเรนเดอร์ Compatibility (OpenGL ES) ที่ไม่มี FSR จึงขยายแบบ bilinear
+	var fsr: bool = p["scale"] < 1.0 and not OS.has_feature("mobile")
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if fsr else Viewport.SCALING_3D_MODE_BILINEAR
 	vp.fsr_sharpness = 0.3
 	RenderingServer.directional_shadow_atlas_set_size(p["shadow_size"], true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(p["shadow_q"])
