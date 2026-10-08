@@ -14,6 +14,11 @@ const MAPS := {
 	"nong_naga": preload("res://maps/thailand/nong_naga.gd"),
 	"yom_lok": preload("res://maps/thailand/yom_lok.gd"),
 	"lam_than": preload("res://maps/thailand/lam_than.gd"),
+	"china_harbor": preload("res://maps/china/china_harbor.gd"),
+	"china_bamboo": preload("res://maps/china/china_bamboo.gd"),
+	"china_tomb": preload("res://maps/china/china_tomb.gd"),
+	"china_wall": preload("res://maps/china/china_wall.gd"),
+	"china_fengdu": preload("res://maps/china/china_fengdu.gd"),
 }
 const CaveMap = preload("res://maps/cave.gd")
 const OreRock = preload("res://client/ore_rock.gd")
@@ -33,11 +38,13 @@ const Hud = preload("res://client/hud.gd")
 const CameraRig = preload("res://client/camera_rig.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const OcclusionFader = preload("res://client/occlusion_fader.gd")
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const RemotePlayer = preload("res://client/remote_player.gd")
 const Sound = preload("res://client/audio/sound.gd")
 const Skills = preload("res://shared/data/skills.gd")
 const Fishing = preload("res://shared/data/fishing.gd")
 const Graphics = preload("res://client/graphics.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 signal logout_requested  ## กดออกจากเกม (กลับหน้าเมนู) — App เป็นคนจัดการ
 
@@ -137,6 +144,7 @@ func _ready() -> void:
 
 	hud = Hud.new()
 	add_child(hud)
+	add_child(PerfOverlay.new())
 	hud.bind(player)
 	hud.bind_auto(auto)
 	hud.track(camera_rig.camera, ghosts)
@@ -154,10 +162,12 @@ func _ready() -> void:
 	_bind_net()
 
 	# โลกใหม่: สุ่มว่าแผนที่ไหนมีถ้ำ (ทุกโลกไม่เหมือนกัน)
+	var cave_rng := RandomNumberGenerator.new()
+	cave_rng.randomize()
 	if player.state["caves"].is_empty():
-		var cave_rng := RandomNumberGenerator.new()
-		cave_rng.randomize()
 		player.state["caves"] = World.pick_caves(cave_rng)
+	else:
+		World.ensure_china_caves(player.state["caves"], cave_rng)
 	var data: Dictionary = session.get("data", {})
 	var start: String = data.get("map", START_MAP)
 	if not MAPS.has(start):
@@ -206,6 +216,7 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 	ambience.tick(0.0)
 	fader.setup(camera_rig.camera, player, map.props_root)
 
+	player.current_map = map.map_id
 	player.pos = map.spawn_point if entry == Vector2.INF else entry
 	player.spawn_point = map.spawn_point
 	player.bounds = map.world_rect
@@ -224,7 +235,9 @@ func load_map(map_id: String, entry: Vector2 = Vector2.INF) -> void:
 		portals.add_child(w)
 	for p in map.ore_rocks:
 		var r := OreRock.new()
-		r.setup(p, map.cave_tier, rocks.get_child_count())
+		# ถ้ำจีนมีโอกาสเจอหินพิเศษ (หินหยกวิญญาณ) ที่ให้แร่ดีกว่า
+		var special: bool = World.country_of(map_id) == "cn" and rng.randf() < World.SPECIAL_ROCK_CHANCE
+		r.setup(p, map.cave_tier, rocks.get_child_count(), special)
 		rocks.add_child(r)
 	boss_timer = rng.randf_range(BOSS_FIRST_DELAY.x, BOSS_FIRST_DELAY.y)
 	for i in map.spawns.size():
@@ -302,11 +315,16 @@ func do_action(name: String) -> void:
 			toggle_auto()
 		"fish":
 			start_fishing()
+		"respawn":
+			player.respawn()
+			camera_rig.snap()
 		"logout":
 			save_now()
 			logout_requested.emit()
 		_:
-			if name.begins_with("warp:"):
+			if name.begins_with("sail:"):
+				sail_to(name.substr(5))
+			elif name.begins_with("warp:"):
 				warp_to(name.substr(5))
 			elif name.begins_with("skill:"):
 				player.use_skill(name.substr(6))
@@ -336,6 +354,20 @@ func toggle_auto() -> void:
 
 
 ## ร่างทรงนำทาง: จ่ายค่าวาร์ปแล้วไปจุดเริ่มของแผนที่นั้น
+## ขึ้นเรือสำเภาข้ามประเทศ (ไทย ↔ จีน) ไม่เสียค่าวาร์ป แต่ต้องทำเควสขึ้นเรือครบก่อน
+func sail_to(map_id: String) -> bool:
+	if not Quests.has_boat_pass(player.state) or player.state["level"] < World.BOAT_LEVEL:
+		hud.add_log("ยังขึ้นเรือไม่ได้: ต้องเลเวล %d ขึ้นไป และทำเควสเตรียมเรือให้ครบ" % World.BOAT_LEVEL)
+		return false
+	guide.stop()
+	auto.set_enabled(false)
+	hud.refresh_auto()
+	load_map(map_id)
+	Sound.play(self, "warp")
+	hud.add_log("เรือสำเภาเทียบท่า%s แล้ว" % map.map_name)
+	return true
+
+
 func warp_to(map_id: String) -> bool:
 	if map_id == map.map_id or not player.pay_warp(map_id):
 		return false
@@ -522,7 +554,7 @@ func _tick_net(delta: float) -> void:
 	pos_timer -= delta
 	if pos_timer <= 0.0:
 		pos_timer = POS_INTERVAL
-		net.send_pos(map.map_id, player.pos, {"cls": player.state["class"], "lv": player.state["level"], "hp": player.hp, "mhp": player.stats["max_hp"], "equip": player.state["equipment"].duplicate()})
+		net.send_pos(map.map_id, player.pos, {"cls": player.state["class"], "lv": player.state["level"], "hp": player.hp, "mhp": player.stats["max_hp"], "equip": player.look_items()})
 
 
 func remote_at_screen(screen: Vector2) -> Node3D:
@@ -598,7 +630,7 @@ func _refresh_npc_markers() -> void:
 		if n.role() in ["shop", "warp", "smith"]:
 			n.set_marker(n.role())
 			continue
-		var mark := "ready" if n.role() == "class" and player.can_change_class() else ""
+		var mark := "ready" if (n.role() == "class" and player.can_change_class()) or (n.role() == "pet" and player.can_evolve_pet()) else ""
 		for id in Quests.for_giver(n.npc_id()):
 			if mark == "ready":
 				break
@@ -608,8 +640,8 @@ func _refresh_npc_markers() -> void:
 				break
 			if st == "available":
 				mark = "available"
-		if mark == "" and n.role() == "class":
-			mark = "class"
+		if mark == "" and n.role() in ["class", "pet", "boat"]:
+			mark = n.role()
 		n.set_marker(mark)
 
 
@@ -627,21 +659,34 @@ func nearest_ghost(radius: float) -> Node3D:
 
 
 func tick(delta: float) -> void:
+	var t := Time.get_ticks_usec()
 	auto.tick(delta)
 	guide.tick(delta)
+	t = _mark("ออโต้", t)
 	player.tick(delta)
+	t = _mark("ผู้เล่น", t)
 	_tick_talk()
 	_tick_portals(delta)
 	for g in ghosts.get_children():
 		if g.has_method("tick"):
 			g.tick(delta)
+	t = _mark("ผี", t)
 	_tick_respawns(delta)
 	_tick_boss(delta)
 	for r in rocks.get_children():
 		r.tick(delta)
 	_tick_pickups()
 	_tick_fish_pending()
+	t = _mark("อื่นๆ", t)
 	_tick_net(delta)
+	_mark("เน็ต", t)
+
+
+## จับเวลาส่วนของเกมให้ตัวบอก FPS แสดงว่าส่วนไหนหนัก
+func _mark(section: String, since: int) -> int:
+	var now := Time.get_ticks_usec()
+	PerfOverlay.add(section, now - since)
+	return now
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -790,6 +835,7 @@ func _on_ghost_died(g: Node3D) -> void:
 			_drop(equip_pool[rng.randi() % equip_pool.size()], g.pos, spread)
 		boss = null
 		boss_timer = rng.randf_range(BOSS_RESPAWN_DELAY.x, BOSS_RESPAWN_DELAY.y)
+		player.add_cc(Fashion.CC_PER_BOSS, "ปราบบอส")
 		hud.announce("ปราบ%sสำเร็จ! ของรางวัลตกอยู่เต็มพื้น" % g.data["name"])
 		return
 	respawn_queue.append({"spawn": g.get_meta("spawn_index"), "time": RESPAWN_DELAY})

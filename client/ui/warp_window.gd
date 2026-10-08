@@ -20,10 +20,14 @@ func open_for(npc_data: Dictionary) -> void:
 
 func _build() -> void:
 	content.add_child(P.label("\"จะไปแผนที่ไหนจ๊ะ ต้องเคยเดินไปเองก่อนหนึ่งครั้งนะ\"", 14, P.TEXT.lightened(0.15)))
+	var country := World.country_of(current_map)
+	content.add_child(P.label("วาร์ปได้เฉพาะในแผ่นดินเดียวกัน (%s) ข้ามประเทศต้องขึ้นเรือสำเภาที่ท่าเรือ" % World.COUNTRY_NAMES[country], 13, P.TEXT.lightened(0.25)))
 	var top := row()
 	top.add_child(icon("coin", 24))
 	top.add_child(P.label("เหรียญของคุณ: %d" % player.coins(), 15, Color(0.72, 0.5, 0.12)))
 	for id in World.ORDER:
+		if World.country_of(id) != country:
+			continue
 		var info: Dictionary = World.MAPS[id]
 		var r := row()
 		var text := VBoxContainer.new()

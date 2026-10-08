@@ -246,6 +246,31 @@ static func draw_icon(ci: CanvasItem, kind: String, c: Vector2, s: float) -> voi
 			for k in 2:
 				var x := (k - 0.5) * s * 0.26
 				ci.draw_polyline(PackedVector2Array([c + Vector2(x - s * 0.12, -s * 0.26), c + Vector2(x + s * 0.12, 0), c + Vector2(x - s * 0.12, s * 0.26)]), OUTLINE, 3.5, true)
+		"gacha":
+			# ลูกกาชาปอง (ร้าน CC)
+			ci.draw_circle(c, s * 0.34, Color(1, 0.98, 0.96))
+			var top := PackedVector2Array()
+			for i in 17:
+				var a := PI + i * PI / 16.0
+				top.append(c + Vector2(cos(a), sin(a)) * s * 0.34)
+			ci.draw_colored_polygon(top, PINK_DEEP.lightened(0.2))
+			ci.draw_arc(c, s * 0.34, 0, TAU, 28, OUTLINE, 2.0, true)
+			ci.draw_line(c + Vector2(-s * 0.34, 0), c + Vector2(s * 0.34, 0), OUTLINE, 2.0, true)
+			ci.draw_circle(c + Vector2(-s * 0.12, -s * 0.15), s * 0.05, Color(1, 1, 1, 0.8))
+			ci.draw_string(font_cc(), c + Vector2(-s * 0.17, s * 0.26), "CC", HORIZONTAL_ALIGNMENT_LEFT, -1, int(s * 0.24), OUTLINE)
+		"dress":
+			# ชุดแฟชั่น + ปีกเล็ก
+			for sgn in [-1.0, 1.0]:
+				var wing := PackedVector2Array()
+				for i in 12:
+					var a := i * TAU / 12.0
+					wing.append(c + Vector2(sgn * s * 0.26 + cos(a) * s * 0.14, -s * 0.08 + sin(a) * s * 0.18))
+				ci.draw_colored_polygon(wing, SKY.lightened(0.3))
+				ci.draw_polyline(wing + PackedVector2Array([wing[0]]), OUTLINE, 1.5, true)
+			var dress := PackedVector2Array([c + Vector2(-s * 0.08, -s * 0.34), c + Vector2(-s * 0.15, -s * 0.06), c + Vector2(-s * 0.3, s * 0.36), c + Vector2(s * 0.3, s * 0.36), c + Vector2(s * 0.15, -s * 0.06), c + Vector2(s * 0.08, -s * 0.34)])
+			ci.draw_colored_polygon(dress, PINK)
+			ci.draw_polyline(dress + PackedVector2Array([dress[0]]), OUTLINE, 2.0, true)
+			ci.draw_line(c + Vector2(-s * 0.15, -s * 0.06), c + Vector2(s * 0.15, -s * 0.06), LEMON.darkened(0.2), 3.0)
 		_:
 			pass
 
@@ -322,3 +347,12 @@ static func line_edit(placeholder: String = "", font_size: int = 15) -> LineEdit
 		st.content_margin_bottom = 4
 		e.add_theme_stylebox_override(state, st)
 	return e
+
+
+static var _cc_font: Font
+
+
+static func font_cc() -> Font:
+	if _cc_font == null:
+		_cc_font = load("res://assets/fonts/Mali-Bold.ttf")
+	return _cc_font

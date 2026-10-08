@@ -1,5 +1,5 @@
 extends "res://maps/map_base.gd"
-## ประเทศไทย แผนที่ 2: ป่าช้าวัดร้าง (ผีเลเวล 12–26 + บอสพญาเปรต)
+## ประเทศไทย แผนที่ 2: ป่าช้าวัดร้าง (ผีเลเวล 10–18 + บอสพญาเปรต Lv 24)
 ## ทางเข้าฝั่งตะวันตกเป็นแคมป์ของตาสัปเหร่อ เดินตามทางดินไปทางตะวันออก
 ## ทางแยกเหนือไปลานเมรุร้าง ทางแยกใต้ไปลานเจดีย์บรรจุอัฐิ สุดทางตะวันออกเป็นป่าไผ่และดงเปรต
 
@@ -42,12 +42,12 @@ func _init() -> void:
 	firefly_color = Color(0.55, 0.95, 1.0)
 	cave_spot = Vector2(560, 1820)
 	spawns = [
-		{"id": "phi_khamot", "count": 4, "rect": Rect2(560, 380, 380, 380)},
-		{"id": "phi_khamot", "count": 4, "rect": Rect2(560, 1250, 420, 420)},
-		{"id": "phi_pop", "count": 4, "rect": OSSUARY_FIELD.grow(-40)},
-		{"id": "phi_pop", "count": 3, "rect": Rect2(1050, 760, 600, 180)},
-		{"id": "phi_pret", "count": 3, "rect": Rect2(2120, 360, 440, 420)},
-		{"id": "phi_pret", "count": 3, "rect": Rect2(2150, 1280, 440, 420)},
+		{"id": "phi_khamot", "count": 6, "rect": Rect2(560, 380, 380, 380)},
+		{"id": "phi_khamot", "count": 6, "rect": Rect2(560, 1250, 420, 420)},
+		{"id": "phi_pop", "count": 6, "rect": OSSUARY_FIELD.grow(-40)},
+		{"id": "phi_pop", "count": 5, "rect": Rect2(1050, 760, 600, 180)},
+		{"id": "phi_pret", "count": 5, "rect": Rect2(2120, 360, 440, 420)},
+		{"id": "phi_pret", "count": 5, "rect": Rect2(2150, 1280, 440, 420)},
 	]
 	boss_id = "pret_king"
 	boss_spawns = [
@@ -66,7 +66,7 @@ func _init() -> void:
 	]
 	portals = [
 		{"pos": PORTAL_WEST, "to": "khlong_village", "to_pos": Vector2(3040, 1100), "name": "หมู่บ้านริมคลอง"},
-		{"pos": PORTAL_EAST, "to": "krung_kao", "to_pos": Vector2(260, 1000), "name": "กรุงเก่าร้าง (Lv 32+)"},
+		{"pos": PORTAL_EAST, "to": "krung_kao", "to_pos": Vector2(260, 1000), "name": "กรุงเก่าร้าง (Lv 21+)"},
 	]
 
 
@@ -154,20 +154,41 @@ func build_props() -> Node3D:
 	_border_ring(["dead_tree", "bamboo", "bush"], [0.35, 0.35, 0.3])
 	_build_grass()
 	_build_mist()
+	_build_life()
 	return props_root
+
+
+## ของตกแต่งชิ้นเล็ก (โมเดลสำเร็จรูป CC0): เทียน โกศ โลงเก่า ตอไม้ เศษซาก + หมาวัดกับแมวดำ
+## วางท้ายสุดเพื่อไม่ให้ตำแหน่งของเดิมเปลี่ยน
+func _build_life() -> void:
+	_add("crate", Vector2(250, 1185))
+	_add("barrel", Vector2(212, 1165))
+	_add("signpost", Vector2(530, 940))
+	for g in GRAVES:
+		var area := Rect2(g[0] - Vector2(g[1], g[1]) * 0.8, Vector2(g[1], g[1]) * 1.6)
+		_scatter("candles", area, 3, true)
+		_scatter("urn", area, 2, true)
+	_scatter("coffin", Rect2(980, 200, 760, 520), 3, true)
+	_scatter("debris", Rect2(520, 120, 2200, 1780), 12, true)
+	_scatter("stump", Rect2(520, 120, 2200, 1780), 10, true)
+	_scatter("mushrooms", Rect2(520, 120, 2200, 1780), 8, true)
+	_add_critters("dog", Vector2(300, 1000), 160.0, 2)
+	_add_critters("cat", Vector2(1360, 800), 220.0, 1)
 
 
 func _build_ground() -> void:
 	var size := world_rect.size * K.S
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = int(size.x * 2)
-	plane.subdivide_depth = int(size.y * 2)
+	plane.subdivide_width = int(size.x * 2 * K.ground_detail())
+	plane.subdivide_depth = int(size.y * 2 * K.ground_detail())
 	var ground := MeshInstance3D.new()
 	ground.name = "Ground"
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # พื้นรับเงาอย่างเดียว ไม่ต้องวาดซ้ำในแผนที่เงา
 	ground.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
+	mat.set_shader_parameter("detail_octaves", K.ground_octaves)
 	var segs := PackedVector2Array()
 	for seg in PATH_SEGS:
 		segs.append(seg[0])

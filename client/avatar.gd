@@ -2,13 +2,15 @@ extends Node3D
 ## โมเดลตัวละครจิบิ (ใช้ทั้งผู้เล่นเองและผู้เล่นออนไลน์คนอื่น)
 ## หน้าตามาจาก: คลาส (สีจีวร ผ้าคาด อาวุธ หมวก ผ้าคลุม ออร่า) + look (เพศ สีผม สีผิว) + ของที่สวมอยู่
 ## ของสวมใส่เปลี่ยนหน้าตาจริง: อาวุธที่ถือ, ชุด (สี/ลาย/เกราะ), หมวก (แทนหมวกของคลาส), เครื่องราง (ชิ้นเล็กที่มองเห็น)
-## ของระดับตำนานเรืองแสงอ่อนๆ อาวุธตีบวก +7 ขึ้นไปมีประกายวิ้งๆ +10 แรงขึ้น
+## ของระดับตำนานเรืองแสงอ่อนๆ อาวุธตีบวกยิ่งสูงยิ่งสวย: +4 เรืองแสงหุ้มอาวุธ, +7 ประกายวน, +9 ละอองแสงลอยขึ้น, +10 วงออร่าทองใต้เท้า
+## แฟชั่น (คีย์ f_costume / f_hat / f_wings ใน equipment) ทับหน้าตาชุดและหมวก และเพิ่มปีกด้านหลัง
 ## ตาราง WEAPON_LOOK / ARMOR_LOOK / HEAD_LOOK / ACC_LOOK แมปตาม id ไอเทม ถ้าไม่มีจะเดาจาก line / ความหายาก / ชื่อ
 
 const K = preload("res://maps/props/mesh_kit.gd")
 const Classes = preload("res://shared/data/classes.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const ItemIcons = preload("res://client/ui/item_icons.gd")
+const Chibi = preload("res://client/chibi_body.gd")
 
 ## สีผม: น้ำตาลเข้ม ดำ น้ำตาลแดง ชมพูพาสเทล เงินอมม่วง
 const HAIR_COLORS := [Color(0.36, 0.25, 0.24), Color(0.2, 0.17, 0.22), Color(0.6, 0.36, 0.24), Color(1.0, 0.68, 0.78), Color(0.82, 0.8, 0.94)]
@@ -68,6 +70,8 @@ const ACC_LOOK := {
 
 var model: Node3D
 var body: Node3D
+var rig: Node3D  ## ร่างจิบิ (client/chibi_body.gd) มีแขนขาข้อต่อ
+var gear: Node3D  ## ฐานของชิ้นส่วนที่ติดลำตัว (เกราะ ผ้าคลุม ปีก เครื่องราง)
 var head: Node3D
 var weapon: Node3D
 var aura: Node3D
@@ -84,6 +88,10 @@ var display_name := ""
 var walk_t := 0.0
 var anim_t := 0.0
 var _sparkles: Node3D  ## ประกายรอบอาวุธที่ตีบวกสูง
+var _weapon_aura: MeshInstance3D  ## แสงหุ้มอาวุธ (+4 ขึ้นไป)
+var _foot_aura: Node3D  ## วงออร่าใต้เท้า (+10)
+var _wings: Array[Node3D] = []  ## ปีกแฟชั่น (ซ้าย ขวา) กระพือเบาๆ
+var dead := false  ## สลบ: นอนราบกับพื้น
 var _orb: Node3D  ## แก้วลอยข้างตัว (เครื่องรางบางชิ้น)
 var _rod_tip: Node3D
 var _line: MeshInstance3D
@@ -112,6 +120,9 @@ func build(p_class_id: String, look: Dictionary, p_equipment: Dictionary, p_disp
 		name_label.queue_free()
 	_sparkles = null
 	_orb = null
+	_weapon_aura = null
+	_foot_aura = null
+	_wings.clear()
 	_build_model()
 	model.rotation.y = keep_rot
 	if levelup_beam == null:
@@ -135,13 +146,20 @@ func animate(delta: float, moving: bool, facing: Vector2, swing: float, flash: b
 	if facing.length() > 0.001:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(facing.x, facing.y), 0.3)
 	if moving:
-		walk_t += delta * 10.0
-		body.position.y = absf(sin(walk_t)) * 0.06
-		body.rotation.z = sin(walk_t) * 0.04
-	else:
-		body.position.y = lerpf(body.position.y, 0.0, 0.3)
-		body.rotation.z = 0.0
-	weapon.rotation.x = -sin((0.2 - swing) / 0.2 * PI) * 1.3 if swing > 0.0 else 0.0
+		walk_t += delta * 8.0
+	rig.animate_pose(walk_t, moving, anim_t)
+	var arm: Node3D = rig.shoulders[1]
+	if swing > 0.0:
+		# ท่าฟัน: ง้างแขนขวาขึ้นเหนือหัว แล้วฟาดลงข้างหน้า
+		var t := (0.2 - swing) / 0.2
+		var lift := t / 0.3 if t < 0.3 else 1.0 - (t - 0.3) / 0.7 * 1.15
+		arm.rotation.x = -2.5 * lift
+		rig.elbows[1].rotation.x = -0.2
+		rig.torso.rotation.y = -0.25 * lift
+	elif fishing:
+		# ถือคันเบ็ดยื่นไปข้างหน้า
+		arm.rotation.x = -0.75
+		rig.elbows[1].rotation.x = -0.5
 	if aura != null:
 		aura.rotation.y += delta * 1.5
 	if _sparkles != null:
@@ -152,8 +170,21 @@ func animate(delta: float, moving: bool, facing: Vector2, swing: float, flash: b
 	if _orb != null:
 		_orb.position.y = 1.05 + sin(anim_t * 2.0) * 0.06
 		_orb.rotation.y += delta * 1.2
+	if _weapon_aura != null:
+		var m := _weapon_aura.material_override as StandardMaterial3D
+		if m != null:
+			m.albedo_color.a = 0.32 + 0.14 * sin(anim_t * 4.0)
+	if _foot_aura != null:
+		_foot_aura.rotation.y -= delta * 0.8
+		_foot_aura.scale = Vector3.ONE * (1.0 + 0.05 * sin(anim_t * 3.0))
+	for i in _wings.size():
+		var sgn := -1.0 if i == 0 else 1.0
+		_wings[i].rotation.y = sgn * (0.35 + sin(anim_t * (9.0 if moving else 4.0)) * 0.25)
 	if fishing:
 		_update_line()
+	# สลบ: นอนหงายกับพื้น
+	model.rotation.x = lerpf(model.rotation.x, -1.4 if dead else 0.0, 0.2)
+	model.position.y = lerpf(model.position.y, 0.32 if dead else 0.0, 0.2)
 	levelup_beam.visible = levelup_fx > 0.0
 	if levelup_fx > 0.0:
 		levelup_beam.scale = Vector3(1, levelup_fx / 1.2, 1)
@@ -223,62 +254,68 @@ func _build_model() -> void:
 	var armor_style := _armor_style(armor_key)
 	var head_key := _item_for("head")
 	var head_style := _head_style(head_key)
+	var costume_key := _item_for("f_costume")
+	var hat_key := _item_for("f_hat")
+	if costume_key != "":
+		# แฟชั่นชุดทับหน้าตาชุดเกราะ (ค่าพลังเกราะยังอยู่)
+		armor_key = ""
+		armor_style = ""
+	if hat_key != "":
+		head_key = ""
+		head_style = ""
 	var robe_c: Color = look["robe"]
 	if armor_style in ["yant_shirt", "jiwon", "yant_robe", "hunter", "reaper"]:
 		robe_c = ItemIcons.tint_of(armor_key)
+	if costume_key != "":
+		robe_c = ItemIcons.tint_of(costume_key)
 	model = Node3D.new()
 	add_child(model)
 	body = Node3D.new()
 	model.add_child(body)
-	# ตัวจิบิ: หัวโต ตัวเล็ก ตาโตมีประกาย แก้มแดง
-	var robe := K.mat(robe_c, 0.0, 0.8) if armor_style != "yant_robe" else _gear_mat(armor_key, robe_c)
-	var sash := K.mat(look["sash"])
-	var skin := K.mat(skin_c, 0.0, 0.7)
-	var hair := K.mat(hair_c, 0.0, 0.6)
-	var eye := K.mat(Color(0.2, 0.13, 0.16), 0.0, 0.3, 0.0, false)
-	var shine := K.mat(Color(1, 1, 1), 1.5, 0.3, 0.0, false)
-	var blush := K.mat(Color(1.0, 0.6, 0.65), 0.3, 0.8, 0.0, false)
-	var shoe := K.mat(Color(0.62, 0.42, 0.36))
+	# ร่างจิบิแบบใหม่ (client/chibi_body.gd): เสื้อสีจีวรของคลาส ผ้าคาดสีคลาส กางเกง/กระโปรงโทนเข้ม
+	var shoe_c := Color(0.62, 0.42, 0.36)
 	if armor_style in ["plate", "naga_plate", "hunter"]:
-		shoe = K.mat(ItemIcons.tint_of(armor_key).darkened(0.35))
-	for x in [-0.1, 0.1]:
-		K.sphere(body, 0.09, Vector3(x, 0.07, 0.03), shoe, 8, Vector3(1, 0.7, 1.3))
-	K.cyl(body, 0.17, 0.3, 0.55, Vector3(0, 0.38, 0), robe, 14)
+		shoe_c = ItemIcons.tint_of(armor_key).darkened(0.35)
+	var covered := head_style in ["helmet", "plume_helmet"] or (head_style == "" and hat_key == "" and armor_style == "reaper")
+	rig = Chibi.new()
+	body.add_child(rig)
+	rig.build({"gender": "f" if female else "m", "hair": _look("hair", 0), "hair_hidden": covered},
+		{"shirt": robe_c, "sash": look["sash"], "pants": robe_c.darkened(0.45).lerp(Color(0.5, 0.4, 0.4), 0.4),
+		"shoe": shoe_c, "hair": hair_c, "skin": skin_c})
+	# ของที่ติดตัว (เกราะ ผ้าคลุม ปีก เครื่องราง) วางบนลำตัวของร่างใหม่ ให้ขยับไปกับท่าเดิน
+	# พิกัดของชิ้นส่วนเหล่านี้ออกแบบไว้กับตัวทรงกรวยแบบเดิม จึงย่อ/ยืดให้พอดีลำตัวใหม่ (ชายอกกว้าง หญิงตัวเรียว)
+	gear = Node3D.new()
+	gear.position = Vector3(0, -Chibi.LIFT + 0.02, 0)
+	gear.scale = Vector3(1.0, 1.08, 0.8) if not female else Vector3(0.8, 1.08, 0.66)
+	rig.torso.add_child(gear)
 	if armor_style == "reaper" or armor_style == "jiwon":
 		# ชุดยาวกรอมเท้า
-		K.cyl(body, 0.29, 0.33, 0.12, Vector3(0, 0.1, 0), robe, 14)
+		K.cyl(gear, 0.22, 0.33, 0.42, Vector3(0, 0.3, 0), K.mat(robe_c, 0.0, 0.8), 16)
 	if armor_style != "jiwon":
-		K.beam(body, Vector3(-0.18, 0.62, 0.14), Vector3(0.2, 0.3, 0.17), 0.07, sash)
+		K.beam(gear, Vector3(-0.18, 0.62, 0.15), Vector3(0.2, 0.32, 0.2), 0.06, K.mat(look["sash"]))
 	if tier >= 1:
 		# ขั้น 1 ขึ้นไป: เข็มขัดและปกเสื้อ
-		K.cyl(body, 0.27, 0.27, 0.07, Vector3(0, 0.33, 0), sash, 14)
-		K.cyl(body, 0.2, 0.2, 0.06, Vector3(0, 0.64, 0), K.mat(look["sash"].lightened(0.3)), 14)
+		K.cyl(gear, 0.25, 0.25, 0.06, Vector3(0, 0.35, 0), K.mat(look["sash"]), 16)
+		K.cyl(gear, 0.15, 0.19, 0.05, Vector3(0, 0.64, 0), K.mat(look["sash"].lightened(0.3)), 14)
 	if look["cape"] and armor_style != "reaper":
-		K.box(body, Vector3(0.5, 0.6, 0.05), Vector3(0, 0.36, -0.26), K.mat(look["sash"].darkened(0.15)), Vector3(0.18, 0, 0))
-	for x in [-0.27, 0.27]:
-		K.sphere(body, 0.08, Vector3(x, 0.42, 0.04), skin, 8)
+		_cape(K.mat(look["sash"].darkened(0.15)), 0.6)
 	_build_armor(armor_key, armor_style, look)
+	if costume_key != "":
+		_build_costume(costume_key)
 	_build_accessory(_item_for("accessory"))
+	if _item_for("f_wings") != "":
+		_build_wings(_item_for("f_wings"))
+	# หมวก/ของบนหัว: ออกแบบไว้กับหัวเดิม (เงยหน้าเล็กน้อย) จึงวางบนฐานที่เอียงและขยายให้คลุมผมทรงใหม่
 	head = Node3D.new()
-	head.position = Vector3(0, 1.0, 0)
-	head.rotation.x = -0.25  # เงยหน้าเล็กน้อยให้เห็นหน้าจากกล้องมุมสูง
-	body.add_child(head)
-	K.sphere(head, 0.4, Vector3.ZERO, skin, 18)
-	var covered := head_style in ["helmet", "plume_helmet"] or (head_style == "" and armor_style == "reaper")
-	if not covered:
-		K.sphere(head, 0.41, Vector3(0, 0.15, -0.11), hair, 18, Vector3(1.0, 0.78, 1.0))
-	if female:
-		_build_female_hair(head, hair, look, covered)
-	for x in [-0.15, 0.15]:
-		K.sphere(head, 0.095, Vector3(x, 0.0, 0.34), eye, 10, Vector3(0.85, 1.25, 0.5))
-		K.sphere(head, 0.035, Vector3(x + 0.03, 0.06, 0.39), shine, 6)
-		K.sphere(head, 0.065, Vector3(x * 1.55, -0.11, 0.32), blush, 8, Vector3(1.2, 0.6, 0.4))
-		if female:
-			# ขนตางอนเล็กๆ ที่หางตา
-			K.box(head, Vector3(0.06, 0.025, 0.02), Vector3(x * 1.55, 0.09, 0.33), eye, Vector3(0, -signf(x) * 0.5, signf(x) * 0.5))
-	K.sphere(head, 0.03, Vector3(0, -0.15, 0.38), K.mat(Color(0.85, 0.4, 0.42), 0.0, 0.8, 0.0, false), 6, Vector3(1.4, 0.7, 0.6))
-	_label_y = 2.15
-	if head_style != "":
+	head.position = Vector3(0, 0.03, -0.01)
+	head.rotation.x = -0.2
+	head.scale = Vector3.ONE * 1.1
+	rig.head.add_child(head)
+	var hair := K.mat(hair_c, 0.0, 0.6)
+	_label_y = 2.3
+	if hat_key != "":
+		_build_fashion_hat(head, hat_key, hair)
+	elif head_style != "":
 		_build_headgear(head, head_key, head_style, hair, female)
 	elif armor_style == "reaper":
 		_build_hat(head, {"hat": "hood", "robe": robe_c, "sash": look["sash"]}, hair, female)
@@ -293,6 +330,7 @@ func _build_model() -> void:
 		_build_gear_weapon(weapon_key, look)
 	else:
 		_build_weapon(look)
+	_attach_weapon()
 	_build_rod()
 	aura = null
 	if look["aura"]:
@@ -309,34 +347,24 @@ func _build_model() -> void:
 	name_label = K.label(self, display_name, Vector3(0, _label_y, 0), Color(1, 0.97, 0.88), 36)
 
 
-## ผมผู้หญิง: มวยสองข้าง ผมยาวด้านหลัง ปอยผมข้างแก้ม และโบว์สีผ้าคาด
-func _build_female_hair(h: Node3D, hair: Material, look: Dictionary, covered: bool) -> void:
-	K.sphere(h, 0.3, Vector3(0, -0.12, -0.2), hair, 14, Vector3(1.25, 1.25, 0.8))
-	for x in [-0.3, 0.3]:
-		K.sphere(h, 0.11, Vector3(x * 1.05, -0.12, 0.12), hair, 10, Vector3(0.7, 1.4, 0.8))
-	if covered:
-		return
-	var ribbon := K.mat(look["sash"])
-	for x in [-0.3, 0.3]:
-		K.sphere(h, 0.13, Vector3(x, 0.32, -0.12), hair, 12)
-	# โบว์ผูกผมบนมวยซ้าย (สองห่วง + ปม) ฝั่งเดียวกับมือที่ว่าง ไม่ชนอาวุธ
-	var bow := Node3D.new()
-	bow.position = Vector3(-0.3, 0.38, 0.03)
-	bow.rotation = Vector3(-0.3, -0.3, 0.35)
-	h.add_child(bow)
-	for sgn in [-1.0, 1.0]:
-		K.sphere(bow, 0.065, Vector3(sgn * 0.075, 0.0, 0.0), ribbon, 8, Vector3(1.25, 0.8, 0.45))
-		K.box(bow, Vector3(0.035, 0.09, 0.02), Vector3(sgn * 0.03, -0.07, 0.0), ribbon, Vector3(0, 0, sgn * 0.35))
-	K.sphere(bow, 0.035, Vector3(0, 0, 0.015), K.mat(look["sash"].lightened(0.3)), 6)
-	# หน้าม้าเฉียง
-	K.sphere(h, 0.18, Vector3(-0.12, 0.26, 0.24), hair, 10, Vector3(1.3, 0.55, 0.6))
+## ย้ายอาวุธจากตำแหน่งเดิม (วางข้างตัว) ไปอยู่ในมือ: ธนูถือมือซ้าย อย่างอื่นถือมือขวา
+## builder ตั้ง weapon.position เป็นพิกัดบนตัวเดิม จึงลบตำแหน่งมือเดิมออกให้เหลือระยะจากมือ
+func _attach_weapon() -> void:
+	var left := weapon.position.x < 0.0
+	var old_hand := Vector3(-0.27 if left else 0.27, 0.42, 0.04)
+	var off := weapon.position - old_hand
+	body.remove_child(weapon)
+	var hand: Node3D = rig.hands[0 if left else 1]
+	hand.add_child(weapon)
+	# มือเอียงตามศอกที่งอไปข้างหน้า หมุนกลับให้อาวุธตั้งตรงเหมือนเดิม
+	weapon.position = off * Vector3(0.6, 0.6, 0.6)
+	weapon.rotation = Vector3(0.35, 0, 0)
 
 
 func _build_hat(h: Node3D, look: Dictionary, hair: Material, female: bool) -> void:
 	match look["hat"]:
 		"":
-			if not female:
-				K.sphere(h, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
+			pass
 		"headband":
 			var band := TorusMesh.new()
 			band.inner_radius = 0.38
@@ -356,8 +384,6 @@ func _build_hat(h: Node3D, look: Dictionary, hair: Material, female: bool) -> vo
 			K.cyl(h, 0.01, 0.12, 0.25, Vector3(0, 0.55, -0.2), K.mat(look["robe"].darkened(0.15)), 8, Vector3(-0.6, 0, 0))
 		"crown":
 			# ชฎาทองแบบไทย ทรงสอบขึ้นเป็นยอดแหลม
-			if not female:
-				K.sphere(h, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
 			K.cyl(h, 0.3, 0.34, 0.12, Vector3(0, 0.36, -0.03), K.gold(), 16)
 			K.cyl(h, 0.16, 0.26, 0.2, Vector3(0, 0.52, -0.03), K.gold(), 14)
 			K.cyl(h, 0.02, 0.15, 0.36, Vector3(0, 0.79, -0.03), K.gold(), 12)
@@ -410,7 +436,7 @@ func _bow_model(wood_c: Color, big: bool, tip_c: Color, glow: float) -> void:
 		for tip in [pts[0], pts[4]]:
 			K.sphere(weapon, 0.06, tip, K.mat(tip_c, 3.0, 0.3, 0.0, false), 6)
 	# กระบอกลูกธนูที่หลัง
-	K.cyl(body, 0.08, 0.08, 0.45, Vector3(0.12, 0.6, -0.26), K.mat(Color(0.7, 0.5, 0.38)), 8, Vector3(0.3, 0, -0.3))
+	K.cyl(gear, 0.08, 0.08, 0.45, Vector3(0.12, 0.6, -0.26), K.mat(Color(0.7, 0.5, 0.38)), 8, Vector3(0.3, 0, -0.3))
 
 
 # ---------- อาวุธตามไอเทม ----------
@@ -449,8 +475,8 @@ func _build_gear_weapon(key: String, look: Dictionary) -> void:
 	var glow := 0.0
 	if legend:
 		glow = 0.6
-	if lv >= 7:
-		glow = maxf(glow, 0.9 if lv < 10 else 1.6)
+	if lv >= 4:
+		glow = maxf(glow, 0.45 if lv < 7 else (0.9 if lv < 10 else 1.6))
 	var guard := K.gold() if fancy else K.mat(tint.darkened(0.3), 0.0, 0.4, 0.6)
 	var gem := K.mat(rc.lightened(0.2), 1.2, 0.3, 0.0, false)
 	var top := 1.0  # ความสูงปลายอาวุธ (ไว้วางประกาย)
@@ -529,7 +555,7 @@ func _build_gear_weapon(key: String, look: Dictionary) -> void:
 			K.beam(weapon, Vector3(0.32, 0.05, 0.22), Vector3(0, 0.05, 0.36), 0.045, arm)
 			K.beam(weapon, Vector3(-0.32, 0.05, 0.22), Vector3(0.32, 0.05, 0.22), 0.01, K.mat(Color(1, 1, 1), 0.0, 0.8, 0.0, false))
 			K.sphere(weapon, 0.05, Vector3(0, 0.1, 0.1), gem, 8)
-			K.cyl(body, 0.08, 0.08, 0.45, Vector3(0.12, 0.6, -0.26), K.mat(Color(0.7, 0.5, 0.38)), 8, Vector3(0.3, 0, -0.3))
+			K.cyl(gear, 0.08, 0.08, 0.45, Vector3(0.12, 0.6, -0.26), K.mat(Color(0.7, 0.5, 0.38)), 8, Vector3(0.3, 0, -0.3))
 			top = 0.3
 		"book", "palm_book", "khoi":
 			weapon.position = Vector3(0.38, 0.6, 0.12)
@@ -552,11 +578,12 @@ func _build_gear_weapon(key: String, look: Dictionary) -> void:
 				var off := float(i) - (cards - 1) / 2.0
 				K.box(weapon, Vector3(0.1, 0.2, 0.01), Vector3(off * 0.2, 0.3 + (0.05 if cards == 3 and i == 1 else 0.0), 0), K.mat(card_c, 1.2 + glow, 0.5, 0.0, false), Vector3(0, 0, off * 0.4))
 			top = 0.4
+	_build_refine_fx(lv, top, rc)
 	if lv >= 7:
 		_sparkles = Node3D.new()
 		_sparkles.position = Vector3(0, top * 0.6, 0)
 		weapon.add_child(_sparkles)
-		var n := 3 if lv < 10 else 5
+		var n := 3 if lv < 9 else (4 if lv < 10 else 6)
 		var sc := Color(1.0, 0.95, 0.6) if lv < 10 else rc.lightened(0.35)
 		for i in n:
 			var a := i * TAU / n
@@ -602,18 +629,26 @@ func _yant_mark(y: float, col: Material, r: float = 0.07) -> void:
 	var ring := TorusMesh.new()
 	ring.inner_radius = r * 0.78
 	ring.outer_radius = r
-	K.add(body, ring, _chest(y, 0.008), col, Vector3(PI / 2.0 - 0.23, 0, 0))
-	K.box(body, Vector3(r * 1.6, 0.012, 0.012), _chest(y, 0.012), col, CHEST_TILT)
-	K.box(body, Vector3(0.012, r * 1.6, 0.012), _chest(y, 0.012), col, CHEST_TILT)
-	K.box(body, Vector3(r * 1.1, 0.012, 0.012), _chest(y + r * 1.5, 0.008), col, CHEST_TILT)
+	K.add(gear, ring, _chest(y, 0.008), col, Vector3(PI / 2.0 - 0.23, 0, 0))
+	K.box(gear, Vector3(r * 1.6, 0.012, 0.012), _chest(y, 0.012), col, CHEST_TILT)
+	K.box(gear, Vector3(0.012, r * 1.6, 0.012), _chest(y, 0.012), col, CHEST_TILT)
+	K.box(gear, Vector3(r * 1.1, 0.012, 0.012), _chest(y + r * 1.5, 0.008), col, CHEST_TILT)
+
+
+## ผ้าคลุมหลัง: กรวยแบนครึ่งหลังโค้งรับลำตัว ห้อยจากไหล่ลงมา (ครึ่งหน้าจมอยู่ในลำตัว)
+func _cape(m: Material, length: float) -> void:
+	var c := K.cyl(gear, 0.19, 0.3, length, Vector3(0, 0.66 - length / 2.0, -0.13), m, 16, Vector3(0.12, 0, 0))
+	c.scale = Vector3(1.0, 1.0, 0.55)
+	for x in [-0.13, 0.13]:
+		K.sphere(gear, 0.035, Vector3(x, 0.62, 0.15), K.gold(), 6)
 
 
 func _shoulder_pads(key: String, mat: Material, trim: Material, spiky: bool) -> void:
 	for x in [-0.21, 0.21]:
-		K.sphere(body, 0.12, Vector3(x, 0.62, 0.0), mat, 12, Vector3(1.0, 0.62, 1.0))
-		K.sphere(body, 0.03, Vector3(x * 1.2, 0.66, 0.06), trim, 6)
+		K.sphere(gear, 0.12, Vector3(x, 0.62, 0.0), mat, 12, Vector3(1.0, 0.62, 1.0))
+		K.sphere(gear, 0.03, Vector3(x * 1.2, 0.66, 0.06), trim, 6)
 		if spiky:
-			K.cyl(body, 0.0, 0.04, 0.12, Vector3(x * 1.25, 0.72, 0.0), trim, 6, Vector3(0, 0, -signf(x) * 0.6))
+			K.cyl(gear, 0.0, 0.04, 0.12, Vector3(x * 1.25, 0.72, 0.0), trim, 6, Vector3(0, 0, -signf(x) * 0.6))
 
 
 func _build_armor(key: String, style: String, look: Dictionary) -> void:
@@ -626,36 +661,36 @@ func _build_armor(key: String, style: String, look: Dictionary) -> void:
 		"yant_shirt":
 			_yant_mark(0.5, K.mat(Color(0.86, 0.26, 0.3), 0.0, 0.8, 0.0, false))
 			for y in [0.2, 0.25]:
-				K.box(body, Vector3(0.14, 0.012, 0.012), _chest(y, 0.005) + Vector3(-0.09, 0, 0), K.mat(Color(0.86, 0.26, 0.3), 0.0, 0.8, 0.0, false), CHEST_TILT)
+				K.box(gear, Vector3(0.14, 0.012, 0.012), _chest(y, 0.005) + Vector3(-0.09, 0, 0), K.mat(Color(0.86, 0.26, 0.3), 0.0, 0.8, 0.0, false), CHEST_TILT)
 		"vest":
 			# เสื้อกั๊กคงกระพันสีแดง ผ่าหน้า มีลายยันต์ทอง
-			K.cyl(body, 0.19, 0.255, 0.3, Vector3(0, 0.5, 0), _gear_mat(key, tint), 14)
-			K.box(body, Vector3(0.06, 0.3, 0.02), _chest(0.5, 0.03), K.mat(look["robe"]), CHEST_TILT)
+			K.cyl(gear, 0.19, 0.255, 0.3, Vector3(0, 0.5, 0), _gear_mat(key, tint), 14)
+			K.box(gear, Vector3(0.06, 0.3, 0.02), _chest(0.5, 0.03), K.mat(look["robe"]), CHEST_TILT)
 			for y in [0.42, 0.52, 0.6]:
-				K.sphere(body, 0.022, _chest(y, 0.05) + Vector3(0.05, 0, 0), K.gold(), 6)
+				K.sphere(gear, 0.022, _chest(y, 0.05) + Vector3(0.05, 0, 0), K.gold(), 6)
 			for x in [-0.14, 0.14]:
 				var ring := TorusMesh.new()
 				ring.inner_radius = 0.035
 				ring.outer_radius = 0.048
-				K.add(body, ring, Vector3(x, 0.47, _robe_r(0.47) * 0.85 + 0.03), K.gold(), Vector3(PI / 2.0 - 0.23, 0, -x))
+				K.add(gear, ring, Vector3(x, 0.47, _robe_r(0.47) * 0.85 + 0.03), K.gold(), Vector3(PI / 2.0 - 0.23, 0, -x))
 		"chain":
 			var mail := _metal(key, tint)
-			K.cyl(body, 0.19, 0.27, 0.38, Vector3(0, 0.46, 0), mail, 14)
+			K.cyl(gear, 0.19, 0.27, 0.38, Vector3(0, 0.46, 0), mail, 14)
 			var link := K.mat(tint.darkened(0.35), 0.0, 0.4, 0.5, false)
 			for row in 4:
 				var y := 0.34 + row * 0.08
 				for col in 5:
 					var a := (col - 2) * 0.32 + (0.16 if row % 2 == 1 else 0.0)
 					var r := _robe_r(y) + 0.032
-					K.sphere(body, 0.014, Vector3(sin(a) * r, y, cos(a) * r), link, 4)
-			K.cyl(body, 0.28, 0.28, 0.06, Vector3(0, 0.3, 0), K.mat(Color(0.55, 0.36, 0.3)), 14)
-			K.box(body, Vector3(0.08, 0.07, 0.03), _chest(0.3, 0.06), K.gold())
+					K.sphere(gear, 0.014, Vector3(sin(a) * r, y, cos(a) * r), link, 4)
+			K.cyl(gear, 0.28, 0.28, 0.06, Vector3(0, 0.3, 0), K.mat(Color(0.55, 0.36, 0.3)), 14)
+			K.box(gear, Vector3(0.08, 0.07, 0.03), _chest(0.3, 0.06), K.gold())
 		"plate", "naga_plate":
 			var naga := style == "naga_plate"
 			var metal := _metal(key, tint)
 			var trim: Material = K.gold() if not naga else K.mat(tint.lightened(0.35), 0.3 if rarity == "legendary" else 0.0, 0.4, 0.5)
-			K.cyl(body, 0.2, 0.275, 0.36, Vector3(0, 0.47, 0), metal, 14)
-			K.cyl(body, 0.285, 0.285, 0.07, Vector3(0, 0.3, 0), trim, 14)
+			K.cyl(gear, 0.2, 0.275, 0.36, Vector3(0, 0.47, 0), metal, 14)
+			K.cyl(gear, 0.285, 0.285, 0.07, Vector3(0, 0.3, 0), trim, 14)
 			if naga:
 				# เกล็ดนาคเรียงเป็นแถวบนอก
 				var scale_m := K.mat(tint.lightened(0.25), 0.3 if rarity == "legendary" else 0.0, 0.4, 0.4, false)
@@ -664,46 +699,46 @@ func _build_armor(key: String, style: String, look: Dictionary) -> void:
 					for col in 4:
 						var a := (col - 1.5) * 0.36 + (0.18 if row % 2 == 1 else 0.0)
 						var r := _robe_r(y) + 0.04
-						K.sphere(body, 0.045, Vector3(sin(a) * r, y, cos(a) * r), scale_m, 6, Vector3(1.0, 0.7, 0.45))
+						K.sphere(gear, 0.045, Vector3(sin(a) * r, y, cos(a) * r), scale_m, 6, Vector3(1.0, 0.7, 0.45))
 			else:
 				# แผ่นอกนูนกลาง
-				K.box(body, Vector3(0.03, 0.3, 0.03), _chest(0.48, 0.045), trim, CHEST_TILT)
-			K.sphere(body, 0.045, _chest(0.52, 0.06), K.mat(rc.lightened(0.2), 1.0, 0.3, 0.0, false), 8)
+				K.box(gear, Vector3(0.03, 0.3, 0.03), _chest(0.48, 0.045), trim, CHEST_TILT)
+			K.sphere(gear, 0.045, _chest(0.52, 0.06), K.mat(rc.lightened(0.2), 1.0, 0.3, 0.0, false), 8)
 			_shoulder_pads(key, metal, trim, naga)
 			if rarity == "legendary" and not look["cape"]:
-				K.box(body, Vector3(0.5, 0.55, 0.04), Vector3(0, 0.36, -0.27), _gear_mat(key, tint.darkened(0.2)), Vector3(0.18, 0, 0))
+				_cape(_gear_mat(key, tint.darkened(0.2)), 0.55)
 		"jiwon":
 			# ห่มเฉียงไหล่ซ้าย (ผ้าสีเข้มขึ้นพาดจากไหล่ไปเอว)
 			var drape := _gear_mat(key, tint.darkened(0.12))
-			K.beam(body, Vector3(-0.2, 0.66, 0.08), Vector3(0.22, 0.26, 0.2), 0.12, drape)
-			K.beam(body, Vector3(-0.2, 0.66, -0.06), Vector3(0.24, 0.24, -0.18), 0.12, drape)
-			K.sphere(body, 0.12, Vector3(-0.2, 0.6, 0.0), drape, 10, Vector3(1.0, 0.7, 1.0))
+			K.beam(gear, Vector3(-0.2, 0.66, 0.08), Vector3(0.22, 0.26, 0.2), 0.12, drape)
+			K.beam(gear, Vector3(-0.2, 0.66, -0.06), Vector3(0.24, 0.24, -0.18), 0.12, drape)
+			K.sphere(gear, 0.12, Vector3(-0.2, 0.6, 0.0), drape, 10, Vector3(1.0, 0.7, 1.0))
 		"yant_robe":
 			var gold_m := K.mat(Color(1.0, 0.82, 0.38), 0.6, 0.4, 0.5)
 			_yant_mark(0.48, gold_m, 0.085)
-			K.cyl(body, 0.31, 0.31, 0.05, Vector3(0, 0.13, 0), gold_m, 14)
-			K.cyl(body, 0.21, 0.21, 0.05, Vector3(0, 0.64, 0), gold_m, 14)
-			K.box(body, Vector3(0.5, 0.58, 0.05), Vector3(0, 0.36, -0.26), _gear_mat(key, tint.darkened(0.25)), Vector3(0.18, 0, 0))
+			K.cyl(gear, 0.31, 0.31, 0.05, Vector3(0, 0.13, 0), gold_m, 14)
+			K.cyl(gear, 0.21, 0.21, 0.05, Vector3(0, 0.64, 0), gold_m, 14)
+			_cape(_gear_mat(key, tint.darkened(0.25)), 0.58)
 		"hunter":
 			# ปกขนสัตว์ เข็มขัด กระเป๋าหนัง
 			var fur := TorusMesh.new()
 			fur.inner_radius = 0.12
 			fur.outer_radius = 0.24
-			K.add(body, fur, Vector3(0, 0.64, 0), K.mat(Color(0.84, 0.68, 0.5)), Vector3.ZERO, Vector3(1, 0.8, 1))
-			K.cyl(body, 0.28, 0.28, 0.06, Vector3(0, 0.3, 0), K.mat(Color(0.55, 0.36, 0.3)), 14)
-			K.box(body, Vector3(0.12, 0.12, 0.06), Vector3(0.16, 0.24, 0.22), K.mat(Color(0.7, 0.48, 0.34)), Vector3(0, -0.5, 0))
+			K.add(gear, fur, Vector3(0, 0.64, 0), K.mat(Color(0.84, 0.68, 0.5)), Vector3.ZERO, Vector3(1, 0.8, 1))
+			K.cyl(gear, 0.28, 0.28, 0.06, Vector3(0, 0.3, 0), K.mat(Color(0.55, 0.36, 0.3)), 14)
+			K.box(gear, Vector3(0.12, 0.12, 0.06), Vector3(0.16, 0.24, 0.22), K.mat(Color(0.7, 0.48, 0.34)), Vector3(0, -0.5, 0))
 		"reaper":
 			# ชุดยมทูต: ผ้าคลุมขาดรุ่ย เชือกบ่วงคาดเอว
 			var cloak := _gear_mat(key, tint.darkened(0.25))
-			K.box(body, Vector3(0.52, 0.62, 0.05), Vector3(0, 0.34, -0.27), cloak, Vector3(0.18, 0, 0))
+			_cape(cloak, 0.64)
 			for x in [-0.18, 0.0, 0.18]:
-				K.cyl(body, 0.06, 0.0, 0.12, Vector3(x, 0.02, -0.33), cloak, 4)
-			K.cyl(body, 0.285, 0.285, 0.035, Vector3(0, 0.3, 0), K.mat(Color(0.74, 0.66, 0.88)), 14)
-			K.beam(body, Vector3(0.12, 0.3, 0.24), Vector3(0.16, 0.14, 0.27), 0.03, K.mat(Color(0.74, 0.66, 0.88)))
+				K.cyl(gear, 0.06, 0.0, 0.12, Vector3(x, 0.02, -0.33), cloak, 4)
+			K.cyl(gear, 0.285, 0.285, 0.035, Vector3(0, 0.3, 0), K.mat(Color(0.74, 0.66, 0.88)), 14)
+			K.beam(gear, Vector3(0.12, 0.3, 0.24), Vector3(0.16, 0.14, 0.27), 0.03, K.mat(Color(0.74, 0.66, 0.88)))
 			var ring := TorusMesh.new()
 			ring.inner_radius = 0.03
 			ring.outer_radius = 0.05
-			K.add(body, ring, Vector3(0.17, 0.11, 0.27), K.mat(Color(0.74, 0.66, 0.88)), Vector3(PI / 2.0, 0, 0))
+			K.add(gear, ring, Vector3(0.17, 0.11, 0.27), K.mat(Color(0.74, 0.66, 0.88)), Vector3(PI / 2.0, 0, 0))
 
 
 # ---------- หมวก ----------
@@ -733,8 +768,6 @@ func _build_headgear(h: Node3D, key: String, style: String, hair: Material, fema
 	var legend := rarity == "legendary"
 	match style:
 		"headband":
-			if not female:
-				K.sphere(h, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
 			var band := TorusMesh.new()
 			band.inner_radius = 0.38
 			band.outer_radius = 0.44
@@ -745,8 +778,6 @@ func _build_headgear(h: Node3D, key: String, style: String, hair: Material, fema
 			# ยันต์ทองหน้าผาก
 			K.box(h, Vector3(0.1, 0.07, 0.02), Vector3(0, 0.22, 0.4), K.mat(Color(1.0, 0.86, 0.45), 0.3, 0.5, 0.0, false), Vector3(-0.3, 0, 0))
 		"mongkol":
-			if not female:
-				K.sphere(h, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
 			var ring := TorusMesh.new()
 			ring.inner_radius = 0.37
 			ring.outer_radius = 0.43
@@ -774,8 +805,6 @@ func _build_headgear(h: Node3D, key: String, style: String, hair: Material, fema
 				K.cyl(h, 0.0, 0.06, 0.2, Vector3(0, 0.56, -0.04), K.gold(), 8)
 		"tiara", "naga_crown":
 			var gold := K.gold()
-			if not female:
-				K.sphere(h, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
 			var band := TorusMesh.new()
 			band.inner_radius = 0.3
 			band.outer_radius = 0.35
@@ -812,8 +841,6 @@ func _build_headgear(h: Node3D, key: String, style: String, hair: Material, fema
 			_label_y += 0.2
 		"chada":
 			var gold := _gear_mat(key, Color(1.0, 0.8, 0.38), 0.35, 0.75) if legend else K.gold()
-			if not female:
-				K.sphere(h, 0.1, Vector3(0, 0.46, -0.12), hair, 10)
 			K.cyl(h, 0.3, 0.34, 0.12, Vector3(0, 0.36, -0.03), gold, 16)
 			K.cyl(h, 0.16, 0.26, 0.2, Vector3(0, 0.52, -0.03), gold, 14)
 			K.cyl(h, 0.12, 0.17, 0.08, Vector3(0, 0.66, -0.03), gold, 12)
@@ -855,7 +882,7 @@ func _necklace(m: Material, r: float = 0.17) -> void:
 	var ring := TorusMesh.new()
 	ring.inner_radius = r - 0.012
 	ring.outer_radius = r + 0.012
-	K.add(body, ring, Vector3(0, 0.62, 0.02), m, Vector3(0.45, 0, 0))
+	K.add(gear, ring, Vector3(0, 0.62, 0.02), m, Vector3(0.45, 0, 0))
 
 
 func _build_accessory(key: String) -> void:
@@ -867,34 +894,39 @@ func _build_accessory(key: String) -> void:
 	var rc: Color = ItemDB.RARITY[rarity]["color"]
 	match style:
 		"wrist_string", "armband":
-			for x in [-0.27, 0.27]:
-				if style == "armband" and x > 0:
+			# สายสิญจน์ผูกข้อมือทั้งสองข้าง / ประเจียดผูกต้นแขนซ้าย
+			for i in 2:
+				if style == "armband" and i == 1:
 					continue
 				var ring := TorusMesh.new()
-				ring.inner_radius = 0.07
-				ring.outer_radius = 0.095 if style == "armband" else 0.088
-				K.add(body, ring, Vector3(x, 0.46, 0.04), _gear_mat(key, tint), Vector3(0, 0, signf(x) * 0.3))
+				ring.inner_radius = 0.045 if style == "wrist_string" else 0.07
+				ring.outer_radius = 0.062 if style == "wrist_string" else 0.092
+				var at: Node3D = rig.hands[i] if style == "wrist_string" else rig.shoulders[i]
+				K.add(at, ring, Vector3(0, 0.05, 0) if style == "wrist_string" else Vector3(0, -0.1, 0), _gear_mat(key, tint))
 			if style == "armband":
 				# ประเจียด: ชายผ้าแดงปลิว + ยันต์ทอง
+				var sh: Node3D = rig.shoulders[0]
 				for k in 2:
-					K.box(body, Vector3(0.04, 0.16, 0.02), Vector3(-0.33 - k * 0.03, 0.4, -0.02), _gear_mat(key, tint), Vector3(0.2, 0, 0.5 + k * 0.3))
-				K.sphere(body, 0.03, Vector3(-0.3, 0.5, 0.1), K.gold(), 6)
+					K.box(sh, Vector3(0.04, 0.16, 0.02), Vector3(-0.07 - k * 0.03, -0.16, -0.02), _gear_mat(key, tint), Vector3(0.2, 0, 0.5 + k * 0.3))
+				K.sphere(sh, 0.03, Vector3(0, -0.1, 0.09), K.gold(), 6)
 		"ring":
+			# แหวนที่มือซ้าย หัวแหวนเรืองแสง
+			var hand: Node3D = rig.hands[0]
 			var ring := TorusMesh.new()
-			ring.inner_radius = 0.06
-			ring.outer_radius = 0.075
-			K.add(body, ring, Vector3(-0.27, 0.42, 0.06), K.gold(), Vector3(PI / 2.0, 0, 0))
-			K.sphere(body, 0.035, Vector3(-0.27, 0.49, 0.1), K.mat(tint, 1.5, 0.3, 0.0, false), 6)
+			ring.inner_radius = 0.05
+			ring.outer_radius = 0.064
+			K.add(hand, ring, Vector3(0, -0.01, 0), K.gold())
+			K.sphere(hand, 0.03, Vector3(0, -0.01, 0.065), K.mat(tint, 1.5, 0.3, 0.0, false), 6)
 		"takrut":
 			_necklace(K.mat(Color(0.92, 0.32, 0.34)))
-			K.cyl(body, 0.03, 0.03, 0.18, _chest(0.52, 0.05), _metal(key, tint), 8, Vector3(0, 0, PI / 2.0))
+			K.cyl(gear, 0.03, 0.03, 0.18, _chest(0.52, 0.05), _metal(key, tint), 8, Vector3(0, 0, PI / 2.0))
 			for sgn in [-1.0, 1.0]:
-				K.cyl(body, 0.034, 0.034, 0.02, _chest(0.52, 0.05) + Vector3(sgn * 0.08, 0, 0), K.mat(tint.darkened(0.25)), 8, Vector3(0, 0, PI / 2.0))
+				K.cyl(gear, 0.034, 0.034, 0.02, _chest(0.52, 0.05) + Vector3(sgn * 0.08, 0, 0), K.mat(tint.darkened(0.25)), 8, Vector3(0, 0, PI / 2.0))
 		"pendant":
 			_necklace(K.mat(Color(0.95, 0.85, 0.55), 0.0, 0.4, 0.5))
-			K.box(body, Vector3(0.1, 0.13, 0.03), _chest(0.5, 0.045), _metal(key, tint), CHEST_TILT)
-			K.box(body, Vector3(0.065, 0.09, 0.03), _chest(0.5, 0.055), K.mat(Color(0.9, 0.84, 0.72)), CHEST_TILT)
-			K.sphere(body, 0.02, _chest(0.52, 0.075), K.mat(Color(0.62, 0.5, 0.4), 0.0, 0.8, 0.0, false), 4)
+			K.box(gear, Vector3(0.1, 0.13, 0.03), _chest(0.5, 0.045), _metal(key, tint), CHEST_TILT)
+			K.box(gear, Vector3(0.065, 0.09, 0.03), _chest(0.5, 0.055), K.mat(Color(0.9, 0.84, 0.72)), CHEST_TILT)
+			K.sphere(gear, 0.02, _chest(0.52, 0.075), K.mat(Color(0.62, 0.5, 0.4), 0.0, 0.8, 0.0, false), 4)
 		"fang":
 			_necklace(K.mat(Color(0.6, 0.4, 0.32)))
 			var fang := K.mat(Color(1.0, 0.97, 0.9))
@@ -902,16 +934,16 @@ func _build_accessory(key: String) -> void:
 				var x := (i - 1) * 0.07
 				var y := 0.53 - (0.02 if i == 1 else 0.0)
 				var p := _chest(y, 0.045) + Vector3(x, 0, 0)
-				K.cyl(body, 0.026, 0.0, 0.1 if i == 1 else 0.08, p, fang, 6, Vector3(-0.23, 0, 0))
-			K.sphere(body, 0.03, _chest(0.58, 0.04), K.mat(tint, 0.8, 0.4, 0.0, false), 6)
+				K.cyl(gear, 0.026, 0.0, 0.1 if i == 1 else 0.08, p, fang, 6, Vector3(-0.23, 0, 0))
+			K.sphere(gear, 0.03, _chest(0.58, 0.04), K.mat(tint, 0.8, 0.4, 0.0, false), 6)
 		"beads":
 			# ประคำเม็ดโตคล้องคอ เรืองแสงสีม่วง
 			var bead := _gear_mat(key, tint)
 			for i in 14:
 				var a := i * TAU / 14.0
 				var p := Vector3(sin(a) * 0.2, 0.6 - (cos(a) * 0.5 + 0.5) * 0.12 * (1.0 if cos(a) > 0 else 0.3), cos(a) * 0.2 + 0.02)
-				K.sphere(body, 0.035, p, bead, 6)
-			K.sphere(body, 0.05, _chest(0.47, 0.06), K.gold(), 8)
+				K.sphere(gear, 0.035, p, bead, 6)
+			K.sphere(gear, 0.05, _chest(0.47, 0.06), K.gold(), 8)
 		"orb":
 			# แก้วพญานาค: ลูกแก้วเรืองแสงลอยข้างไหล่
 			_orb = Node3D.new()
@@ -929,8 +961,9 @@ func _build_accessory(key: String) -> void:
 
 func _build_rod() -> void:
 	rod = Node3D.new()
-	rod.position = Vector3(0.27, 0.45, 0.06)
-	body.add_child(rod)
+	rod.position = Vector3(0, 0.03, 0.02)
+	rod.rotation.x = 1.0  # ชดเชยแขนที่ยื่นไปข้างหน้าตอนตกปลา
+	rig.hands[1].add_child(rod)
 	var bamboo := K.mat(Color(0.86, 0.72, 0.42))
 	var a := Vector3(0, -0.12, -0.08)
 	var b := Vector3(0, 0.95, 1.05)
@@ -969,7 +1002,12 @@ func _build_rod() -> void:
 func _update_line() -> void:
 	if _line == null:
 		return
-	var tip := body.transform * (rod.transform * _rod_tip.position)
+	# ปลายคันอยู่ในมือที่ขยับได้: ไล่ transform จากปลายคันขึ้นไปถึงตัวโมเดล
+	var tip := _rod_tip.position
+	var n: Node3D = rod
+	while n != null and n != model:
+		tip = n.transform * tip
+		n = n.get_parent() as Node3D
 	var end := bobber.position + Vector3(0, 0.18, 0)
 	var dir := end - tip
 	var length := dir.length()
@@ -992,3 +1030,211 @@ func _build_fx() -> void:
 	levelup_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	levelup_beam.visible = false
 	add_child(levelup_beam)
+
+
+# ---------- เอฟเฟกต์อาวุธตามขั้นตีบวก ----------
+
+## สีแสงตามขั้น: +4–6 ฟ้า, +7–8 ม่วงชมพู, +9 ชมพูบานเย็น, +10 ทอง
+static func refine_color(lv: int) -> Color:
+	if lv >= 10:
+		return Color(1.0, 0.82, 0.3)
+	if lv >= 9:
+		return Color(1.0, 0.45, 0.8)
+	if lv >= 7:
+		return Color(0.78, 0.6, 1.0)
+	return Color(0.55, 0.85, 1.0)
+
+
+func _build_refine_fx(lv: int, top: float, rc: Color) -> void:
+	if lv < 4:
+		return
+	var c := refine_color(lv)
+	# แสงใสหุ้มตัวอาวุธ (เต้นเป็นจังหวะใน animate)
+	var aura_mesh := SphereMesh.new()
+	aura_mesh.radius = 0.15 if lv < 7 else (0.2 if lv < 10 else 0.24)
+	aura_mesh.height = maxf(0.4, top + 0.25)
+	var m: StandardMaterial3D = K.mat(Color(c, 0.4), 2.0 + lv * 0.15, 0.3, 0.0, false).duplicate()  # สำเนา: animate เปลี่ยนความใสได้ไม่กระทบวัสดุที่แชร์
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_weapon_aura = K.add(weapon, aura_mesh, Vector3(0, top * 0.5, 0), m)
+	_weapon_aura.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if lv >= 7:
+		var light := OmniLight3D.new()
+		light.light_color = c
+		light.light_energy = 0.6 if lv < 10 else 1.2
+		light.omni_range = 1.6
+		light.position = Vector3(0, top * 0.7, 0)
+		weapon.add_child(light)
+	if lv >= 9:
+		# ละอองแสงลอยขึ้นจากอาวุธ
+		var p := CPUParticles3D.new()
+		var dot := SphereMesh.new()
+		dot.radius = 0.04
+		dot.height = 0.08
+		dot.radial_segments = 6
+		dot.rings = 3
+		p.mesh = dot
+		var pm := K.mat(c.lightened(0.3), 3.0, 0.3, 0.0, false)
+		p.material_override = pm
+		p.amount = 14 if lv < 10 else 24
+		p.lifetime = 1.1
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		p.emission_box_extents = Vector3(0.08, top * 0.5, 0.08)
+		p.position = Vector3(0, top * 0.5, 0)
+		p.direction = Vector3(0, 1, 0)
+		p.spread = 25.0
+		p.gravity = Vector3(0, 0.6, 0)
+		p.initial_velocity_min = 0.2
+		p.initial_velocity_max = 0.5
+		p.scale_amount_min = 0.6
+		p.scale_amount_max = 1.3
+		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		weapon.add_child(p)
+	if lv >= 10:
+		# วงออร่าทองหมุนใต้เท้า + ลายดาวแปดแฉก
+		_foot_aura = Node3D.new()
+		_foot_aura.position.y = 0.03
+		model.add_child(_foot_aura)
+		for r in [[0.62, 0.68], [0.82, 0.86]]:
+			var ring := TorusMesh.new()
+			ring.inner_radius = r[0]
+			ring.outer_radius = r[1]
+			var mi := K.add(_foot_aura, ring, Vector3.ZERO, K.mat(Color(c, 0.85), 2.6, 0.3, 0.0, false), Vector3.ZERO, Vector3(1, 0.15, 1))
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for i in 8:
+			var a := i * TAU / 8.0
+			var mi := K.box(_foot_aura, Vector3(0.05, 0.01, 0.2), Vector3(cos(a) * 0.74, 0, sin(a) * 0.74), K.mat(c.lightened(0.3), 3.0, 0.3, 0.0, false), Vector3(0, -a + PI / 2.0, 0))
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+# ---------- แฟชั่น ----------
+
+func _fashion_glow(key: String) -> float:
+	var lv := ItemDB.refine_of(key)
+	var g := 0.4 if _rarity(key) == "legendary" else 0.0
+	if lv >= 7:
+		g = maxf(g, 0.5 + (lv - 7) * 0.25)
+	return g
+
+
+## ชุดแฟชั่น: สีจีวรเปลี่ยนเป็นสีชุด (ตั้งไว้ตอนสร้างตัว) + เข็มขัด ปกคอ สไบ ตามชุด
+func _build_costume(key: String) -> void:
+	var id := ItemDB.base_id(key)
+	var tint := ItemIcons.tint_of(key)
+	var glow := _fashion_glow(key)
+	var gold := K.mat(Color(1.0, 0.8, 0.32), 0.3 + glow, 0.35, 0.6)
+	var trim: Color = {"f_chut_dek_wat": Color(0.95, 0.5, 0.3), "f_chut_thai": Color(0.95, 0.75, 0.35),
+		"f_chut_nang_ram": Color(1.0, 0.82, 0.35), "f_chut_thewada": Color(1.0, 0.85, 0.4)}.get(id, tint.darkened(0.3))
+	# เข็มขัดทอง + ปกคอ
+	K.cyl(gear, 0.275, 0.275, 0.06, Vector3(0, 0.3, 0), gold, 16)
+	var collar := TorusMesh.new()
+	collar.inner_radius = 0.16
+	collar.outer_radius = 0.23
+	K.add(gear, collar, Vector3(0, 0.66, 0), K.mat(trim, glow, 0.5), Vector3.ZERO, Vector3(1, 0.5, 1))
+	# สไบ/ผ้าพาดเฉียง
+	K.beam(gear, Vector3(-0.2, 0.64, 0.12), Vector3(0.22, 0.28, 0.2), 0.065, K.mat(trim, glow, 0.6))
+	# ลายกนกทองที่ชายผ้า
+	for i in 10:
+		var a := i * TAU / 10.0
+		K.sphere(gear, 0.03, Vector3(sin(a) * 0.31, 0.13, cos(a) * 0.31), gold, 6)
+	if _rarity(key) in ["epic", "legendary"]:
+		# อินทรธนู (ไหล่ทองโค้ง)
+		for x in [-0.25, 0.25]:
+			K.sphere(gear, 0.1, Vector3(x, 0.62, 0), gold, 10, Vector3(1.2, 0.5, 1.0))
+			K.box(gear, Vector3(0.05, 0.12, 0.05), Vector3(x * 1.25, 0.66, 0), gold, Vector3(0, 0, -signf(x) * 0.6))
+	if id == "f_chut_thewada":
+		# ทับทรวงทองประดับพลอย
+		K.sphere(gear, 0.09, _chest(0.52, 0.03), gold, 10, Vector3(1.2, 1.2, 0.4))
+		K.sphere(gear, 0.045, _chest(0.52, 0.07), K.mat(Color(1.0, 0.45, 0.55), 1.5, 0.3, 0.0, false), 8)
+
+
+## หมวกแฟชั่น
+func _build_fashion_hat(h: Node3D, key: String, hair: Material) -> void:
+	var id := ItemDB.base_id(key)
+	var tint := ItemIcons.tint_of(key)
+	var glow := _fashion_glow(key)
+	var gold := K.mat(Color(1.0, 0.8, 0.32), 0.3 + glow, 0.35, 0.6)
+	match id:
+		"f_hu_maeo":
+			var band := TorusMesh.new()
+			band.inner_radius = 0.38
+			band.outer_radius = 0.42
+			K.add(h, band, Vector3(0, 0.22, -0.04), K.mat(tint.darkened(0.15), glow), Vector3(0.35, 0, PI / 2.0))
+			for x in [-0.22, 0.22]:
+				K.cyl(h, 0.0, 0.13, 0.26, Vector3(x, 0.44, -0.02), K.mat(tint, glow), 4, Vector3(0, 0, -signf(x) * 0.35))
+				K.cyl(h, 0.0, 0.075, 0.16, Vector3(x * 0.97, 0.42, 0.03), K.mat(Color(1.0, 0.9, 0.93), glow), 4, Vector3(0, 0, -signf(x) * 0.35))
+			_label_y += 0.1
+		"f_ngob":
+			K.cyl(h, 0.08, 0.66, 0.24, Vector3(0, 0.42, -0.03), K.mat(tint, glow, 0.9), 16, Vector3(-0.1, 0, 0))
+			var band := TorusMesh.new()
+			band.inner_radius = 0.3
+			band.outer_radius = 0.34
+			K.add(h, band, Vector3(0, 0.38, -0.03), K.mat(Color(0.9, 0.35, 0.45), glow), Vector3(-0.1, 0, 0))
+			for i in 3:
+				var a := -0.6 + i * 0.6
+				K.sphere(h, 0.06, Vector3(sin(a) * 0.33, 0.42, cos(a) * 0.33), K.mat([Color(1.0, 0.6, 0.7), Color(1.0, 0.9, 0.5), Color(0.7, 0.85, 1.0)][i], 0.3), 8)
+			_label_y += 0.1
+		"f_mongkut_mali":
+			for i in 14:
+				var a := i * TAU / 14.0
+				K.sphere(h, 0.055, Vector3(cos(a) * 0.36, 0.3 + sin(a * 2.0) * 0.015, sin(a) * 0.36 - 0.02), K.mat(tint, 0.4 + glow, 0.6), 6)
+				if i % 2 == 0:
+					K.sphere(h, 0.04, Vector3(cos(a + 0.2) * 0.38, 0.27, sin(a + 0.2) * 0.38 - 0.02), K.mat(Color(0.5, 0.8, 0.5)), 5, Vector3(1.4, 0.5, 0.8))
+			K.sphere(h, 0.07, Vector3(0, 0.36, 0.36), K.mat(Color(1.0, 0.7, 0.8), 0.6 + glow), 8)
+		"f_chada_thep":
+			# ชฎาทรงยอดแหลมซ้อนชั้น
+			var y := 0.3
+			for i in 5:
+				var r := 0.36 - i * 0.065
+				K.cyl(h, r * 0.85, r, 0.13, Vector3(0, y, -0.04), gold, 12)
+				K.cyl(h, r * 0.86, r * 0.86, 0.02, Vector3(0, y + 0.07, -0.04), K.mat(Color(1.0, 0.45, 0.55), 0.8 + glow, 0.3), 12)
+				y += 0.13
+			K.cyl(h, 0.0, 0.06, 0.32, Vector3(0, y + 0.12, -0.04), gold, 8)
+			K.sphere(h, 0.06, Vector3(0, 0.34, 0.33), K.mat(Color(0.45, 0.85, 1.0), 1.5 + glow, 0.3, 0.0, false), 8)
+			for x in [-0.36, 0.36]:
+				K.box(h, Vector3(0.03, 0.22, 0.12), Vector3(x, 0.08, 0.02), gold, Vector3(0, 0, signf(x) * 0.3))
+			_label_y += 0.8
+		_:
+			K.sphere(h, 0.42, Vector3(0, 0.2, -0.05), K.mat(tint, glow), 14, Vector3(1, 0.6, 1))
+
+
+## ปีกแฟชั่นด้านหลัง (สองข้าง กระพือใน animate)
+func _build_wings(key: String) -> void:
+	var id := ItemDB.base_id(key)
+	var tint := ItemIcons.tint_of(key)
+	var glow := _fashion_glow(key)
+	for sgn in [-1.0, 1.0]:
+		var pivot := Node3D.new()
+		pivot.position = Vector3(sgn * 0.08, 0.6, -0.24)
+		gear.add_child(pivot)
+		_wings.append(pivot)
+		match id:
+			"f_pik_khangkhao":
+				var m := K.mat(tint, glow, 0.7)
+				for k in 3:
+					K.sphere(pivot, 0.16, Vector3(sgn * (0.16 + k * 0.13), 0.1 - k * 0.07, -0.04), m, 10, Vector3(1.0, 1.2, 0.18))
+				K.beam(pivot, Vector3.ZERO, Vector3(sgn * 0.48, 0.2, -0.04), 0.03, K.mat(tint.darkened(0.35)))
+			"f_pik_phisuea":
+				var m1 := K.mat(Color(tint, 0.9), 0.5 + glow, 0.4, 0.0, false)
+				var m2 := K.mat(Color(1.0, 0.75, 0.88), 0.5 + glow, 0.4, 0.0, false)
+				K.sphere(pivot, 0.26, Vector3(sgn * 0.26, 0.18, -0.04), m1, 12, Vector3(1.0, 1.1, 0.12))
+				K.sphere(pivot, 0.17, Vector3(sgn * 0.22, -0.16, -0.04), m2, 12, Vector3(1.0, 1.1, 0.12))
+				K.sphere(pivot, 0.07, Vector3(sgn * 0.3, 0.22, -0.02), K.mat(Color(1, 1, 1), 1.2, 0.3, 0.0, false), 8, Vector3(1, 1, 0.3))
+			_:
+				# ปีกขนนก: ขนยาวเรียงเป็นพัด (นางฟ้าขาว / กินรีทอง)
+				var big := id == "f_pik_kinnari"
+				var m := K.mat(tint, 0.35 + glow, 0.5, 0.2 if big else 0.0)
+				var n := 6 if big else 5
+				var span := 0.62 if big else 0.5
+				for k in n:
+					var t := float(k) / (n - 1)
+					var length := lerpf(span, span * 0.45, t)
+					var ang := lerpf(0.5, -0.7, t)
+					var dir := Vector3(sgn * cos(ang), sin(ang), 0)
+					_feather(pivot, dir, length, m)
+
+
+## ขนปีกหนึ่งเส้น: ทรงรีแบนวางตามทิศ dir จากโคนปีก
+func _feather(pivot: Node3D, dir: Vector3, length: float, m: Material) -> void:
+	var mi := K.sphere(pivot, 0.5, dir * length * 0.5, m, 8, Vector3(length, length * 0.26, 0.06))
+	mi.rotation.z = atan2(dir.y, dir.x)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

@@ -58,6 +58,12 @@ func _init() -> void:
 	]
 	border_kinds = ["bamboo", "palm", "bush"]
 	border_weights = [0.4, 0.3, 0.3]
+	decor = [
+		["flowers", Rect2(520, 820, 2200, 1080), 24], ["grass_plant", Rect2(40, 120, 2700, 1780), 20],
+		["stones", Rect2(520, 380, 2200, 420), 10], ["mushrooms", Rect2(520, 120, 2200, 260), 6],
+		["bucket", Rect2(700, 820, 1600, 160), 3],
+	]
+	critters = [["crab", Vector2(1300, 820), 300.0, 3], ["chick", Vector2(1180, 1300), 150.0, 3], ["dog", Vector2(800, 1000), 200.0, 1], ["cat", Vector2(1600, 1000), 200.0, 1]]
 	grass_base = Color(0.42, 0.66, 0.46)
 	grass_tip = Color(0.75, 0.9, 0.62)
 	mist_color = Color(0.9, 0.98, 1.0, 0.0)

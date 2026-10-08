@@ -15,6 +15,7 @@ const Protocol = preload("res://shared/net/protocol.gd")
 const Server = preload("res://server/server.gd")
 const NetClient = preload("res://client/net/net_client.gd")
 const LocalStore = preload("res://client/net/local_store.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 const STEP := 0.05
 
@@ -39,9 +40,13 @@ func _run_all() -> void:
 	await _test_world()
 	print("== แผนที่ถึง Lv150 ถ้ำ หลอมแร่ ตีบวก วาร์ป ==")
 	_test_data()
+	print("== สมดุลใหม่ + ประเทศจีน ==")
+	_test_china()
 	await _test_expansion()
 	print("== ตกปลา พระเครื่อง บัฟปาร์ตี้ ==")
 	await _test_fishing_buffs()
+	print("== แฟชั่น กาชา ร้าน CC สัตว์เลี้ยง ขุดแร่ เอฟเฟกต์อาวุธ ==")
+	await _test_fashion_pets()
 	print("== กดเควสเดินเอง / หน้าต่างบังปุ่ม ==")
 	await _test_quest_guide()
 	print("== ออนไลน์: ผู้เล่นอื่น แชท ปาร์ตี้แชร์ EXP บัฟ ==")
@@ -77,7 +82,8 @@ func _test_combat() -> void:
 
 func _test_progression() -> void:
 	var state := {"level": 1, "exp": 0}
-	check(Progression.add_exp(state, 19) == 0 and state["level"] == 1, "EXP ไม่พอยังไม่อัป")
+	var need1 := Progression.exp_to_next(1)
+	check(Progression.add_exp(state, need1 - 1) == 0 and state["level"] == 1, "EXP ไม่พอยังไม่อัป")
 	check(Progression.add_exp(state, 1) == 1 and state["level"] == 2 and state["exp"] == 0, "EXP ครบแล้วอัปเลเวล")
 	check(Progression.add_exp(state, 1000) >= 2, "EXP เยอะอัปหลายเลเวลในครั้งเดียว")
 
@@ -108,7 +114,7 @@ func _test_gameplay() -> void:
 		return
 
 	check(player.hp == player.stats["max_hp"], "ผู้เล่นเริ่มด้วย HP เต็ม")
-	check(main.alive_ghosts().size() == 12, "ผีเกิดครบ 12 ตัว")
+	check(main.alive_ghosts().size() == 19, "ผีเกิดครบ 19 ตัว")
 
 	var dest: Vector2 = player.pos + Vector2(100, 0)
 	player.command_move(dest)
@@ -153,7 +159,7 @@ func _test_gameplay() -> void:
 	check(player.state["level"] >= 3, "ล่าผีจนถึงเลเวล 3 (เวลาในเกม %d วินาที, ใช้สกิล %d ครั้ง)" % [time, casts])
 
 	_run(main, 9.0)
-	check(main.alive_ghosts().size() == 12, "ผีที่ตายแล้วเกิดใหม่ครบ")
+	check(main.alive_ghosts().size() == 19, "ผีที่ตายแล้วเกิดใหม่ครบ")
 
 	var drop: Node3D = null
 	for d in main.drops.get_children():
@@ -172,8 +178,12 @@ func _test_gameplay() -> void:
 	if herbs > 0:
 		check(player.use_herb() and player.hp > 10, "ใช้ยาหอมสมุนไพรแล้ว HP เพิ่ม")
 
-	player.take_damage(9999)
-	check(player.hp == player.stats["max_hp"] and player.pos == player.spawn_point, "สลบแล้วฟื้นที่วัดพร้อม HP เต็ม")
+	player.take_damage(9999, "ผีทดสอบ")
+	check(player.hp == 0 and main.hud.death_layer.visible and "ผีทดสอบ" in main.hud.death_label.text, "สลบแล้วมีป้ายกลางจอบอกว่าโดนใครตี")
+	_run(main, 1.0)
+	check(player.hp == 0, "สลบแล้วไม่ฟื้นเอง รอผู้เล่นกดปุ่ม")
+	main.hud.death_button.pressed.emit()
+	check(player.hp == player.stats["max_hp"] and player.pos == player.spawn_point and not main.hud.death_layer.visible, "กดปุ่มเกิดใหม่แล้วฟื้นที่วัดพร้อม HP เต็ม")
 	check(map.props_root.get_child_count() > 100, "สร้างฉาก 3D ครบ (สิ่งของ %d ชิ้น)" % map.props_root.get_child_count())
 
 	# จอยบนจอ (มือถือ): ดันจอยแล้วเดินต่อเนื่อง และเดินลงคลองไม่ได้
@@ -275,36 +285,55 @@ func _test_character(main: Node3D) -> void:
 
 	player.add_item("mitmo")
 	var atk_plain: int = player.stats["atk"]
-	check(player.equip("mitmo") and player.stats["atk"] == atk_plain + 18 + 2 * 2, "สวมมีดหมอแล้ว ATK เพิ่ม")
+	# กดสวมในกระเป๋า: โชว์หน้าเทียบก่อน ยังไม่สวมจนกว่าจะกดติดตั้ง
+	var pv: Dictionary = player.preview_equip("mitmo")
+	check(pv["current"] == "" and pv["after"]["atk"] > pv["before"]["atk"] and player.stats["atk"] == atk_plain, "เทียบของก่อนสวม: เห็น ATK ที่จะเพิ่ม แต่ยังไม่ได้สวมจริง")
+	var bag: Node = main.hud.windows["bag"]
+	main.hud.toggle_window("bag")
+	bag._compare = "mitmo"
+	bag.refresh()
+	var labels: Array = bag.find_children("*", "Label", true, false).map(func(l): return l.text)
+	check("ใส่อยู่ตอนนี้" in labels and "ของใหม่" in labels and not player.state["equipment"].has("weapon"), "หน้าต่างกระเป๋าโชว์การ์ดเทียบของ ยังไม่สวมก่อนกดติดตั้ง")
+	bag._compare = ""
+	main.hud.toggle_window("bag")
+	var mitmo_bonus: Dictionary = ItemDB.bonus_of("mitmo")
+	check(player.equip("mitmo") and player.stats["atk"] == atk_plain + mitmo_bonus["atk"] + mitmo_bonus["str"] * 2, "สวมมีดหมอแล้ว ATK เพิ่ม")
 	player.add_item("khan_thanu")
 	check(not player.equip("khan_thanu"), "สายประชิดสวมธนูไม่ได้")
 	check(player.unequip("weapon") and player.inventory.get("mitmo", 0) == 1, "ถอดอาวุธกลับเข้ากระเป๋า")
 
 	player.gain_exp(50000000)
 	check(player.state["level"] == 150, "เลเวลตันที่ 150")
-	check(not player.change_class("nak_dab"), "ขั้น 2 ต้องปราบนางพญากระสือก่อน")
+	check(not player.change_class("nak_dab"), "ขั้น 2 ต้องปราบพญามัจจุราชก่อน")
 	player.state["coins"] = 100000
-	for pair in [["q_trial_2", "krasue_queen"], ["q_trial_3", "pret_king"]]:
+	for pair in [["q_trial_2", "matchurat"], ["q_trial_3", "yan_wang"]]:
 		player.accept_quest(pair[0])
 		player.reward_kill(pair[1], 0, 0)
 		player.complete_quest(pair[0])
 		if pair[0] == "q_trial_2":
-			check(player.change_class("nak_dab"), "ปราบนางพญากระสือ + จ่ายค่าครู แล้วเลื่อนขั้น 2")
-	check(player.change_class("khun_phaen") and player.coins() == 100000 - 5000 - 30000, "ปราบพญาเปรต + จ่ายค่าครู แล้วเลื่อนขั้น 3 ครบ")
+			check(player.change_class("nak_dab"), "ปราบพญามัจจุราช + จ่ายค่าครู แล้วเลื่อนขั้น 2")
+	check(player.change_class("khun_phaen") and player.coins() == 100000 - 5000 - 30000, "ปราบพญายมราชจีน + จ่ายค่าครู แล้วเลื่อนขั้น 3 ครบ")
 	check(not player.can_change_class(), "ขั้นสุดท้ายแล้วเลื่อนต่อไม่ได้")
 
 	# บอสประจำถิ่น
 	var boss: Node3D = main.spawn_boss(0)
 	check(boss != null and boss.is_boss() and boss in main.alive_ghosts(), "บอสประจำถิ่นเกิด")
 	check(hud.announce_panel.visible and hud.announce_label.text.contains(boss.data["name"]), "มีประกาศเมื่อบอสเกิด")
-	var drops_before: int = main.drops.get_child_count()
+	# นับเฉพาะของที่บอสดรอป (ของเก่าบนพื้นอาจถูกผู้เล่นเก็บไปในเฟรมเดียวกัน)
+	# และสุ่มจากค่าตั้งต้นเดิมทุกครั้ง (จำนวนเฟรมก่อนถึงตรงนี้ไม่เท่ากันในแต่ละเครื่อง)
+	var drops_before: Array = main.drops.get_children()
+	main.rng.seed = 12345
 	boss.take_damage(999999, player)
 	await process_frame
 	var equips := 0
+	var boss_drops := 0
 	for d in main.drops.get_children():
+		if d in drops_before:
+			continue
+		boss_drops += 1
 		if ItemDB.ITEMS[d.item_id]["type"] == "equip":
 			equips += 1
-	check(main.drops.get_child_count() - drops_before >= 3 and equips >= 1, "ปราบบอสแล้วของตกเยอะ (ของสวมใส่ %d ชิ้น)" % equips)
+	check(boss_drops >= 3 and equips >= 1, "ปราบบอสแล้วของตกเยอะ (%d ชิ้น ของสวมใส่ %d ชิ้น)" % [boss_drops, equips])
 	check(main.boss == null and main.boss_timer >= main.BOSS_RESPAWN_DELAY.x, "บอสเกิดใหม่อีกครั้งหลังรอนาน")
 
 	# ผีทั่วไปดรอปของสวมใส่ยาก
@@ -328,7 +357,7 @@ func _test_world() -> void:
 	var hud: CanvasLayer = main.hud
 
 	# ---- ร้านค้า ----
-	check(main.npcs.get_child_count() == 6, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ และช่างหลอมแร่")
+	check(main.npcs.get_child_count() == 8, "หมู่บ้านมี NPC ร้านยา หลวงตา ครูใหญ่ ร่างทรงวาร์ป ร้านอาวุธ ช่างหลอมแร่ ครูฝึกสัตว์ และไต้ก๋งเรือ")
 	for n in main.npcs.get_children():
 		if n.role() == "class":
 			player.pos = n.pos + Vector2(0, 40)
@@ -444,7 +473,7 @@ func _test_world() -> void:
 	var min_level := 999
 	for g in main.alive_ghosts():
 		min_level = mini(min_level, g.data["level"])
-	check(main.alive_ghosts().size() == 21 and min_level >= 12, "ป่าช้ามีผีเลเวลสูงขึ้น (ต่ำสุด Lv %d)" % min_level)
+	check(main.alive_ghosts().size() == 33 and min_level >= 10, "ป่าช้ามีผีเลเวลสูงขึ้น (ต่ำสุด Lv %d)" % min_level)
 	check(main.npcs.get_child_count() == 3 and main.map.props_root.get_child_count() > 150, "ป่าช้ามี NPC และฉากครบ (สิ่งของ %d ชิ้น)" % main.map.props_root.get_child_count())
 	var route: PackedVector2Array = main.map.find_path(main.map.spawn_point, Vector2(2550, 1000))
 	check(route.size() > 0 and route[route.size() - 1].distance_to(Vector2(2550, 1000)) < 40.0, "เดินจากทางเข้าไปสุดป่าช้าได้")
@@ -491,7 +520,7 @@ func _test_data() -> void:
 			if not ItemDB.ITEMS.has(d["item"]):
 				missing.append(d["item"])
 	check(missing.is_empty(), "ของที่ผีดรอปมีอยู่ในฐานข้อมูลครบ %s" % str(missing))
-	check(max_level == 150, "มีผีถึงเลเวล 150")
+	check(max_level == 90, "ผีแรงสุดคือพญายมจีน Lv 90")
 	for id in World.MAPS:
 		if World.MAPS[id].get("safe", false):
 			continue
@@ -552,6 +581,80 @@ func _test_data() -> void:
 	check(ItemDB.display_name("mitmo+7") == "+7 มีดหมอลงอาคม" and ItemDB.base_id("mitmo+7") == "mitmo" and ItemDB.sell_price("mitmo+7") > ItemDB.sell_price("mitmo"), "ของตีบวกมีชื่อ +N และขายได้แพงขึ้น")
 
 
+## สมดุลใหม่: ผีไทยไม่เกิน Lv 50 ผีจีน 55–90 ตีผีไม่ได้เงิน และเควสขึ้นเรือข้ามประเทศ
+func _test_china() -> void:
+	var th_max := 0
+	var cn_min := 999
+	var cn_max := 0
+	var coin_drop := 0
+	for gid in GhostDB.GHOSTS:
+		var g: Dictionary = GhostDB.GHOSTS[gid]
+		coin_drop += int(g.get("coins", 0))
+		if gid.begins_with("cave_china") or gid in CHINA_GHOSTS:
+			cn_min = mini(cn_min, g["level"])
+			cn_max = maxi(cn_max, g["level"])
+		else:
+			th_max = maxi(th_max, g["level"])
+	check(th_max == 50, "ผีไทยเลเวลสูงสุด 50 (ได้ %d)" % th_max)
+	check(cn_min == 55 and cn_max == 90, "ผีจีนเลเวล %d–%d" % [cn_min, cn_max])
+	check(coin_drop == 0, "ตีผีไม่ได้เหรียญแล้ว (รวม %d)" % coin_drop)
+	# หลอด EXP ยาวขึ้น ต้องใช้เวลาเล่นมากขึ้น
+	check(Progression.exp_to_next(50) >= 30000, "เลเวล 50 ต้องใช้ EXP %d ถึงจะขึ้นเลเวล" % Progression.exp_to_next(50))
+	var kills: int = ceili(float(Progression.exp_to_next(20)) / float(GhostDB.GHOSTS["phi_pret"]["exp"]))
+	check(kills > 40, "เลเวล 20 ต้องตีผีราว %d ตัวถึงจะขึ้นเลเวล" % kills)
+	# ของสวมใส่ดรอปยากขึ้น และของจีนดีกว่าของไทย
+	var gear_rate := 0.0
+	var best_th := 0
+	var best_cn := 0
+	for gid in GhostDB.GHOSTS:
+		var g: Dictionary = GhostDB.GHOSTS[gid]
+		var cn: bool = gid.begins_with("cave_china") or gid in CHINA_GHOSTS
+		for d in g["drops"]:
+			var it: Dictionary = ItemDB.ITEMS[d["item"]]
+			if it["type"] != "equip":
+				continue
+			if not g.get("boss", false):
+				gear_rate = maxf(gear_rate, d["chance"])
+			if it.get("slot", "") == "weapon":
+				if cn:
+					best_cn = maxi(best_cn, it["bonus"].get("atk", 0))
+				else:
+					best_th = maxi(best_th, it["bonus"].get("atk", 0))
+	check(gear_rate <= 0.01, "ผีธรรมดาดรอปของสวมใส่ยากมาก โอกาสสูงสุด %.2f%%" % (gear_rate * 100.0))
+	check(best_cn > best_th, "อาวุธที่ผีจีนดรอปแรงกว่าของไทย (ATK %d vs %d)" % [best_cn, best_th])
+	# แผนที่จีน 5 แผนที่ เรียงเลเวลต่อจากไทย และวาร์ปข้ามประเทศไม่ได้
+	var cn_maps: Array[String] = []
+	for id in World.ORDER:
+		if World.country_of(id) == "cn":
+			cn_maps.append(id)
+	check(cn_maps.size() == 5 and cn_maps[0] == "china_harbor" and cn_maps[4] == "china_fengdu", "ประเทศจีนมี 5 แผนที่ %s" % str(cn_maps))
+	check(World.country_of("khlong_village") == "th" and World.PORTS["cn"] == "china_harbor", "ท่าเรือสองฝั่ง: หมู่บ้านริมคลอง ↔ ท่าเรือเฉวียนโจว")
+	# เควสขึ้นเรือ: ต้อง Lv 50 ขึ้นไป ทำครบ 3 ขั้นถึงได้สิทธิ์
+	var st := Progression.new_state()
+	check(not Quests.has_boat_pass(st), "เริ่มเกมยังขึ้นเรือไม่ได้")
+	for qid in ["q_boat_1", "q_boat_2", "q_boat_3"]:
+		check(Quests.QUESTS[qid]["min_level"] >= World.BOAT_LEVEL and Quests.QUESTS[qid]["giver"] == "tai_kong", "%s ต้องเลเวล %d ขึ้นไป" % [Quests.QUESTS[qid]["name"], Quests.QUESTS[qid]["min_level"]])
+		st["quests_done"][qid] = 1
+	check(Quests.has_boat_pass(st), "ทำเควสเตรียมเรือครบแล้วได้สิทธิ์ขึ้นเรือ")
+	# ถ้ำจีน: ลึกกว่าถ้ำไทย และมีหินพิเศษที่ให้แร่ดีขึ้น
+	check(World.CAVE_TIER["china_fengdu"] > World.CAVE_TIER["yom_lok"], "ถ้ำจีนลึกกว่าถ้ำไทย (ขั้น %d)" % World.CAVE_TIER["china_fengdu"])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	var plain := 0
+	var special := 0
+	for i in 20000:
+		if World.roll_ore(World.CAVE_TIER["china_fengdu"], rng) == "ore_diamond":
+			plain += 1
+		if World.roll_ore(World.CAVE_TIER["china_fengdu"] + World.SPECIAL_ROCK_BONUS, rng) == "ore_diamond":
+			special += 1
+	check(special > plain, "หินพิเศษในถ้ำจีนออกเพชรบ่อยกว่าหินปกติ (%d vs %d)" % [special, plain])
+
+
+const CHINA_GHOSTS := ["jiangshi", "shui_gui", "jiangshi_wang", "huli_jing", "diao_si_gui", "nu_gui", "jiuwei_hu",
+	"bingmayong", "hua_pi", "han_ba", "qin_gui_di", "wutou_bing", "e_gui", "baigu_yao", "baigu_jing",
+	"niu_tou", "ma_mian", "hei_bai", "yan_wang"]
+
+
 func _test_expansion() -> void:
 	var main: Node3D = load("res://main.tscn").instantiate()
 	root.add_child(main)
@@ -559,11 +662,11 @@ func _test_expansion() -> void:
 	main.set_process(false)
 	var player: Node3D = main.player
 	var hud: CanvasLayer = main.hud
-	check(player.state["caves"].size() == World.CAVE_COUNT, "เริ่มโลกใหม่สุ่มแผนที่ที่มีถ้ำ %s" % str(player.state["caves"]))
+	check(player.state["caves"].size() == World.CAVE_COUNT * 2, "เริ่มโลกใหม่สุ่มแผนที่ที่มีถ้ำ %s" % str(player.state["caves"]))
 
 	# ---- แผนที่ใหม่ทุกแผนที่โหลดได้ มีผีตามช่วงเลเวล มีทางเดินถึงประตูถัดไป ----
 	player.state["caves"] = ["krung_kao", "doi_phi", "yom_lok"]
-	var expected := {"krung_kao": [32, 50], "doi_phi": [62, 85], "nong_naga": [96, 122], "yom_lok": [132, 148]}
+	var expected := {"krung_kao": [21, 28], "doi_phi": [30, 36], "nong_naga": [37, 43], "yom_lok": [45, 50]}
 	for id in expected:
 		main.load_map(id)
 		await process_frame
@@ -586,9 +689,67 @@ func _test_expansion() -> void:
 			has_cave = has_cave or w.data.get("style", "") == "cave"
 		check(has_cave == (id in player.state["caves"]), "%s: %s" % [main.map.map_name, "มีปากถ้ำ (ถูกสุ่ม)" if has_cave else "ไม่มีถ้ำ"])
 		var boss: Node3D = main.spawn_boss(0)
-		check(boss != null and boss.is_boss() and boss.data["level"] >= 70, "%s: บอส %s Lv %d" % [main.map.map_name, boss.data["name"], boss.data["level"]])
+		check(boss != null and boss.is_boss() and boss.data["level"] >= 24, "%s: บอส %s Lv %d" % [main.map.map_name, boss.data["name"], boss.data["level"]])
 		_run(main, 1.0)
 	check(main.map.portals.size() >= 1 and main.map.portals[0]["to"] == "nong_naga", "ยมโลกเป็นแผนที่สุดท้าย มีประตูกลับบึงนาคา")
+
+	# ---- ประเทศจีน: 5 แผนที่ ถ้ำลึกกว่า หินพิเศษ และขึ้นเรือข้ามประเทศ ----
+	var cn_expected := {"china_harbor": [55, 58], "china_bamboo": [61, 67], "china_tomb": [69, 75], "china_wall": [77, 83], "china_fengdu": [85, 89]}
+	player.state["caves"] = ["china_fengdu"]
+	for id in cn_expected:
+		main.load_map(id)
+		await process_frame
+		var lo := 999
+		var hi := 0
+		for g in main.alive_ghosts():
+			lo = mini(lo, g.data["level"])
+			hi = maxi(hi, g.data["level"])
+		check(lo == cn_expected[id][0] and hi == cn_expected[id][1] and main.alive_ghosts().size() >= 15, "%s: ผี %d ตัว Lv %d–%d" % [main.map.map_name, main.alive_ghosts().size(), lo, hi])
+		var roles := []
+		for n in main.npcs.get_children():
+			roles.append(n.role())
+		check("quest" in roles and "shop" in roles and "warp" in roles, "%s: แคมป์มี NPC เควส ร้านยา และวาร์ป" % main.map.map_name)
+		check(main.map.props_root.get_child_count() > 100, "%s: ฉากเมืองจีนครบ (สิ่งของ %d ชิ้น)" % [main.map.map_name, main.map.props_root.get_child_count()])
+		_run(main, 0.5)
+	# ท่าเรือมีไต้ก๋งและร้านอาวุธจีน ไม่มีประตูฝั่งตะวันตก (เป็นทะเล)
+	main.load_map("china_harbor")
+	await process_frame
+	var harbor_roles := []
+	for n in main.npcs.get_children():
+		harbor_roles.append(n.role())
+	check("boat" in harbor_roles, "ท่าเรือเฉวียนโจวมีนายท้ายเรือสำเภา")
+	var gear_stock := []
+	for n in main.map.npcs:
+		if n["id"] == "china_harbor_gear":
+			gear_stock = n["stock"]
+	var gear_ok := gear_stock.size() >= 5
+	for item in gear_stock:
+		gear_ok = gear_ok and ItemDB.ITEMS.has(item) and ItemDB.ITEMS[item]["type"] == "equip"
+	check(gear_ok, "ร้านอาวุธท่าเรือขายของจีน %d ชิ้น" % gear_stock.size())
+	# หินพิเศษในถ้ำจีน
+	main.load_map("cave:china_fengdu")
+	await process_frame
+	var specials := 0
+	for r in main.rocks.get_children():
+		if r.special:
+			specials += 1
+	check(main.rocks.get_child_count() == 14 and specials > 0, "ถ้ำจีนมีหินแร่ 14 ก้อน เป็นหินหยกวิญญาณ %d ก้อน" % specials)
+	# ขึ้นเรือ: ยังไม่ทำเควสขึ้นไม่ได้ / วาร์ปข้ามประเทศไม่ได้
+	main.load_map("khlong_village")
+	await process_frame
+	player.state["coins"] = 100000
+	player.state["visited"]["china_harbor"] = true
+	check(not player.can_warp("china_harbor") and not main.warp_to("china_harbor"), "วาร์ปข้ามประเทศไม่ได้ ต้องขึ้นเรือ")
+	check(not main.sail_to("china_harbor"), "ยังไม่ทำเควสเตรียมเรือ ขึ้นเรือไม่ได้")
+	for qid in ["q_boat_1", "q_boat_2", "q_boat_3"]:
+		player.state["quests_done"][qid] = 1
+	player.state["level"] = World.BOAT_LEVEL
+	check(main.sail_to("china_harbor") and main.map.map_id == "china_harbor", "ทำเควสครบ + Lv 50 ขึ้นเรือข้ามไปท่าเรือจีนได้")
+	var back := false
+	for n in main.npcs.get_children():
+		if n.role() == "boat":
+			back = main.sail_to("khlong_village")
+	check(back and main.map.map_id == "khlong_village", "นั่งเรือกลับเมืองไทยได้")
 
 	# ---- วาร์ป ----
 	player.state["coins"] = 100000
@@ -668,6 +829,7 @@ func _test_expansion() -> void:
 	hud.close_windows()
 
 	# ---- ถ้ำ: ผีพิเศษ + ขุดแร่ ----
+	player.state["caves"] = ["krung_kao", "doi_phi", "yom_lok"]
 	main.load_map("krung_kao")
 	await process_frame
 	var cave_gate: Node3D = null
@@ -682,7 +844,7 @@ func _test_expansion() -> void:
 	var special := true
 	for g in main.alive_ghosts():
 		special = special and g.ghost_id == "cave_krung_kao"
-	check(special and main.alive_ghosts().size() == 11, "ในถ้ำมีผีพิเศษ (%s)" % GhostDB.GHOSTS["cave_krung_kao"]["name"])
+	check(special and main.alive_ghosts().size() == 18, "ในถ้ำมีผีพิเศษ (%s)" % GhostDB.GHOSTS["cave_krung_kao"]["name"])
 	check(main.rocks.get_child_count() == 14, "ในถ้ำมีหินแร่ 14 ก้อน")
 	for g in main.alive_ghosts():
 		g.free()
@@ -706,6 +868,258 @@ func _test_expansion() -> void:
 	await process_frame
 	check(main.map.map_id == "krung_kao", "ออกจากถ้ำกลับกรุงเก่า")
 	main.free()
+
+
+func _test_fashion_pets() -> void:
+	var main: Node3D = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	var player: Node3D = main.player
+	var hud: CanvasLayer = main.hud
+	for g in main.alive_ghosts():
+		g.free()
+	main.respawn_queue.clear()
+
+	# ---- ตารางกาชา: รวม 100% แฟชั่นออกยาก ----
+	var total := 0.0
+	var fashion_w := 0.0
+	for e in Fashion.GACHA_TABLE:
+		total += e["weight"]
+		if e["item"] == "@fashion":
+			fashion_w += e["weight"]
+		else:
+			check(ItemDB.ITEMS.has(e["item"]), "กาชามีไอเทม %s" % e["item"])
+	check(is_equal_approx(total, 100.0) and fashion_w <= 10.0, "อัตรากาชารวม 100%% แฟชั่น %.0f%%" % fashion_w)
+	var sum := 0.0
+	for id in Fashion.fashion_pool():
+		sum += Fashion.fashion_chance(id)
+	check(absf(sum - fashion_w / 100.0) < 0.0001, "อัตราแฟชั่นแต่ละชิ้นรวมกันเท่ากลุ่มแฟชั่น")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var counts := {}
+	for i in 4000:
+		var r := Fashion.roll_gacha(rng)
+		var t: String = ItemDB.ITEMS[r["item"]]["type"]
+		counts[t] = counts.get(t, 0) + 1
+	check(counts.get("fashion", 0) > 150 and counts.get("fashion", 0) < 450 and counts.get("fashion_refine", 0) > 1000 and counts.has("consumable"), "สุ่ม 4000 ลูก: แฟชั่น %d หินตี+แฟชั่น %d ยา/เกลือ %d" % [counts.get("fashion", 0), counts.get("fashion_refine", 0), counts.get("consumable", 0)])
+
+	# ---- ร้าน CC ----
+	check(player.cc() == Fashion.CC_START, "ตัวละครใหม่มี %d CC" % Fashion.CC_START)
+	hud.toggle_window("ccshop")
+	check(hud.windows["ccshop"].visible, "เปิดร้าน CC จากเมนูได้")
+	check(player.buy_gacha(10) and player.cc() == Fashion.CC_START - 100 and player.inventory.get("gachapon", 0) == 10, "ซื้อกาชา 10 ลูก จ่าย 100 CC")
+	check(not player.buy_gacha(1), "CC หมดแล้วซื้อไม่ได้")
+	var got: Array = hud.windows["ccshop"].last_results
+	hud.windows["ccshop"].open(10)
+	got = hud.windows["ccshop"].last_results
+	check(got.size() == 10 and player.inventory.get("gachapon", 0) == 0, "เปิดกาชา 10 ลูกได้ของ 10 อย่าง")
+	hud.close_windows()
+
+	# ---- เกลือเสก ----
+	player.inventory["kluea_sek"] = 2
+	var def_before: int = player.stats["def"]
+	check(player.use_item("kluea_sek") and player.stats["def"] > def_before and player.buffs.has("def"), "โปรยเกลือเสกแล้ว DEF เพิ่ม")
+
+	# ---- แฟชั่น: ใส่แยกจากของสวมใส่ ค่าพลังเพิ่ม ----
+	player.inventory["f_pik_kinnari"] = 1
+	player.inventory["f_chut_thai"] = 1
+	player.inventory["f_mongkut_mali"] = 1
+	var atk_before: int = player.stats["atk"]
+	check(player.wear_fashion("f_pik_kinnari") and player.stats["atk"] > atk_before and player.fashion()["wings"] == "f_pik_kinnari", "ใส่ปีกกินรีแล้ว ATK เพิ่ม")
+	check(player.wear_fashion("f_chut_thai") and player.wear_fashion("f_mongkut_mali") and player.state["equipment"].is_empty(), "ใส่ชุด/หมวกแฟชั่นได้ ไม่ไปทับช่องของสวมใส่")
+	check(player.avatar._wings.size() == 2 and player.look_items().has("f_wings"), "ปีกโผล่บนตัวละคร และส่งให้ผู้เล่นอื่นเห็น")
+	player.add_item("suea_yant")
+	player.equip("suea_yant")
+	check(player.state["equipment"].has("armor") and player.fashion().has("costume"), "สวมเสื้อจริงกับชุดแฟชั่นพร้อมกันได้")
+
+	# ---- ตีบวกแฟชั่น ----
+	player.inventory[Fashion.STONE_ID] = 30
+	var vit_before: int = player.stats["vit"]
+	var res: Dictionary = {}
+	for i in 30:
+		res = player.refine_fashion(player.fashion()["costume"], "costume")
+		if ItemDB.refine_of(player.fashion()["costume"]) >= 3:
+			break
+	check(ItemDB.refine_of(player.fashion()["costume"]) >= 3 and player.stats["vit"] > vit_before, "ตีบวกชุดแฟชั่นถึง %s ค่าพลังขึ้น" % ItemDB.display_name(player.fashion()["costume"]))
+	player.inventory.erase(Fashion.STONE_ID)
+	check(player.refine_fashion(player.fashion()["costume"], "costume")["result"] == "error", "หินตี+ แฟชั่นหมดแล้วตีไม่ได้")
+	player.fashion()["hat"] = "f_mongkut_mali+7"
+	player.inventory[Fashion.STONE_ID] = 1
+	player.rng.seed = 1
+	var risky_ok := true
+	for i in 40:
+		player.inventory[Fashion.STONE_ID] = 1
+		player.fashion()["hat"] = "f_mongkut_mali+7"
+		var rr: Dictionary = player.refine_fashion("f_mongkut_mali+7", "hat")
+		risky_ok = risky_ok and (rr["level"] == 8 if rr["result"] == "success" else rr["level"] == 6)
+	check(risky_ok, "ตีแฟชั่นตั้งแต่ +7 พลาดแล้วลด 1 ขั้น")
+
+	# ---- สัตว์เลี้ยง ----
+	player.inventory["pet_maa"] = 1
+	check(player.wear_fashion("pet_maa") and player.pet != null and player.pet_species() == "maa", "ใส่ลูกหมาบางแก้วแล้วออกมาเดินตาม")
+	await process_frame
+	player.pos = main.map.spawn_point
+	player.pet.pos = player.pos + Vector2(400, 0)
+	_run(main, 3.0)
+	check(player.pet.pos.distance_to(player.pos) < 80.0, "สัตว์เลี้ยงเดินตามเจ้าของ")
+	var g: Node3D = load("res://client/ghost.gd").new()
+	g.setup("phi_takiang", player.pos + Vector2(60, 0), player, 999)
+	main.ghosts.add_child(g)
+	g.data = g.data.duplicate()
+	g.data["atk"] = 0
+	var hp0: int = g.hp
+	player.attack_target = g
+	player.attack_cooldown = 999.0
+	_run(main, 3.0)
+	check(not is_instance_valid(g) or not g.alive or g.hp < hp0, "สัตว์เลี้ยงช่วยตีผีที่เจ้าของตี")
+	check(player.pet.skill_cd > 0.0, "สัตว์เลี้ยงใช้สกิลเองแล้ว")
+	if is_instance_valid(g):
+		g.free()
+	player.attack_target = null
+	var d: Dictionary = Fashion.pet_data(player.state, "maa")
+	var lv0: int = d["lv"]
+	var atk0: int = player.pet.atk()
+	player.gain_exp(50000)
+	check(d["lv"] > lv0 and player.pet.atk() > atk0, "สัตว์เลี้ยงเลเวลขึ้นพร้อมเจ้าของ (Lv.%d) และตีแรงขึ้น" % d["lv"])
+	d["lv"] = 29
+	player.state["coins"] = 100000
+	check(not player.can_evolve_pet() and not player.evolve_pet(), "เลเวลไม่ถึงพัฒนาร่างไม่ได้")
+	check(player.quest_status("q_pet_1") == "locked" and Quests.pet_lock(player.state, "q_pet_1").contains("Lv.30"), "บททดสอบครูฝึกสัตว์ล็อกจนสัตว์เลี้ยงถึง Lv.30")
+	check(player.quest_status("q_pet_2") == "locked", "บททดสอบร่าง 3 ยังรับไม่ได้ตอนอยู่ร่างแรก")
+	d["lv"] = 30
+	check(not player.can_evolve_pet() and not player.evolve_pet() and d["stage"] == 0, "ถึงเลเวลแล้วแต่ยังไม่ผ่านบททดสอบ พัฒนาร่างไม่ได้")
+	# ---- NPC ครูฝึกสัตว์ ในหมู่บ้านริมคลอง ----
+	if main.map.map_id != "khlong_village":
+		main.load_map("khlong_village")
+		await process_frame
+	var trainer: Node3D = null
+	for n in main.npcs.get_children():
+		if n.npc_id() == "khru_fuek_sat":
+			trainer = n
+	check(trainer != null and trainer.role() == "pet" and main.map.is_walkable(trainer.pos), "มี NPC ครูฝึกสัตว์ในหมู่บ้านริมคลอง (ยืนบนพื้นที่เดินได้)")
+	main._refresh_npc_markers()
+	check(trainer != null and trainer.marker_state == "available", "ครูฝึกสัตว์มีเครื่องหมาย ! เมื่อสัตว์เลี้ยงถึงเลเวล")
+	main.hud.open_npc(trainer.data)
+	check(main.hud.windows["pettrainer"].visible, "คุยกับครูฝึกสัตว์เปิดหน้าต่างพัฒนาร่าง")
+	check(player.accept_quest("q_pet_1"), "รับบททดสอบพัฒนาร่าง 1")
+	for i in Quests.QUESTS["q_pet_1"]["count"]:
+		player.reward_kill(Quests.QUESTS["q_pet_1"]["target"], 0, 0)
+	check(player.quest_status("q_pet_1") == "ready" and player.complete_quest("q_pet_1"), "ปราบครบแล้วส่งบททดสอบได้")
+	check(player.pet_trial_passed() and player.can_evolve_pet(), "ผ่านบททดสอบแล้วพัฒนาร่างได้")
+	main._refresh_npc_markers()
+	check(trainer.marker_state == "ready", "ครูฝึกสัตว์ขึ้น ? เมื่อพัฒนาร่างได้")
+	check(player.evolve_pet() and d["stage"] == 1 and player.pet.atk() > Fashion.pet_atk("maa", 30, 0), "Lv.30 พัฒนาเป็น %s" % Fashion.pet_name("maa", 1))
+	check(player.quest_status("q_pet_1") == "locked", "บททดสอบร่าง 2 ใช้ซ้ำกับตัวเดิมไม่ได้")
+	main.hud.windows["pettrainer"].refresh()
+	main.hud.close_windows()
+	d["lv"] = 60
+	check(not player.evolve_pet() and player.quest_status("q_pet_2") == "available", "ร่าง 3 ต้องทำบททดสอบที่ 2 ก่อน")
+	player.accept_quest("q_pet_2")
+	for i in Quests.QUESTS["q_pet_2"]["count"]:
+		player.reward_kill(Quests.QUESTS["q_pet_2"]["target"], 0, 0)
+	player.remove_fashion("pet")
+	check(player.quest_status("q_pet_2") == "active", "ต้องพาสัตว์เลี้ยงตัวที่จะพัฒนามาส่งบททดสอบ")
+	player.wear_fashion("pet_maa")
+	check(player.complete_quest("q_pet_2"), "พาสัตว์เลี้ยงมาแล้วส่งบททดสอบที่ 2 ได้")
+	check(player.evolve_pet() and d["stage"] == 2 and not player.evolve_pet(), "Lv.60 พัฒนาเป็น %s (สูงสุด 2 ขั้น)" % Fashion.pet_name("maa", 2))
+	player.remove_fashion("pet")
+	await process_frame
+	check(player.pet == null, "ถอดสัตว์เลี้ยงแล้วเก็บกลับ")
+	player.wear_fashion("pet_maa")
+	check(Fashion.pet_data(player.state, "maa")["stage"] == 2, "ใส่กลับมาเลเวล/ร่างยังอยู่")
+
+	# ---- บันทึก/โหลด: แฟชั่น สัตว์เลี้ยง CC ติดตัวไป ----
+	var saved: Dictionary = player.save_data()
+	var p2: Node3D = load("res://client/player.gd").new()
+	p2.apply_save(JSON.parse_string(JSON.stringify(saved)))
+	check(p2.state["fashion"].get("pet", "") == "pet_maa" and int(p2.state["pets"]["maa"]["stage"]) == 2 and int(p2.state["cc"]) == player.cc(), "เซฟแล้วโหลดได้แฟชั่น สัตว์เลี้ยง และ CC ครบ")
+	p2.free()
+
+	# ---- ขุดแร่: ผีทำร้ายไม่ได้ หลอดขุด 2 วิ ----
+	check(is_equal_approx(player.MINE_TIME, 2.0), "ขุดแร่ครั้งละ 2 วินาที")
+	var Rock = load("res://client/ore_rock.gd")
+	var rock: Node3D = Rock.new()
+	rock.setup(player.pos + Vector2(20, 0), 0, 0)
+	main.rocks.add_child(rock)
+	player.command_mine(rock)
+	_run(main, 0.5)
+	var hp_mine: int = player.hp
+	player.take_damage(50, "ผีทดสอบ")
+	check(player.is_mining() and player.hp == hp_mine and player.mine_progress() > 0.0, "ระหว่างขุดแร่ ผีทำร้ายไม่ได้ (มีหลอดขุด)")
+	player.command_move(player.pos)
+	rock.free()
+
+	# ---- อาวุธตีบวกสูงยิ่งสวย ----
+	player.add_item("maipai_staff+5")
+	player.equip("maipai_staff+5")
+	check(player.avatar._weapon_aura != null and player.avatar._foot_aura == null, "+5: มีแสงหุ้มอาวุธ")
+	player.add_item("maipai_staff+10")
+	player.equip("maipai_staff+10")
+	var particles := 0
+	for c in player.avatar.weapon.get_children():
+		if c is CPUParticles3D:
+			particles += 1
+	check(player.avatar._weapon_aura != null and player.avatar._sparkles != null and particles == 1 and player.avatar._foot_aura != null, "+10: แสงหุ้ม ประกายวน ละอองแสง และวงออร่าใต้เท้า")
+	await _test_attack_fx(main, player)
+	main.free()
+
+
+## เอฟเฟกต์ตีปกติ สกิลทุกตัว และออร่าบัฟ: สร้างได้ ไม่มี error และหายไปเอง
+func _test_attack_fx(main: Node3D, player: Node3D) -> void:
+	var Effect = load("res://client/effect.gd")
+	var world: Node = player.get_parent()
+	var count_fx := func() -> int:
+		var n := 0
+		for c in world.get_children():
+			if c.get_script() == Effect:
+				n += 1
+		return n
+	for g in main.alive_ghosts():
+		g.free()
+	var g: Node3D = load("res://client/ghost.gd").new()
+	g.setup("phi_takiang", player.pos + Vector2(40, 0), player, 999)
+	main.ghosts.add_child(g)
+	g.data = g.data.duplicate()
+	g.data["atk"] = 0
+	g.hp = 999999
+	var before: int = count_fx.call()
+	for cls in ["nak_rob", "phran", "mo_phi"]:
+		player.state["class"] = cls
+		player.recalc()
+		player._basic_attack(g)
+	check(count_fx.call() > before + 3, "ตีปกติมีเอฟเฟกต์ (ฟัน/ธนู/ลูกพลัง + ประกาย)")
+	var skill_fx := true
+	for id in Skills.SKILLS:
+		player.state["skills"][id] = 1
+		player.skill_cd.erase(id)
+		player.sp = 99999
+		player.hp = player.stats["max_hp"]
+		g.hp = 999999
+		var n0: int = count_fx.call()
+		player.use_skill(id, g)
+		if count_fx.call() < n0 + 3:
+			skill_fx = false
+			print("    สกิล %s มีเอฟเฟกต์น้อย" % id)
+	check(skill_fx, "สกิลทุกตัวมีเอฟเฟกต์หลายชั้น (วงเวท + ของตกจากฟ้า/ฟัน/ระเบิด)")
+	await create_timer(1.8).timeout
+	check(count_fx.call() <= before + 2, "เอฟเฟกต์หายไปเองหลังเล่นจบ (เหลือ %d)" % (count_fx.call() - before))
+	# ---- ออร่าบัฟรอบตัว ----
+	player.buffs.clear()
+	player.guard_timer = 0.0
+	player._sync(0.0)
+	check(player.buff_aura.active.is_empty(), "ไม่มีบัฟไม่มีออร่า")
+	player.apply_buff("atk", 0.2, 30.0, "ทดสอบ")
+	player.guard_timer = 10.0
+	player._sync(0.0)
+	await process_frame
+	check(player.buff_aura.active == ["guard", "atk"] and player.buff_aura.shield != null and player.buff_aura.sparks != null, "ติดบัฟแล้วมีวงเวท ลูกแก้ว ประกาย และโล่อาคมรอบตัว")
+	player.buffs.clear()
+	player.guard_timer = 0.0
+	player._sync(0.0)
+	check(player.buff_aura.active.is_empty(), "บัฟหมดออร่าหายไป")
+	if is_instance_valid(g):
+		g.free()
 
 
 func _test_quest_guide() -> void:
@@ -747,6 +1161,7 @@ func _test_quest_guide() -> void:
 	hud.close_windows()
 
 	# ส่งจากต่างแผนที่: อยู่ป่าช้า เควสหาของครบ กดแล้วเดินกลับหมู่บ้านไปส่ง
+	player.gain_exp(2000)  # หลอด EXP ยาวขึ้นแล้ว ต้องดันเลเวลให้ถึงเกณฑ์เควสถัดไป
 	player.accept_quest("q_shard")
 	player.add_item("spirit_shard", 10)
 	main.load_map("pa_cha")
@@ -794,7 +1209,9 @@ func _test_quest_guide() -> void:
 	check(vp.msaa_3d == Viewport.MSAA_8X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED and main.ambience.env.ssil_enabled and main.ambience.env.volumetric_fog_enabled, "ระดับสูงสุด: ลบรอยหยัก 8x ไม่เบลอ มีแสงสะท้อนและหมอกมีแสง")
 	check(K.detail == 2.5 and main.map.map_id == map_before and player.pos.distance_to(stand) < 1.0, "เปลี่ยนระดับแล้วสร้างฉากใหม่ ยืนที่เดิม")
 	Graphics.set_level(main.get_tree(), "low")
-	check(vp.msaa_3d == Viewport.MSAA_DISABLED and vp.scaling_3d_scale < 1.0 and not main.ambience.env.ssao_enabled and K.detail == 1.0, "ระดับต่ำ: ปิดเอฟเฟกต์หนักๆ เรนเดอร์เล็กลงสำหรับมือถือ")
+	check(vp.msaa_3d == Viewport.MSAA_DISABLED and vp.scaling_3d_scale < 1.0 and not main.ambience.env.ssao_enabled and K.detail < 1.0 and Graphics.PRESETS["low"]["splits"] == 1, "ระดับต่ำ: ปิดเอฟเฟกต์หนักๆ เรนเดอร์เล็กลง โมเดลเหลี่ยมน้อยลงสำหรับมือถือ")
+	var prop_meshes: int = main.map.props_root.find_children("*", "MeshInstance3D", true, false).size()
+	check(prop_meshes < main.map.props_root.get_child_count() * 4 and main.map.props_root.find_children("Batched", "MeshInstance3D", true, false).size() > 0, "ของประดับรวมชิ้นส่วนเป็น mesh เดียวต่อวัสดุ (ลดการสั่งวาดบนมือถือ)")
 	var gcfg := ConfigFile.new()
 	gcfg.load(Graphics.config_path)
 	check(gcfg.get_value("graphics", "level", "") == "low", "จำระดับคุณภาพภาพไว้")

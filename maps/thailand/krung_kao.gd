@@ -1,5 +1,5 @@
 extends "res://maps/thailand/field_map.gd"
-## ประเทศไทย แผนที่ 3: กรุงเก่าร้าง (ผีเลเวล 32–50 + บอสขุนศึกผีกรุงเก่า Lv 70)
+## ประเทศไทย แผนที่ 3: กรุงเก่าร้าง (ผีเลเวล 21–28 + บอสขุนศึกผีกรุงเก่า Lv 34)
 ## ซากเมืองโบราณอิฐแดง: ลานวิหารร้างทางเหนือมีปรางค์สามองค์ เศียรพระในรากโพธิ์ เสาอิฐหักเรียงแถว
 
 const PLAZA := Rect2(1050, 260, 820, 560)
@@ -54,17 +54,23 @@ func _init() -> void:
 	]
 	border_kinds = ["rain_tree", "mango", "bush"]
 	border_weights = [0.35, 0.3, 0.35]
+	decor = [
+		["debris", Rect2(1050, 260, 820, 600), 5], ["stones", Rect2(520, 120, 2200, 1780), 14],
+		["urn", PLAZA, 6], ["flowers", Rect2(520, 900, 2200, 1000), 12], ["grass_plant", Rect2(520, 120, 2200, 1780), 16],
+	]
+	# ลิงแห่งเมืองเก่า (แบบลพบุรี) วิ่งเล่นในลานวิหาร
+	critters = [["monkey", Vector2(1460, 640), 300.0, 5], ["dog", Vector2(300, 1000), 140.0, 1]]
 	grass_base = Color(0.45, 0.6, 0.4)
 	grass_tip = Color(0.72, 0.8, 0.56)
 	mist_color = Color(0.95, 0.85, 0.8, 0.1)
 	cave_spot = Vector2(2560, 1720)
 	spawns = [
-		{"id": "phi_tai_hong", "count": 4, "rect": Rect2(580, 360, 380, 380)},
-		{"id": "phi_tai_hong", "count": 3, "rect": Rect2(560, 1320, 400, 380)},
-		{"id": "phi_hua_khat", "count": 4, "rect": Rect2(1300, 1250, 420, 420)},
-		{"id": "phi_hua_khat", "count": 2, "rect": Rect2(1000, 1100, 300, 200)},
-		{"id": "thahan_phi", "count": 3, "rect": Rect2(2100, 360, 420, 400)},
-		{"id": "thahan_phi", "count": 3, "rect": Rect2(2060, 1320, 420, 400)},
+		{"id": "phi_tai_hong", "count": 6, "rect": Rect2(580, 360, 380, 380)},
+		{"id": "phi_tai_hong", "count": 5, "rect": Rect2(560, 1320, 400, 380)},
+		{"id": "phi_hua_khat", "count": 6, "rect": Rect2(1300, 1250, 420, 420)},
+		{"id": "phi_hua_khat", "count": 3, "rect": Rect2(1000, 1100, 300, 200)},
+		{"id": "thahan_phi", "count": 5, "rect": Rect2(2100, 360, 420, 400)},
+		{"id": "thahan_phi", "count": 5, "rect": Rect2(2060, 1320, 420, 400)},
 	]
 	boss_id = "khun_suek"
 	boss_spawns = [
@@ -79,4 +85,4 @@ func _init() -> void:
 		"stock": ["dab_lek", "thanu_khao", "khamphi_thong", "suea_so", "suea_kraphan", "mongkhon", "takrut"]})
 	npcs.append({"id": "chang_lom_krung", "name": "ช่างหลอมแร่", "role": "smith", "pos": Vector2(300, 1190),
 		"look": {"robe": Color(0.55, 0.52, 0.6), "sash": Color(1.0, 0.6, 0.35), "hat": "headband"}})
-	portals = gates("pa_cha", "ป่าช้าวัดร้าง", Vector2(2620, 1000), "doi_phi", "ดอยผีปันน้ำ (Lv 62+)")
+	portals = gates("pa_cha", "ป่าช้าวัดร้าง", Vector2(2620, 1000), "doi_phi", "ดอยผีปันน้ำ (Lv 30+)")

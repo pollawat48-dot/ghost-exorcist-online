@@ -40,10 +40,10 @@ func configure(parent_map: String, parent_exit: Vector2) -> void:
 	gloom_fog = Color(0.18, 0.16, 0.26)
 	var ghost_id := "cave_" + parent_map
 	spawns = [
-		{"id": ghost_id, "count": 3, "rect": Rect2(450, 180, 340, 260)},
-		{"id": ghost_id, "count": 3, "rect": Rect2(840, 1000, 320, 300)},
-		{"id": ghost_id, "count": 2, "rect": Rect2(1250, 160, 320, 260)},
-		{"id": ghost_id, "count": 3, "rect": Rect2(1480, 900, 280, 300)},
+		{"id": ghost_id, "count": 5, "rect": Rect2(450, 180, 340, 260)},
+		{"id": ghost_id, "count": 5, "rect": Rect2(840, 1000, 320, 300)},
+		{"id": ghost_id, "count": 3, "rect": Rect2(1250, 160, 320, 260)},
+		{"id": ghost_id, "count": 5, "rect": Rect2(1480, 900, 280, 300)},
 	]
 	boss_id = ""
 	boss_spawns = []
@@ -111,13 +111,15 @@ func _build_ground() -> void:
 	var size := world_rect.size * K.S
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = int(size.x * 2)
-	plane.subdivide_depth = int(size.y * 2)
+	plane.subdivide_width = int(size.x * 2 * K.ground_detail())
+	plane.subdivide_depth = int(size.y * 2 * K.ground_detail())
 	var ground := MeshInstance3D.new()
 	ground.name = "Ground"
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # พื้นรับเงาอย่างเดียว ไม่ต้องวาดซ้ำในแผนที่เงา
 	ground.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
+	mat.set_shader_parameter("detail_octaves", K.ground_octaves)
 	var segs := PackedVector2Array()
 	for seg in PATH_SEGS:
 		segs.append(seg[0])

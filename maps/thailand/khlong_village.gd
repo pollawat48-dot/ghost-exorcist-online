@@ -12,6 +12,8 @@ const CANAL_WATER := 62.0
 const CANAL_BANK := 80.0
 const BRIDGE_Y := 1000.0
 const BRIDGE_HALF := 40.0
+## ท่าไม้ของไต้ก๋งเรือสำเภา (เว้นมะพร้าวริมคลองช่วงนี้ไว้ให้เห็นเรือ)
+const DOCK_Y := 1040.0
 const COURTYARD := Rect2(200, 460, 680, 620)
 const PADDY := Rect2(1450, 150, 1150, 640)
 const PLOT := Vector2(230, 160)
@@ -45,10 +47,10 @@ func _init() -> void:
 	spawn_point = Vector2(560, 1000)
 	path_segs = PATH_SEGS
 	spawns = [
-		{"id": "krasue_noi", "count": 4, "rect": PADDY.grow(-40)},
-		{"id": "krasue_noi", "count": 3, "rect": Rect2(2550, 1150, 400, 350)},
-		{"id": "phi_takiang", "count": 3, "rect": GROVE.grow(-40)},
-		{"id": "phi_takiang", "count": 2, "rect": Rect2(2650, 720, 400, 260)},
+		{"id": "krasue_noi", "count": 6, "rect": PADDY.grow(-40)},
+		{"id": "krasue_noi", "count": 5, "rect": Rect2(2550, 1150, 400, 350)},
+		{"id": "phi_takiang", "count": 5, "rect": GROVE.grow(-40)},
+		{"id": "phi_takiang", "count": 3, "rect": Rect2(2650, 720, 400, 260)},
 	]
 	# จุดที่บอสประจำถิ่น (นางพญากระสือ) สุ่มเกิด
 	boss_id = "krasue_queen"
@@ -71,11 +73,15 @@ func _init() -> void:
 		{"id": "lung_lek", "name": "ลุงเหล็ก ร้านอาวุธ", "role": "shop", "sign": "ร้านอาวุธ", "pos": Vector2(940, 1075),
 			"look": {"robe": Color(0.72, 0.62, 0.55), "sash": Color(0.95, 0.6, 0.4), "hat": "farmer"},
 			"stock": ["maipai_staff", "suea_yant", "pha_khat_hua", "saisin", "mitmo", "khan_thanu", "khamphi_yant", "suea_kraphan", "mongkhon", "takrut", "phra_khrueang"]},
+		{"id": "khru_fuek_sat", "name": "ครูฝึกสัตว์ (พัฒนาร่าง)", "role": "pet", "pos": Vector2(580, 1060),
+			"look": {"robe": Color(0.6, 0.85, 0.65), "sash": Color(1.0, 0.75, 0.4), "hat": "farmer"}},
+		{"id": "tai_kong", "name": "ไต้ก๋งเรือสำเภา (ข้ามประเทศ)", "role": "boat", "pos": Vector2(1085, 1040),
+			"look": {"robe": Color(0.5, 0.62, 0.75), "sash": Color(1.0, 0.72, 0.38), "hat": "farmer"}},
 		{"id": "chang_lom", "name": "ช่างหลอมแร่", "role": "smith", "pos": Vector2(1060, 925),
 			"look": {"robe": Color(0.55, 0.52, 0.6), "sash": Color(1.0, 0.6, 0.35), "hat": "headband"}},
 	]
 	portals = [
-		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 12+)"},
+		{"pos": PORTAL_EAST, "to": "pa_cha", "to_pos": Vector2(260, 1000), "name": "ป่าช้าวัดร้าง (Lv 10+)"},
 		{"pos": PORTAL_SOUTH, "to": "lam_than", "to_pos": Vector2(260, 1000), "name": "ลำธารใสเย็น (ตกปลา)"},
 	]
 
@@ -137,7 +143,7 @@ func build_props() -> Node3D:
 	_build_village_details()
 	# มะพร้าวริมคลองทั้งสองฝั่ง
 	for y in range(120, 1950, 150):
-		if absf(y - BRIDGE_Y) > 120:
+		if absf(y - BRIDGE_Y) > 120 and absf(y - DOCK_Y) > 150:
 			_add("palm", Vector2(canal_center(y) - CANAL_BANK - 40 - _rng.randf() * 30, y))
 			_add("palm", Vector2(canal_center(y + 70) + CANAL_BANK + 40 + _rng.randf() * 30, y + 70))
 	_scatter("palm", Rect2(40, 80, 1000, 1850), 10, false)
@@ -162,7 +168,46 @@ func build_props() -> Node3D:
 	_build_rice()
 	_build_grass()
 	_build_lotus()
+	_build_life()
 	return props_root
+
+
+## ของตกแต่งชิ้นเล็ก (โมเดลสำเร็จรูป CC0) กับสัตว์เลี้ยงและชาวบ้านเดินเล่น ให้หมู่บ้านดูมีชีวิต
+## วางท้ายสุดเพื่อไม่ให้ตำแหน่งของเดิมเปลี่ยน
+func _build_life() -> void:
+	var village := Rect2(40, 80, 1050, 1850)
+	_scatter("flowers", village, 22, true)
+	_scatter("grass_plant", village, 16, true)
+	_scatter("stones", village, 8, true)
+	_scatter("flowers", Rect2(1350, 820, 1800, 300), 10, true)
+	_scatter("grass_plant", field_rect, 18, true)
+	_scatter("hay", Rect2(PADDY.position.x, PADDY.end.y + 10, PADDY.size.x, 110), 9, true)
+	_scatter("stump", field_rect, 6, true)
+	_scatter("mushrooms", GROVE, 10, true)
+	# ของใช้หน้าบ้าน: ถังน้ำ ลังไม้ ถังไม้
+	for h in [Vector2(330, 300), Vector2(620, 270), Vector2(880, 250), Vector2(300, 1330), Vector2(780, 1300), Vector2(330, 1720), Vector2(800, 1700)]:
+		_try_add(["barrel", "crate", "bucket"][_rng.randi() % 3], h + Vector2(80, 70), false)
+		_try_add(["crate", "bucket", "barrel"][_rng.randi() % 3], h + Vector2(-80, 72), false)
+	# แผงขายของกับเกวียนริมทางเข้าสะพาน
+	_try_add("stall", Vector2(1080, 1110), false)
+	_try_add("cart", Vector2(1160, 900), false)
+	_try_add("stall", Vector2(330, 1080), false)
+	# ป่าช้าเก่า: เทียนกับโกศเล็กๆ
+	_scatter("candles", Rect2(GRAVE_CENTER - Vector2(260, 220), Vector2(520, 440)), 8, true)
+	_scatter("urn", Rect2(GRAVE_CENTER - Vector2(260, 220), Vector2(520, 440)), 5, true)
+	_scatter("debris", Rect2(2450, 1600, 700, 380), 4, true)
+	# สัตว์เลี้ยงกับชาวบ้าน
+	_add_critters("villager", Vector2(600, 1000), 340.0, 5)
+	_add_critters("villager", Vector2(500, 300), 260.0, 2)
+	_add_critters("villager", Vector2(1800, 950), 260.0, 2)
+	_add_critters("dog", Vector2(560, 1080), 320.0, 3)
+	_add_critters("cat", Vector2(330, 1300), 160.0, 1)
+	_add_critters("cat", Vector2(780, 300), 160.0, 1)
+	_add_critters("chick", Vector2(320, 1420), 120.0, 4)
+	_add_critters("chick", Vector2(1700, 560), 120.0, 3)
+	_add_critters("pig", Vector2(800, 1620), 120.0, 2)
+	_add_critters("cow", Vector2(1900, 820), 220.0, 2)
+	_add_critters("elephant", Vector2(980, 560), 150.0, 1)
 
 
 ## บ้านคน ต้นไม้ และของใช้ในหมู่บ้านฝั่งวัด + บ้านชาวนาฝั่งทุ่ง
@@ -241,6 +286,7 @@ func _place(kind: String, pos: Vector2, radius: float, gap: float) -> bool:
 func _terrain_material(shader: Shader) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = shader
+	mat.set_shader_parameter("detail_octaves", K.ground_octaves)
 	mat.set_shader_parameter("canal_x", CANAL_X)
 	mat.set_shader_parameter("canal_water", CANAL_WATER)
 	mat.set_shader_parameter("canal_bank", CANAL_BANK)
@@ -265,10 +311,11 @@ func _build_ground() -> void:
 	var size := world_rect.size * K.S
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = int(size.x * 4)
-	plane.subdivide_depth = int(size.y * 4)
+	plane.subdivide_width = int(size.x * 4 * K.ground_detail())
+	plane.subdivide_depth = int(size.y * 4 * K.ground_detail())
 	var ground := MeshInstance3D.new()
 	ground.name = "Ground"
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # พื้นรับเงาอย่างเดียว ไม่ต้องวาดซ้ำในแผนที่เงา
 	ground.mesh = plane
 	ground.material_override = _terrain_material(GROUND_SHADER)
 	ground.position = Vector3(size.x / 2.0, 0, size.y / 2.0)

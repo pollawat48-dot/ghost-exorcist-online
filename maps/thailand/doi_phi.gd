@@ -1,5 +1,5 @@
 extends "res://maps/thailand/field_map.gd"
-## ประเทศไทย แผนที่ 4: ดอยผีปันน้ำ (ผีเลเวล 62–85 + บอสพญาพรายเจ้าป่า Lv 100)
+## ประเทศไทย แผนที่ 4: ดอยผีปันน้ำ (ผีเลเวล 30–36 + บอสพญาพรายเจ้าป่า Lv 42)
 ## ป่าสนบนดอยมีหมอกขาว ก้อนหินใหญ่ ศาลผีบ้านผีเรือน กระท่อมชาวดอย และแอ่งน้ำซับ
 
 func _init() -> void:
@@ -45,18 +45,24 @@ func _init() -> void:
 	]
 	border_kinds = ["pine", "bamboo", "bush"]
 	border_weights = [0.6, 0.15, 0.25]
+	decor = [
+		["mushrooms", Rect2(520, 120, 2200, 1780), 18], ["stump", Rect2(520, 120, 2200, 1780), 12],
+		["boulder", Rect2(520, 120, 2200, 1780), 8], ["flowers", Rect2(520, 120, 2200, 1780), 14],
+		["grass_plant", Rect2(40, 120, 2700, 1780), 18],
+	]
+	critters = [["parrot", Vector2(1300, 900), 400.0, 3], ["bunny", Vector2(900, 1300), 250.0, 3], ["bunny", Vector2(2000, 700), 250.0, 2]]
 	grass_base = Color(0.38, 0.56, 0.44)
 	grass_tip = Color(0.66, 0.8, 0.62)
 	grass_count = 3200
 	mist_color = Color(0.95, 0.97, 1.0, 0.2)
 	cave_spot = Vector2(2560, 300)
 	spawns = [
-		{"id": "phi_ka", "count": 4, "rect": Rect2(560, 1300, 360, 360)},
-		{"id": "phi_ka", "count": 3, "rect": Rect2(600, 300, 360, 300)},
-		{"id": "phi_pong", "count": 4, "rect": Rect2(1450, 340, 420, 360)},
-		{"id": "phi_pong", "count": 2, "rect": Rect2(1100, 1150, 300, 250)},
-		{"id": "nang_mai", "count": 3, "rect": Rect2(2150, 1300, 420, 380)},
-		{"id": "nang_mai", "count": 3, "rect": Rect2(2180, 360, 380, 340)},
+		{"id": "phi_ka", "count": 6, "rect": Rect2(560, 1300, 360, 360)},
+		{"id": "phi_ka", "count": 5, "rect": Rect2(600, 300, 360, 300)},
+		{"id": "phi_pong", "count": 6, "rect": Rect2(1450, 340, 420, 360)},
+		{"id": "phi_pong", "count": 3, "rect": Rect2(1100, 1150, 300, 250)},
+		{"id": "nang_mai", "count": 5, "rect": Rect2(2150, 1300, 420, 380)},
+		{"id": "nang_mai", "count": 5, "rect": Rect2(2180, 360, 380, 340)},
 	]
 	boss_id = "phraya_phrai"
 	boss_spawns = [
@@ -66,4 +72,4 @@ func _init() -> void:
 	]
 	npcs = camp_npcs("pu_chan", "ปู่จันทร์หมอผีดอย", {"robe": Color(0.45, 0.42, 0.6), "sash": Color(0.95, 0.4, 0.45), "hat": "headband"},
 		["ya_hom_thong", "nam_mon_yai", "ya_thip", "nam_mon_thep"])
-	portals = gates("krung_kao", "กรุงเก่าร้าง", Vector2(2620, 1000), "nong_naga", "บึงนาคาบาดาล (Lv 96+)")
+	portals = gates("krung_kao", "กรุงเก่าร้าง", Vector2(2620, 1000), "nong_naga", "บึงนาคาบาดาล (Lv 37+)")

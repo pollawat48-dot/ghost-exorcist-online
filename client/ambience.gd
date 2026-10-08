@@ -4,7 +4,9 @@ extends Node3D
 
 signal phase_changed(text: String)
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const K = preload("res://maps/props/mesh_kit.gd")
+const Effect = preload("res://client/effect.gd")
 const Graphics = preload("res://client/graphics.gd")
 const DAY_LENGTH := 240.0
 
@@ -101,9 +103,23 @@ func _ready() -> void:
 func _on_graphics_changed() -> void:
 	Graphics.apply_viewport(get_viewport())
 	Graphics.apply_environment(env, sun)
+	# แสงจันทร์: เงาแบบเดียวกับแดด แต่ระดับต่ำ (มือถือ) ไม่มีเงาจันทร์เลย
+	moon.shadow_enabled = not Graphics.level() in ["lowest", "low"]
+	# หิ่งห้อยเป็นอนุภาคที่ CPU คำนวณทุกเฟรม ระดับต่ำลดจำนวนลง
+	var flies := int(260 * Effect.PARTICLE_SCALE.get(Graphics.level(), 1.0))
+	if fireflies.amount != flies:
+		fireflies.amount = flies
+	moon.directional_shadow_mode = sun.directional_shadow_mode
+	moon.directional_shadow_max_distance = sun.directional_shadow_max_distance
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_process_body(delta)
+	PerfOverlay.add("ฟ้า", Time.get_ticks_usec() - t0)
+
+
+func _process_body(delta: float) -> void:
 	tick(delta)
 
 
@@ -117,18 +133,32 @@ func tick(delta: float) -> void:
 
 	# ดวงอาทิตย์เคลื่อนจากตะวันออกไปตะวันตกในช่วงกลางวัน
 	var sun_t := clampf(time_of_day / 0.55, 0.0, 1.0)
-	sun.rotation = Vector3(-0.37 - sin(sun_t * PI) * 0.95, lerpf(-1.4, 1.4, sun_t), 0)
+	var sun_rot := Vector3(-0.37 - sin(sun_t * PI) * 0.95, lerpf(-1.4, 1.4, sun_t), 0)
+	# ขยับดวงอาทิตย์เป็นช่วงๆ: ทุกครั้งที่ขยับ ท้องฟ้าและเงาต้องคำนวณใหม่
+	if sun.rotation.distance_to(sun_rot) > 0.01:
+		sun.rotation = sun_rot
 	sun.light_energy = 1.0 * (1.0 - night) * (1.0 - gloom * 0.35)
 	sun.light_color = Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.65, 0.5), dusk)
 	moon.light_energy = 0.45 * night
+	# ไฟที่มืดสนิทยังเสียแรงวาดแผนที่เงา ปิดไว้เลย (กลางวันไม่มีแสงจันทร์ กลางคืนไม่มีแดด)
+	moon.visible = night > 0.02
+	sun.visible = sun.light_energy > 0.01
 
-	sky_mat.sky_top_color = Color(0.55, 0.76, 0.98).lerp(Color(0.7, 0.55, 0.85), dusk).lerp(Color(0.16, 0.16, 0.36), clampf(night * 1.5 - 0.5, 0.0, 1.0))
-	sky_mat.sky_horizon_color = Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.72, 0.62), dusk).lerp(Color(0.32, 0.3, 0.52), clampf(night * 1.5 - 0.5, 0.0, 1.0))
+	var top := Color(0.55, 0.76, 0.98).lerp(Color(0.7, 0.55, 0.85), dusk).lerp(Color(0.16, 0.16, 0.36), clampf(night * 1.5 - 0.5, 0.0, 1.0))
+	var horizon := Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.72, 0.62), dusk).lerp(Color(0.32, 0.3, 0.52), clampf(night * 1.5 - 0.5, 0.0, 1.0))
 	if gloom > 0.0:
-		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(map.gloom_sky, gloom * 0.6)
-		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(map.gloom_horizon, gloom * 0.6)
-	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-	sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.1).lerp(Color(0.02, 0.02, 0.04), night)
+		top = top.lerp(map.gloom_sky, gloom * 0.6)
+		horizon = horizon.lerp(map.gloom_horizon, gloom * 0.6)
+	# ท้องฟ้าเปลี่ยนสีทีละนิด: แก้วัสดุเฉพาะตอนสีต่างพอเห็น เพราะทุกครั้งที่แก้
+	# เครื่องต้องวาดแผนที่แสงท้องฟ้าใหม่ทั้งชุด (หนักมากบนมือถือ)
+	if _far(sky_mat.sky_top_color, top) or _far(sky_mat.sky_horizon_color, horizon):
+		sky_mat.sky_top_color = top
+		sky_mat.sky_horizon_color = horizon
+		sky_mat.ground_horizon_color = horizon
+		sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.1).lerp(Color(0.02, 0.02, 0.04), night)
+	if env.ambient_light_source == Environment.AMBIENT_SOURCE_COLOR:
+		# ระดับประหยัด/ต่ำ: แสงรอบข้างเป็นสีคงที่ ผสมสีฟ้าเล็กน้อยแทนการคำนวณจากท้องฟ้า
+		env.ambient_light_color = Color(0.92, 0.88, 1.0).lerp(horizon.lerp(top, 0.5), 0.35)
 	env.ambient_light_energy = lerpf(0.4, 0.45, night)
 	env.fog_light_color = sky_mat.sky_horizon_color
 	env.fog_density = lerpf(0.0015, 0.012, night) + gloom * 0.004
@@ -148,6 +178,10 @@ func tick(delta: float) -> void:
 	if p != phase:
 		phase = p
 		phase_changed.emit(phase)
+
+
+static func _far(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) > 0.02
 
 
 func _night_factor(t: float) -> float:

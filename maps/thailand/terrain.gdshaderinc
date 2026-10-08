@@ -38,6 +38,24 @@ float fbm(vec2 p) {
 	return v;
 }
 
+// ลายละเอียดบนพื้น (สีด่าง ฝีแปรง) ระดับประหยัดใช้ชั้นน้อยลง ลดงานการ์ดจอมือถือ
+uniform int detail_octaves = 4;
+
+float fbm_d(vec2 p) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 4; i++) {
+		if (i >= detail_octaves) {
+			v += a * 0.5;
+		} else {
+			v += a * vnoise(p);
+		}
+		p *= 2.0;
+		a *= 0.5;
+	}
+	return v;
+}
+
 float canal_center(float y) {
 	return canal_x + sin(y * 0.0035) * 45.0 + sin(y * 0.011) * 12.0;
 }

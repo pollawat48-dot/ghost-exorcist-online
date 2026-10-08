@@ -4,6 +4,7 @@ extends RefCounted
 
 const Classes = preload("res://shared/data/classes.gd")
 const ItemDB = preload("res://shared/data/items.gd")
+const Fashion = preload("res://shared/data/fashion.gd")
 
 const MAX_LEVEL := 150
 const STATS := ["str", "agi", "vit", "int", "dex", "luk"]
@@ -20,8 +21,9 @@ const START_COINS := 200
 const SKILL_POINT_EVERY := 3
 
 
+## หลอด EXP ยาวขึ้นเรื่อยๆ ตามเลเวล (ยิ่งสูงยิ่งต้องเล่นนาน): เลเวล 10 ราว 1.1 พัน, 50 ราว 3.1 หมื่น, 90 ราว 1.2 แสน
 static func exp_to_next(level: int) -> int:
-	return int(round(20.0 * pow(level, 1.6)))
+	return int(round(20.0 * pow(level, 1.6) * (1.0 + level / 25.0)))
 
 
 ## สร้างข้อมูลตัวละครใหม่ (ศิษย์วัด เลเวล 1)
@@ -36,12 +38,13 @@ static func new_state() -> Dictionary:
 		"coins": START_COINS, "quests": {}, "quests_done": {},
 		"visited": {}, "caves": [],
 		"skill_slots": ["holy_water", "", "", "", "", "", "", "", ""],
+		"fashion": {}, "pets": {}, "cc": Fashion.CC_START,
 	}
 
 
-## รวมค่าสเตตัสจากของสวมใส่
+## รวมค่าสเตตัสจากของสวมใส่ + แฟชั่น + สัตว์เลี้ยง
 static func equipment_bonus(state: Dictionary) -> Dictionary:
-	var total := {}
+	var total := Fashion.bonus(state)
 	for slot in state["equipment"]:
 		var bonus := ItemDB.bonus_of(state["equipment"][slot])
 		for key in bonus:

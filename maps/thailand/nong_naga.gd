@@ -1,5 +1,5 @@
 extends "res://maps/thailand/field_map.gd"
-## ประเทศไทย แผนที่ 5: บึงนาคาบาดาล (ผีเลเวล 96–122 + บอสพญานาคทมิฬ Lv 135)
+## ประเทศไทย แผนที่ 5: บึงนาคาบาดาล (ผีเลเวล 37–43 + บอสพญานาคทมิฬ Lv 47)
 ## บึงกว้างหลายแอ่ง มีบัว รูปปั้นนาคเฝ้าทาง ท่าน้ำ เรือ และต้นตาลริมบึง
 
 func _init() -> void:
@@ -47,17 +47,19 @@ func _init() -> void:
 	]
 	border_kinds = ["palm", "banana", "bush"]
 	border_weights = [0.4, 0.3, 0.3]
+	decor = [["grass_plant", Rect2(40, 120, 2700, 1780), 24], ["stones", Rect2(520, 120, 2200, 1780), 12], ["flowers", Rect2(520, 120, 2200, 1780), 10]]
+	critters = [["crab", Vector2(1150, 1150), 260.0, 3], ["crab", Vector2(2000, 800), 260.0, 3]]
 	grass_base = Color(0.36, 0.56, 0.5)
 	grass_tip = Color(0.62, 0.8, 0.68)
 	mist_color = Color(0.8, 0.95, 0.95, 0.16)
 	cave_spot = Vector2(2580, 260)
 	spawns = [
-		{"id": "phrai_nam", "count": 4, "rect": Rect2(560, 760, 300, 160)},
-		{"id": "phrai_nam", "count": 3, "rect": Rect2(560, 1250, 340, 400)},
-		{"id": "phi_naga", "count": 4, "rect": Rect2(1250, 1050, 450, 200)},
-		{"id": "phi_naga", "count": 2, "rect": Rect2(1250, 450, 250, 300)},
-		{"id": "kong_koi", "count": 3, "rect": Rect2(2150, 900, 450, 300)},
-		{"id": "kong_koi", "count": 3, "rect": Rect2(2150, 1250, 200, 400)},
+		{"id": "phrai_nam", "count": 6, "rect": Rect2(560, 760, 300, 160)},
+		{"id": "phrai_nam", "count": 5, "rect": Rect2(560, 1250, 340, 400)},
+		{"id": "phi_naga", "count": 6, "rect": Rect2(1250, 1050, 450, 200)},
+		{"id": "phi_naga", "count": 3, "rect": Rect2(1250, 450, 250, 300)},
+		{"id": "kong_koi", "count": 5, "rect": Rect2(2150, 900, 450, 300)},
+		{"id": "kong_koi", "count": 5, "rect": Rect2(2150, 1250, 200, 400)},
 	]
 	boss_id = "phaya_nak"
 	boss_spawns = [
@@ -70,4 +72,4 @@ func _init() -> void:
 	npcs.append({"id": "chang_ngoen", "name": "ช่างเงินริมบึง", "role": "shop", "sign": "ร้านอาวุธ", "pos": Vector2(200, 1080),
 		"look": {"robe": Color(0.75, 0.78, 0.9), "sash": Color(0.6, 0.8, 1.0), "hat": "farmer"},
 		"stock": ["dab_ngoen", "thanu_ngoen", "khamphi_ngoen", "kraphan_ngoen", "muak_ngoen"]})
-	portals = gates("doi_phi", "ดอยผีปันน้ำ", Vector2(2620, 1000), "yom_lok", "ยมโลก (Lv 132+)")
+	portals = gates("doi_phi", "ดอยผีปันน้ำ", Vector2(2620, 1000), "yom_lok", "ยมโลก (Lv 45+)")

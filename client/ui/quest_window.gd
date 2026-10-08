@@ -87,7 +87,11 @@ func _quest_card(list: VBoxContainer, id: String) -> void:
 		var need := "ต้องเลเวล %d" % q["min_level"]
 		if q["requires"] != "" and not player.state["quests_done"].has(q["requires"]):
 			need += " และทำเควส \"%s\" ก่อน" % Quests.QUESTS[q["requires"]]["name"]
+		if q.has("pet_stage") and player.state["level"] >= q["min_level"]:
+			need = Quests.pet_lock(player.state, id)
 		goal = need
+	elif st == "active" and q.has("pet_stage") and Quests.progress(player.state, player.inventory, id) >= q["count"]:
+		goal += " · พาสัตว์เลี้ยงตัวที่จะพัฒนามาส่ง (%s)" % Quests.pet_lock(player.state, id)
 	info.add_child(P.label("เป้าหมาย: " + goal, 13, P.PINK_DEEP if st == "ready" else P.TEXT))
 	info.add_child(P.label("รางวัล: " + Quests.reward_text(id, player.class_info()["line"]), 12, Color(0.7, 0.5, 0.15)))
 	var reward_items: Dictionary = Quests.reward(id, player.class_info()["line"]).get("items", {})

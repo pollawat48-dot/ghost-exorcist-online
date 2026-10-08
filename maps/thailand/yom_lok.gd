@@ -1,5 +1,5 @@
 extends "res://maps/thailand/field_map.gd"
-## ประเทศไทย แผนที่ 6: ยมโลก (ผีเลเวล 132–148 + บอสพญามัจจุราช Lv 150) แผนที่สุดท้าย
+## ประเทศไทย แผนที่ 6: ยมโลก (ผีเลเวล 45–50 + บอสพญามัจจุราช Lv 50) แผนที่สุดท้ายของประเทศไทย
 ## ลานศาลยมบาลกลางแผนที่ กระทะทองแดง ต้นงิ้วหนาม บ่อไฟสีส้ม ท้องฟ้าแดงอมม่วง (ยังน่ารักแบบพาสเทล)
 
 const COURT := Rect2(1150, 720, 700, 560)
@@ -50,17 +50,21 @@ func _init() -> void:
 	]
 	border_kinds = ["ngiw_tree", "dead_tree", "rock"]
 	border_weights = [0.4, 0.4, 0.2]
+	decor = [
+		["debris", Rect2(520, 120, 2200, 1780), 14], ["candles", COURT, 10], ["coffin", Rect2(520, 120, 2200, 1780), 6],
+		["urn", Rect2(520, 120, 2200, 1780), 8],
+	]
 	grass_base = Color(0.5, 0.36, 0.46)
 	grass_tip = Color(0.85, 0.55, 0.62)
 	grass_count = 2200
 	mist_color = Color(1.0, 0.7, 0.75, 0.14)
 	cave_spot = Vector2(2580, 260)
 	spawns = [
-		{"id": "asurakai", "count": 4, "rect": Rect2(580, 330, 380, 360)},
-		{"id": "asurakai", "count": 3, "rect": Rect2(580, 1320, 380, 380)},
-		{"id": "yomathut", "count": 3, "rect": Rect2(2050, 300, 420, 380)},
-		{"id": "yomathut", "count": 2, "rect": Rect2(1250, 1300, 500, 150)},
-		{"id": "pret_awe", "count": 4, "rect": Rect2(2000, 1320, 420, 380)},
+		{"id": "asurakai", "count": 6, "rect": Rect2(580, 330, 380, 360)},
+		{"id": "asurakai", "count": 5, "rect": Rect2(580, 1320, 380, 380)},
+		{"id": "yomathut", "count": 5, "rect": Rect2(2050, 300, 420, 380)},
+		{"id": "yomathut", "count": 3, "rect": Rect2(1250, 1300, 500, 150)},
+		{"id": "pret_awe", "count": 6, "rect": Rect2(2000, 1320, 420, 380)},
 	]
 	boss_id = "matchurat"
 	boss_spawns = [

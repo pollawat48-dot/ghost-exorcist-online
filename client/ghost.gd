@@ -8,6 +8,8 @@ const Combat = preload("res://shared/combat/combat.gd")
 const GhostDB = preload("res://shared/data/ghosts.gd")
 const DamageText = preload("res://client/damage_text.gd")
 const Effect = preload("res://client/effect.gd")
+const ChinaModels = preload("res://client/ghost_models_china.gd")
+const Batcher = preload("res://maps/props/prop_batcher.gd")
 
 signal died(ghost: Node3D)
 
@@ -36,6 +38,7 @@ var float_height := 1.25  ## ความสูงที่ลอยจากพ
 var label_y := 2.15
 var aoe_timer := 0.0
 var crown_y := 0.0  ## ตำแหน่งมงกุฎบอสเหนือหัว (ตามรูปร่าง)
+var hop := false  ## กระโดดดึ๋งๆ แทนลอยขึ้นลง (เจียงซือ)
 
 
 func setup(id: String, at: Vector2, player_ref: Node3D, seed_value: int) -> void:
@@ -84,6 +87,8 @@ func _ready() -> void:
 		K.label(self, "★ %s Lv.%d ★" % [data["name"], data["level"]], Vector3(0, label_y * base_scale * 0.95 + 0.6, 0), Color(1, 0.85, 0.4), 44)
 	else:
 		K.label(self, "%s Lv.%d" % [data["name"], data["level"]], Vector3(0, label_y, 0), Color(1, 0.88, 0.88), 34)
+	# รวมชิ้นส่วนที่ไม่ขยับเป็น mesh เดียว (ชายผ้า/ริบบิ้นที่แกว่งรวมแยกในตัวเอง) ลดการวาดบนมือถือ
+	Batcher.batch(model, dangles)
 	_sync()
 
 
@@ -234,10 +239,16 @@ func _build_pret(eye: Material, shine: Material, blush: Material, tone: Color = 
 
 func _sync() -> void:
 	position = K.to3d(pos)
-	model.position.y = (float_height + sin(bob) * 0.12) * (1.6 if is_boss() and float_height > 1.0 else 1.0)
+	if hop:
+		# กระโดดสองเท้าเป็นจังหวะ ยุบตัวนิดๆ ตอนแตะพื้น
+		var h := absf(sin(bob * 1.4))
+		model.position.y = float_height + h * 0.4
+		model.scale = Vector3(1.0 + (1.0 - h) * 0.08, 1.0 - (1.0 - h) * 0.1, 1.0 + (1.0 - h) * 0.08)
+	else:
+		model.position.y = (float_height + sin(bob) * 0.12) * (1.6 if is_boss() and float_height > 1.0 else 1.0)
 	for i in dangles.size():
 		dangles[i].rotation.x = sin(bob * 1.3 + i) * 0.25
-	model.scale = Vector3.ONE * base_scale * (1.15 if flash > 0.0 else 1.0)
+	model.scale = (model.scale if hop else Vector3.ONE) * base_scale * (1.15 if flash > 0.0 else 1.0)
 	if target != null and is_instance_valid(target):
 		var d: Vector2 = target.pos - pos
 		if d.length() > 1.0:
@@ -286,13 +297,13 @@ func tick(delta: float) -> void:
 		if aoe_timer <= 0.0 and pos.distance_to(target.pos) < data["aoe_radius"]:
 			aoe_timer = data["aoe_interval"]
 			Effect.ring(get_parent(), position, data["aoe_radius"] / 32.0, Color(1.0, 0.4, 0.7))
-			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng, data["aoe_power"]))
+			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng, data["aoe_power"]), data["name"])
 	if target != null:
 		if pos.distance_to(target.pos) > data["attack_range"]:
 			pos = pos.move_toward(target.pos, data["speed"] * 1.3 * delta)
 		elif attack_cooldown <= 0.0:
 			attack_cooldown = data["attack_interval"]
-			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng))
+			target.take_damage(Combat.damage(data["atk"], target.stats["def"], "neutral", "none", rng), data["name"])
 	else:
 		_wander(delta)
 	if model != null:
@@ -339,7 +350,9 @@ func _build_model(kind: String, c: Color, eye: Material, shine: Material, blush:
 		"rock":
 			_build_rock_spirit(c, eye, shine, blush)
 		_:
-			K.sphere(model, 0.3, Vector3.ZERO, K.mat(c, 1.0), 10)
+			# ผีจีน (เจียงซือ จิ้งจอก ยมทูตขาวดำ ฯลฯ) อยู่ใน ghost_models_china.gd
+			if not ChinaModels.build(self, kind, c, eye, shine, blush):
+				K.sphere(model, 0.3, Vector3.ZERO, K.mat(c, 1.0), 10)
 
 
 func _face(y: float, z: float, spread: float, eye: Material, shine: Material, blush: Material, size: float = 1.0) -> void:

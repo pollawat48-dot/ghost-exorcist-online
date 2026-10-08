@@ -9,12 +9,17 @@ const S := 1.0 / 32.0
 const OUTLINE_COLOR := Color(0.36, 0.24, 0.26)
 
 ## ตัวคูณความละเอียดของทรงกลม/ทรงกระบอก (ตั้งจาก client/graphics.gd ตามระดับคุณภาพภาพ)
-## ทรงที่ตั้งใจให้เป็นเหลี่ยม (น้อยกว่า 8 ด้าน เช่น อัญมณี) คงเดิม
+## ทรงที่ตั้งใจให้เป็นเหลี่ยม (น้อยกว่า 8 ด้าน เช่น อัญมณี) คงเดิม ระดับต่ำ (<1) ลดเหลี่ยมแต่ไม่ต่ำกว่า 8
 static var detail := 1.0
 
 static var _materials := {}
 static var _meshes := {}
 static var _outline: StandardMaterial3D
+## เส้นขอบเปิด/ปิดได้ตามระดับภาพ (ระดับประหยัดปิด ลดงานวาดเกือบครึ่ง) จึงจำวัสดุที่ต้องมีเส้นขอบไว้
+static var outlines_on := true
+## ชั้นลายละเอียดของพื้น (shader ดิน/หญ้า) ตั้งตามระดับภาพ
+static var ground_octaves := 4
+static var _outlined: Array[BaseMaterial3D] = []
 static var _font: Font
 
 
@@ -36,6 +41,21 @@ static func outline() -> StandardMaterial3D:
 	return _outline
 
 
+static func attach_outline(m: BaseMaterial3D) -> void:
+	m.set_meta("outlined", true)
+	_outlined.append(m)
+	m.next_pass = outline() if outlines_on else null
+
+
+static func set_outlines(on: bool) -> void:
+	if on == outlines_on:
+		return
+	outlines_on = on
+	for m in _outlined:
+		if is_instance_valid(m):
+			m.next_pass = outline() if on else null
+
+
 static func to3d(p: Vector2, height: float = 0.0) -> Vector3:
 	return Vector3(p.x * S, height, p.y * S)
 
@@ -55,7 +75,7 @@ static func mat(color: Color, emission: float = 0.0, roughness: float = 0.85, me
 	m.rim = 0.2
 	m.rim_tint = 0.6
 	if outlined and color.a >= 1.0 and emission < 2.0:
-		m.next_pass = outline()
+		attach_outline(m)
 	if emission > 0.0:
 		m.emission_enabled = true
 		m.emission = color
@@ -109,8 +129,15 @@ static func cyl(parent: Node3D, r_top: float, r_bottom: float, h: float, pos: Ve
 	return add(parent, _meshes[key], pos, material, rot)
 
 
+## ความถี่ของจุดบนพื้นแผนที่ (พื้นยุบเป็นคลอง/ทางเดินด้วย shader) ระดับต่ำใช้จุดน้อยลง
+static func ground_detail() -> float:
+	return minf(1.0, detail)
+
+
 static func _smooth(n: int) -> int:
-	return n if n < 8 or detail <= 1.0 else int(round(n * detail))
+	if n < 8 or detail == 1.0:
+		return n
+	return maxi(8, int(round(n * detail)))
 
 
 static func sphere(parent: Node3D, r: float, pos: Vector3, material: Variant, segs: int = 12, scl := Vector3.ONE) -> MeshInstance3D:
@@ -184,6 +211,20 @@ static func convex_mesh(faces: Array[PackedVector3Array]) -> ArrayMesh:
 				st.set_normal(n)
 				st.add_vertex(v)
 	return st.commit()
+
+
+## แคปซูล (ทรงยาวหัวท้ายมน) ใช้ทำแขน ขา ลำตัว: h = ความยาวรวมทั้งหัวท้าย
+static func capsule(parent: Node3D, r: float, h: float, pos: Vector3, material: Variant, rot := Vector3.ZERO, scl := Vector3.ONE, segs: int = 12) -> MeshInstance3D:
+	segs = _smooth(segs)
+	var key := "cap%s|%s|%s" % [r, h, segs]
+	if not _meshes.has(key):
+		var m := CapsuleMesh.new()
+		m.radius = r
+		m.height = maxf(h, r * 2.0)
+		m.radial_segments = segs
+		m.rings = maxi(2, segs / 3)
+		_meshes[key] = m
+	return add(parent, _meshes[key], pos, material, rot, scl)
 
 
 ## แท่งยาวระหว่างจุด a กับ b (ใช้ทำคานเฉียง ขอบหลังคา ราก ฯลฯ)

@@ -3,9 +3,12 @@ extends CanvasLayer
 ## ซ้ายบน: ชื่อ/เลเวล/HP/SP  กลางบน: ชื่อแผนที่+เวลา+ประกาศ+หลอดบอส  ขวาบน: แผนที่ย่อ+ปุ่มเมนู
 ## ล่างซ้าย: จอย  ล่างกลาง: แชท  ล่างขวา: ปุ่มโจมตี + ช่องสกิล 2 วงล้อมรอบ (1–9, ลากสกิลมาใส่) + ยา/ออโต้
 ## ซ้าย: รายการเควสที่กำลังทำ (กดเพื่อเดินไปเอง)
-## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เควส (J), ออโต้, เลื่อนขั้นคลาส, ร้านค้า, เควสจาก NPC
+## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เควส (J), แฟชั่น, ร้าน CC, ออโต้, เลื่อนขั้นคลาส, ร้านค้า, เควสจาก NPC
+## สลบ: ป้ายกลางจอพร้อมปุ่มเกิดใหม่ (ผู้เล่นกดเอง) · ขุดแร่: หลอดขุดเหนือหัว
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const ItemDB = preload("res://shared/data/items.gd")
+const World = preload("res://shared/data/world.gd")
 const Progression = preload("res://shared/combat/progression.gd")
 const P = preload("res://client/ui/palette.gd")
 const TouchButton = preload("res://client/ui/touch_button.gd")
@@ -16,6 +19,8 @@ const CharWindow = preload("res://client/ui/char_window.gd")
 const SkillWindow = preload("res://client/ui/skill_window.gd")
 const BagWindow = preload("res://client/ui/bag_window.gd")
 const ClassWindow = preload("res://client/ui/class_window.gd")
+const PetTrainerWindow = preload("res://client/ui/pet_trainer_window.gd")
+const BoatWindow = preload("res://client/ui/boat_window.gd")
 const ShopWindow = preload("res://client/ui/shop_window.gd")
 const QuestWindow = preload("res://client/ui/quest_window.gd")
 const AutoWindow = preload("res://client/ui/auto_window.gd")
@@ -27,6 +32,8 @@ const ChatBox = preload("res://client/ui/chat_box.gd")
 const PartyWindow = preload("res://client/ui/party_window.gd")
 const SettingsWindow = preload("res://client/ui/settings_window.gd")
 const Sound = preload("res://client/audio/sound.gd")
+const FashionWindow = preload("res://client/ui/fashion_window.gd")
+const CcShopWindow = preload("res://client/ui/cc_shop_window.gd")
 
 signal action(name: String)  ## "attack", "potion_hp", "potion_sp", "auto", "fish", "logout", "skill:<id>", "warp:<map>"
 signal chat_sent(ch: String, text: String, to: String)
@@ -40,7 +47,7 @@ const SLOT_EMPTY := Color(1, 1, 1, 0.5)
 ## จุดกลางปุ่มโจมตี (นับจากมุมขวาล่าง) และช่องสกิล 2 วงล้อมรอบ: [รัศมี, ขนาดช่อง, มุมแต่ละช่อง (องศา)]
 const ATTACK_CENTER := Vector2(-100, -104)
 const SLOT_RINGS := [[120.0, 62.0, [180.0, 210.0, 240.0, 270.0]], [196.0, 58.0, [180.0, 202.5, 225.0, 247.5, 270.0]]]
-const MENU_X := -458.0  ## ปุ่มเมนูใต้แผนที่ย่อ (ปุ่มสุดท้ายทางขวาคือปุ่มย่อ/กาง)
+const MENU_X := -570.0  ## ปุ่มเมนูใต้แผนที่ย่อ (ปุ่มสุดท้ายทางขวาคือปุ่มย่อ/กาง)
 const SIDE_X := -372.0  ## แถวปุ่มยา/ออโต้/ตกปลา ทางซ้ายของวงสกิล
 
 var player: Node3D
@@ -90,6 +97,9 @@ var dialog: PanelContainer
 var dialog_label: Label
 var net: Node = null
 var remotes: Node = null
+var death_layer: Control  ## ป้ายสลบกลางจอ + ปุ่มเกิดใหม่
+var death_label: Label
+var death_button: Button
 
 
 func _ready() -> void:
@@ -149,6 +159,7 @@ func _ready() -> void:
 	minimap.size = Vector2(220, 142)
 	top_right.add_child(minimap)
 	var menus := [["char", "user", "ตัวละคร", P.PINK], ["skills", "book", "สกิล", P.SKY], ["bag", "bag", "กระเป๋า", P.LEMON], ["questlog", "scroll", "เควส", P.MINT],
+		["fashion", "dress", "แฟชั่น", P.LAVENDER.lightened(0.25)], ["ccshop", "gacha", "ร้าน CC", P.PINK.lightened(0.15)],
 		["party", "party", "ปาร์ตี้", P.PINK.lightened(0.2)], ["auto", "auto", "ออโต้", P.LAVENDER.lightened(0.3)], ["settings", "gear", "ตั้งค่า", Color(0.9, 0.88, 0.95)]]
 	for i in menus.size():
 		var m: Array = menus[i]
@@ -304,7 +315,8 @@ func _ready() -> void:
 	# ---- หน้าต่างเมนู ----
 	var kinds := {"char": CharWindow, "skills": SkillWindow, "bag": BagWindow, "class": ClassWindow,
 		"shop": ShopWindow, "quest": QuestWindow, "questlog": QuestWindow, "auto": AutoWindow,
-		"warp": WarpWindow, "smith": SmithWindow, "refine": RefineWindow, "party": PartyWindow, "settings": SettingsWindow}
+		"warp": WarpWindow, "smith": SmithWindow, "refine": RefineWindow, "party": PartyWindow, "settings": SettingsWindow,
+		"fashion": FashionWindow, "ccshop": CcShopWindow, "pettrainer": PetTrainerWindow, "boat": BoatWindow}
 	for key in kinds:
 		var w: Control = kinds[key].new()
 		add_child(w)
@@ -313,10 +325,65 @@ func _ready() -> void:
 	windows["auto"].toggle_requested.connect(func(): action.emit("auto"))
 	windows["warp"].warp_requested.connect(func(id: String): action.emit("warp:" + id))
 	windows["smith"].open_refine_requested.connect(func(): open_refine(""))
-	for key in ["quest", "questlog"]:
+	windows["boat"].sail_requested.connect(func(id: String): action.emit("sail:" + id))
+	for key in ["quest", "questlog", "pettrainer", "boat"]:
 		windows[key].guide_requested.connect(func(id: String): quest_clicked.emit(id))
 	windows["party"].request.connect(func(what: String): party_request.emit(what))
 	windows["settings"].logout_requested.connect(func(): action.emit("logout"))
+	_build_death_layer()
+
+
+## ป้ายสลบกลางจอ: พื้นหลังมืดลง ข้อความใหญ่ และปุ่มเกิดใหม่ (บังการคลิกฉากจนกว่าจะกด)
+func _build_death_layer() -> void:
+	death_layer = Control.new()
+	death_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	death_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	death_layer.add_to_group(P.UI_BLOCK)
+	death_layer.visible = false
+	add_child(death_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.18, 0.1, 0.2, 0.45)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	death_layer.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	death_layer.add_child(center)
+	var panel := PanelContainer.new()
+	var st := P.panel_style(26, Color(1.0, 0.95, 0.96, 0.98), P.PINK_DEEP)
+	st.set_border_width_all(4)
+	st.content_margin_left = 40
+	st.content_margin_right = 40
+	st.content_margin_top = 22
+	st.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel", st)
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(box)
+	var title := _label(box, "คุณสลบไปแล้ว...", 32, P.PINK_DEEP)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	death_label = _label(box, "", 17, P.TEXT)
+	death_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	death_button = P.button("ฟื้นคืนชีพที่จุดเกิด", P.MINT, 20)
+	death_button.custom_minimum_size = Vector2(280, 56)
+	death_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	death_button.pressed.connect(func():
+		Sound.play(self, "click")
+		action.emit("respawn"))
+	box.add_child(death_button)
+
+
+func show_death(by: String) -> void:
+	close_windows()
+	death_label.text = ("ถูก%sโจมตีจนหมดสติ" % by if by != "" else "พลังชีวิตหมดลง") + "\nกดปุ่มด้านล่างเพื่อฟื้นที่จุดเกิดของแผนที่นี้"
+	death_layer.visible = true
+
+
+func hide_death() -> void:
+	death_layer.visible = false
 
 
 func _anchor(ax: float, ay: float) -> Control:
@@ -387,18 +454,22 @@ func _input(event: InputEvent) -> void:
 ## เปิดหน้าต่างของ NPC ที่คุยด้วย (ร้านค้า หรือรายการเควส)
 func open_npc(npc: Dictionary) -> void:
 	close_windows()
-	var w: Control = windows[{"shop": "shop", "class": "class", "warp": "warp", "smith": "smith"}.get(npc["role"], "quest")]
+	var w: Control = windows[{"shop": "shop", "class": "class", "warp": "warp", "smith": "smith", "pet": "pettrainer", "boat": "boat"}.get(npc["role"], "quest")]
 	w.open_for(npc)
 
 
 ## กดใช้หินตี+ (หรือปุ่มที่ร้านหลอม): เปิดหน้าต่างตีบวก
 func open_refine(stone_id: String) -> void:
 	close_windows()
+	if stone_id == "fashion":
+		windows["fashion"].show_window()
+		return
 	windows["refine"].open_with(stone_id)
 
 
 func set_map_id(map_id: String) -> void:
 	windows["warp"].current_map = map_id
+	windows["boat"].from_country = World.country_of(map_id)
 
 
 func bind_auto(a: RefCounted) -> void:
@@ -518,6 +589,12 @@ func setup_minimap(map: Node3D, npc_root: Node = null, portal_root: Node = null,
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_hud_process(delta)
+	PerfOverlay.add("หน้าจอ", Time.get_ticks_usec() - t0)
+
+
+func _hud_process(delta: float) -> void:
 	overlay.queue_redraw()
 	if invite_timer > 0.0:
 		invite_timer -= delta
@@ -546,8 +623,15 @@ func _process(delta: float) -> void:
 func _draw_overhead() -> void:
 	if camera == null or player == null:
 		return
+	var t0 := Time.get_ticks_usec()
+	_draw_overhead_bars()
+	PerfOverlay.add("หลอดเลือด", Time.get_ticks_usec() - t0)
+
+
+func _draw_overhead_bars() -> void:
 	_foot_bar(player.global_position, float(player.hp) / player.stats["max_hp"], 60.0, P.HP if player.hp * 3 > player.stats["max_hp"] else P.HP_LOW)
 	_draw_fishing()
+	_draw_mining()
 	if remotes != null:
 		for r in remotes.get_children():
 			if r.in_party:
@@ -609,6 +693,8 @@ func bind(p: Node3D) -> void:
 	player = p
 	player.changed.connect(refresh)
 	player.message.connect(add_log)
+	player.died.connect(show_death)
+	player.respawned.connect(hide_death)
 	for w in windows.values():
 		w.bind(p)
 	refresh()
@@ -619,7 +705,7 @@ func refresh() -> void:
 	var need := Progression.exp_to_next(level)
 	title_label.text = player.player_name
 	info_label.text = "Lv %d  ·  %s  ·  Exp %.1f%%" % [level, player.class_info()["name"], 100.0 * player.state["exp"] / need]
-	coin_label.text = "เหรียญ %s" % _commas(player.coins())
+	coin_label.text = "เหรียญ %s  ·  CC %s" % [_commas(player.coins()), _commas(player.cc())]
 	_refresh_buffs()
 	bars.queue_redraw()
 	_refresh_hotbar()
@@ -833,6 +919,19 @@ func _draw_fishing() -> void:
 	overlay.draw_string_outline(font, p + Vector2(-tw / 2.0, -14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 5, Color.WHITE)
 	overlay.draw_string(font, p + Vector2(-tw / 2.0, -14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.3, 0.5, 0.75))
 	P.draw_round_bar(overlay, Rect2(p.x - 45, p.y - 8, 90, 10), player.fish_timer / player.fish_time(), P.SKY)
+
+
+## หลอดขุดแร่เหนือหัว (ขุดครั้งละ 2 วินาที ระหว่างขุดผีทำร้ายไม่ได้)
+func _draw_mining() -> void:
+	if not player.is_mining() or camera.is_position_behind(player.global_position + Vector3(0, 2.6, 0)):
+		return
+	var p := camera.unproject_position(player.global_position + Vector3(0, 2.6, 0))
+	var font := overlay.get_theme_default_font()
+	var text := "กำลังขุด... (ผีทำร้ายไม่ได้)"
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+	overlay.draw_string_outline(font, p + Vector2(-tw / 2.0, -14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 5, Color.WHITE)
+	overlay.draw_string(font, p + Vector2(-tw / 2.0, -14), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.42, 0.3))
+	P.draw_round_bar(overlay, Rect2(p.x - 50, p.y - 8, 100, 12), player.mine_progress(), P.LEMON.darkened(0.1))
 
 
 func _panel(pos: Vector2, min_size: Vector2, radius: int = 18, parent: Node = self) -> VBoxContainer:

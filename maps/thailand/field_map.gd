@@ -22,6 +22,9 @@ var plaza := Rect2()
 ## สิ่งก่อสร้างหลัก [[kind, pos]] และของที่โรยทั่วแผนที่ [[kind, rect, จำนวน]]
 var landmarks := []
 var scatters := []
+## ของตกแต่งชิ้นเล็กจากโมเดลสำเร็จรูป [[kind, rect, จำนวน]] และสัตว์เดินเล่น [[kind, ศูนย์กลาง, รัศมี, จำนวน]]
+var decor := []
+var critters := []
 var border_kinds := ["dead_tree", "bush"]
 var border_weights := [0.5, 0.5]
 var grass_base := Color(0.42, 0.55, 0.42)
@@ -29,6 +32,10 @@ var grass_tip := Color(0.68, 0.74, 0.6)
 var grass_count := 3000
 var mist_color := Color(0.82, 0.8, 0.92, 0.14)
 var seed_value := 1
+## ของประจำแคมป์ (แผนที่จีนเปลี่ยนเป็นศาลาจีน โคมแดง ศาลเจ้าที่)
+var camp_hall := "sala"
+var camp_lamp := "lantern"
+var camp_shrine := "spirit_house"
 
 
 func _ready() -> void:
@@ -74,11 +81,11 @@ func build_props() -> Node3D:
 	super.build_props()
 	# แคมป์ทางเข้า: กองไฟ ศาลา ตะเกียง (เหมือนกันทุกแผนที่ให้จำได้ว่าเป็นที่ปลอดภัย)
 	_add("campfire", Vector2(420, 930))
-	_add("sala", Vector2(170, 830))
+	_add(camp_hall, Vector2(170, 830))
 	for p in [Vector2(150, 1140), Vector2(470, 860), Vector2(470, 1160), Vector2(200, 900)]:
-		_add("lantern", p)
+		_add(camp_lamp, p)
 		lanterns.append(p)
-	_add("spirit_house", Vector2(140, 1210))
+	_add(camp_shrine, Vector2(140, 1210))
 	for lm in landmarks:
 		var node := _add(lm[0], lm[1])
 		if lm.size() > 2:
@@ -107,20 +114,35 @@ func build_props() -> Node3D:
 	_border_ring(border_kinds, border_weights)
 	_build_grass()
 	_build_mist()
+	_build_life()
 	return props_root
+
+
+## ของตกแต่งชิ้นเล็ก (โมเดลสำเร็จรูป CC0) กับสัตว์ที่เดินเล่น วางท้ายสุดเพื่อไม่ให้ตำแหน่งของเดิมเปลี่ยน
+func _build_life() -> void:
+	# ของใช้ในแคมป์: ลังเสบียง ถังไม้ ป้ายบอกทาง
+	_add("crate", Vector2(250, 1185))
+	_add("barrel", Vector2(212, 1165))
+	_add("signpost", Vector2(530, 940))
+	for d in decor:
+		_scatter(d[0], d[1], d[2], true)
+	for c in critters:
+		_add_critters(c[0], c[1], c[2], c[3])
 
 
 func _build_ground() -> void:
 	var size := world_rect.size * K.S
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = int(size.x * 2)
-	plane.subdivide_depth = int(size.y * 2)
+	plane.subdivide_width = int(size.x * 2 * K.ground_detail())
+	plane.subdivide_depth = int(size.y * 2 * K.ground_detail())
 	var ground := MeshInstance3D.new()
 	ground.name = "Ground"
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # พื้นรับเงาอย่างเดียว ไม่ต้องวาดซ้ำในแผนที่เงา
 	ground.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
+	mat.set_shader_parameter("detail_octaves", K.ground_octaves)
 	var segs := PackedVector2Array()
 	for seg in path_segs:
 		segs.append(seg[0])

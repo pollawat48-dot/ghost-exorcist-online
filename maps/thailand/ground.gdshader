@@ -19,19 +19,19 @@ void vertex() {
 
 void fragment() {
 	vec2 p = wp;
-	float n = fbm(p * 0.004);
+	float n = fbm_d(p * 0.004);
 	float d = hash(floor(p / 3.0));
-	float fine = fbm(p * 0.08);
+	float fine = fbm_d(p * 0.08);
 
 	// โทนพาสเทลแบบภาพวาดสีเทียน: สีอ่อน มีลายกระดาษ/ฝีแปรงจางๆ
 	vec3 col = mix(vec3(0.6, 0.8, 0.44), vec3(0.74, 0.88, 0.54), smoothstep(0.3, 0.7, n));
 	col *= 0.93 + 0.1 * fine;
 
-	float gv = 1.0 - smoothstep(-60.0, 40.0, rect_sdf(p, grove) + (fbm(p * 0.015) - 0.5) * 120.0);
+	float gv = 1.0 - smoothstep(-60.0, 40.0, rect_sdf(p, grove) + (fbm_d(p * 0.015) - 0.5) * 120.0);
 	col = mix(col, vec3(0.48, 0.7, 0.4) * (0.92 + 0.12 * fine), 0.7 * gv);
 
 	float gd = length(p - grave_center);
-	float dry = (1.0 - smoothstep(grave_r - 140.0, grave_r + fbm(p * 0.02) * 60.0, gd)) * 0.85;
+	float dry = (1.0 - smoothstep(grave_r - 140.0, grave_r + fbm_d(p * 0.02) * 60.0, gd)) * 0.85;
 	col = mix(col, vec3(0.86, 0.78, 0.62) * (0.92 + 0.12 * fine), dry);
 
 	if (in_rect(p, courtyard)) {
@@ -59,7 +59,7 @@ void fragment() {
 	col = mix(vec3(0.9, 0.78, 0.6) * (0.92 + 0.1 * fine), col, smoothstep(canal_bank - 12.0, canal_bank + 4.0, dx));
 
 	// ฝีแปรงจางๆ ให้ดูเป็นภาพวาด
-	float stroke = sin(p.x * 0.35 + fbm(p * 0.05) * 6.0) * 0.5 + 0.5;
+	float stroke = sin(p.x * 0.35 + fbm_d(p * 0.05) * 6.0) * 0.5 + 0.5;
 	col *= 0.97 + 0.04 * stroke;
 	ALBEDO = col;
 	ROUGHNESS = 0.95;

@@ -59,6 +59,28 @@ const SHAPES := {
 	"phra_din": ["amulet", "clay"],
 	"phra_phong": ["amulet", "powder"],
 	"phra_thong": ["amulet", "gold"],
+	# ร้าน CC: กาชา เกลือ หินตี+ แฟชั่น
+	"gachapon": ["capsule", ""],
+	"kluea_sek": ["salt", ""],
+	"hin_ti_fashion": ["rune_stone", "2"],
+	# แฟชั่น
+	"f_chut_dek_wat": ["dress", "monk"],
+	"f_chut_thai": ["dress", "thai"],
+	"f_chut_nang_ram": ["dress", "dancer"],
+	"f_chut_thewada": ["dress", "angel"],
+	"f_hu_maeo": ["cat_ears", ""],
+	"f_ngob": ["ngob", ""],
+	"f_mongkut_mali": ["jasmine", ""],
+	"f_chada_thep": ["chada", ""],
+	"f_pik_khangkhao": ["wings", "bat"],
+	"f_pik_phisuea": ["wings", "butterfly"],
+	"f_pik_nangfa": ["wings", "feather"],
+	"f_pik_kinnari": ["wings", "gold"],
+	"pet_maa": ["pet", "maa"],
+	"pet_maeo": ["pet", "maeo"],
+	"pet_krathai": ["pet", "krathai"],
+	"pet_nok": ["pet", "nok"],
+	"pet_chang": ["pet", "chang"],
 	# อาวุธ
 	"maipai_staff": ["staff", ""],
 	"mitmo": ["sword", "knife"],
@@ -261,7 +283,7 @@ static func draw_slot(ci: CanvasItem, item_key: String, rect: Rect2) -> void:
 	st.anti_aliasing = true
 	if ItemDB.ITEMS.has(id):
 		var item: Dictionary = ItemDB.ITEMS[id]
-		if item["type"] == "equip":
+		if item["type"] in ["equip", "fashion"]:
 			var rc: Color = ItemDB.RARITY[item["rarity"]]["color"]
 			st.bg_color = Color(1, 1, 1).lerp(rc, 0.13)
 			st.border_color = rc
@@ -298,6 +320,8 @@ static func tint_of(item_key: String) -> Color:
 	if not ItemDB.ITEMS.has(id):
 		return P.LAVENDER
 	var item: Dictionary = ItemDB.ITEMS[id]
+	if item.has("tint"):
+		return item["tint"]
 	if item.has("color"):
 		return item["color"]
 	return (ItemDB.RARITY[item.get("rarity", "common")]["color"] as Color).lightened(0.25)
@@ -413,6 +437,14 @@ static func _draw_shape(shape: String, v: String, tint: Color, rarity: String, i
 		"ring": _ring(tint, rc)
 		"armband": _armband(tint)
 		"orb": _orb(tint)
+		"capsule": _capsule()
+		"salt": _salt()
+		"dress": _dress(tint, v, rc)
+		"cat_ears": _cat_ears(tint)
+		"ngob": _ngob(tint)
+		"jasmine": _jasmine(tint)
+		"wings": _wings(tint, v)
+		"pet": _pet(tint, v)
 		_: _unknown()
 
 
@@ -1422,3 +1454,123 @@ static func _orb(tint: Color) -> void:
 	_shine(Vector2(-0.1, -0.14), 0.07, 0.05, 0.9)
 	_dot(Vector2(0.1, 0.08), 0.03, Color(1, 1, 1, 0.8))
 	_sparkle(Vector2(0.3, -0.3), 0.08, WHITE)
+
+
+# ---------- ร้าน CC และแฟชั่น ----------
+
+static func _capsule() -> void:
+	# ลูกกาชาปอง: ครึ่งบนชมพูใส ครึ่งล่างขาว มีดาวข้างใน
+	_poly(_ell(0, 0.02, 0.36, 0.36, 28, PI, TAU), Color(1.0, 0.68, 0.8))
+	_poly(_ell(0, 0.02, 0.36, 0.36, 28, 0.0, PI), Color(1, 0.98, 0.96))
+	_rrect(Vector2(-0.37, -0.02), Vector2(0.74, 0.08), 0.03, Color(1.0, 0.82, 0.4))
+	_poly(_star_pts(Vector2(0, -0.16), 0.12, 0.05), Color(1.0, 0.95, 0.55), true, 0.6)
+	_shine(Vector2(-0.16, -0.2), 0.07, 0.04)
+	_sparkle(Vector2(0.32, -0.32), 0.08, Color(1.0, 0.92, 0.5))
+
+
+static func _salt() -> void:
+	# ถุงผ้าเกลือเสก มัดด้ายแดง กองเกลือขาวด้านหน้า
+	_poly([Vector2(-0.26, 0.36), Vector2(-0.3, -0.02), Vector2(-0.14, -0.22), Vector2(0.14, -0.22), Vector2(0.3, -0.02), Vector2(0.26, 0.36)], Color(0.94, 0.88, 0.76))
+	_poly([Vector2(-0.14, -0.22), Vector2(-0.22, -0.38), Vector2(0.0, -0.3), Vector2(0.22, -0.38), Vector2(0.14, -0.22)], Color(0.94, 0.88, 0.76), true, 0.8)
+	_line(Vector2(-0.16, -0.22), Vector2(0.16, -0.22), Color(0.88, 0.25, 0.3), 1.6)
+	_poly(_ell(0.1, 0.32, 0.26, 0.1, 16, PI, TAU), Color(1, 1, 1))
+	for p in [Vector2(-0.05, 0.27), Vector2(0.12, 0.25), Vector2(0.22, 0.29)]:
+		_dot(p, 0.02, Color(0.75, 0.85, 1.0))
+	_rrect(Vector2(-0.1, 0.0), Vector2(0.2, 0.16), 0.03, Color(1.0, 0.95, 0.75))
+	_line(Vector2(0, 0.03), Vector2(0, 0.13), Color(0.88, 0.25, 0.3), 0.6)
+
+
+static func _dress(tint: Color, v: String, rc: Color) -> void:
+	var body := [Vector2(-0.12, -0.36), Vector2(-0.22, -0.3), Vector2(-0.2, -0.04), Vector2(-0.38, 0.38), Vector2(0.38, 0.38), Vector2(0.2, -0.04), Vector2(0.22, -0.3), Vector2(0.12, -0.36), Vector2(0.0, -0.28)]
+	_poly(body, tint)
+	_rrect(Vector2(-0.21, -0.08), Vector2(0.42, 0.08), 0.02, GOLD)
+	match v:
+		"monk":
+			_poly([Vector2(-0.22, -0.3), Vector2(-0.12, -0.36), Vector2(0.3, 0.2), Vector2(0.26, 0.3)], tint.darkened(0.15), true, 0.7)
+		"thai", "dancer":
+			# สไบพาดเฉียงสีทอง
+			_poly([Vector2(-0.22, -0.3), Vector2(-0.1, -0.36), Vector2(0.24, 0.0), Vector2(0.16, 0.06)], Color(1.0, 0.82, 0.4) if v == "dancer" else tint.darkened(0.2), true, 0.7)
+	for x in [-0.24, -0.08, 0.08, 0.24]:
+		_dot(Vector2(x, 0.33), 0.03, GOLD)
+	if v in ["dancer", "angel"]:
+		for x in [-0.2, 0.2]:
+			_circle(Vector2(x, -0.3), 0.06, GOLD, true, 0.6)
+	if v == "angel":
+		_circle(Vector2(0, -0.14), 0.05, Color(1.0, 0.45, 0.55), true, 0.6)
+		_sparkle(Vector2(0.34, -0.3), 0.08, Color(1.0, 0.92, 0.5))
+
+
+static func _cat_ears(tint: Color) -> void:
+	_ci.draw_arc(_v(Vector2(0, 0.18)), 0.34 * _s, PI * 1.05, PI * 1.95, 20, OL, _w(3.2), true)
+	_ci.draw_arc(_v(Vector2(0, 0.18)), 0.34 * _s, PI * 1.05, PI * 1.95, 20, tint.darkened(0.15), _w(1.6), true)
+	for sgn in [-1.0, 1.0]:
+		_poly([Vector2(sgn * 0.12, -0.12), Vector2(sgn * 0.32, -0.4), Vector2(sgn * 0.36, -0.02)], tint)
+		_poly([Vector2(sgn * 0.17, -0.12), Vector2(sgn * 0.3, -0.31), Vector2(sgn * 0.32, -0.08)], Color(1.0, 0.9, 0.93), false)
+	_circle(Vector2(0, 0.2), 0.07, Color(1.0, 0.5, 0.62), true, 0.6)
+
+
+static func _ngob(tint: Color) -> void:
+	_poly([Vector2(-0.42, 0.14), Vector2(0, -0.3), Vector2(0.42, 0.14), Vector2(0.3, 0.2), Vector2(-0.3, 0.2)], tint)
+	_poly(_ell(0, 0.17, 0.42, 0.06, 20), tint.darkened(0.12), true, 0.7)
+	_line(Vector2(-0.24, 0.04), Vector2(0.24, 0.04), Color(0.9, 0.35, 0.45), 1.6)
+	for i in 3:
+		_circle(Vector2(-0.12 + i * 0.12, 0.0), 0.05, [Color(1.0, 0.6, 0.7), Color(1.0, 0.9, 0.5), Color(0.7, 0.85, 1.0)][i], true, 0.5)
+
+
+static func _jasmine(tint: Color) -> void:
+	for i in 12:
+		var a := i * TAU / 12.0
+		_circle(Vector2(cos(a) * 0.3, sin(a) * 0.18 + 0.05), 0.07, tint if i % 3 else Color(0.6, 0.85, 0.55), true, 0.5)
+	_circle(Vector2(0, -0.18), 0.09, Color(1.0, 0.7, 0.8), true, 0.6)
+	_sparkle(Vector2(0.3, -0.3), 0.08, Color(1.0, 0.95, 0.7))
+
+
+static func _wings(tint: Color, v: String) -> void:
+	for sgn in [-1.0, 1.0]:
+		match v:
+			"bat":
+				_poly([Vector2(sgn * 0.04, -0.1), Vector2(sgn * 0.42, -0.28), Vector2(sgn * 0.38, 0.0), Vector2(sgn * 0.3, 0.06), Vector2(sgn * 0.24, 0.0), Vector2(sgn * 0.16, 0.12), Vector2(sgn * 0.04, 0.06)], tint)
+			"butterfly":
+				_poly(_ell(sgn * 0.2, -0.12, 0.2, 0.18, 18), Color(tint, 1.0))
+				_poly(_ell(sgn * 0.17, 0.17, 0.13, 0.12, 14), Color(1.0, 0.75, 0.88))
+				_dot(Vector2(sgn * 0.22, -0.14), 0.05, Color(1, 1, 1))
+			_:
+				for k in 4:
+					var t := k / 3.0
+					var a := lerpf(-0.5, 0.6, t)
+					var length := lerpf(0.42, 0.24, t)
+					var d := Vector2(sgn * cos(a), sin(a))
+					var n := Vector2(-d.y, d.x) * 0.06
+					_poly([Vector2(sgn * 0.04, 0.0), Vector2(sgn * 0.04, 0.0) + d * length + n, Vector2(sgn * 0.04, 0.0) + d * (length + 0.06), Vector2(sgn * 0.04, 0.0) + d * length - n], tint if k % 2 == 0 else tint.darkened(0.08), true, 0.6)
+	_circle(Vector2(0, -0.02), 0.06, tint.darkened(0.2), true, 0.6)
+	if v == "gold":
+		_sparkle(Vector2(0.34, -0.34), 0.09, Color(1.0, 0.95, 0.6))
+
+
+static func _pet(tint: Color, v: String) -> void:
+	# หน้าสัตว์เลี้ยงกลมๆ ยิ้มแป้น หูตามชนิด
+	match v:
+		"maa":
+			for sgn in [-1.0, 1.0]:
+				_poly(_ell(sgn * 0.27, -0.06, 0.1, 0.2, 14), tint.darkened(0.25))
+		"maeo":
+			for sgn in [-1.0, 1.0]:
+				_poly([Vector2(sgn * 0.1, -0.26), Vector2(sgn * 0.28, -0.4), Vector2(sgn * 0.3, -0.12)], tint)
+		"krathai":
+			for sgn in [-1.0, 1.0]:
+				_poly(_ell(sgn * 0.12, -0.36, 0.07, 0.2, 14), tint)
+				_poly(_ell(sgn * 0.12, -0.34, 0.035, 0.13, 10), Color(1.0, 0.75, 0.82), false)
+		"nok":
+			_poly([Vector2(-0.06, -0.3), Vector2(0.02, -0.44), Vector2(0.08, -0.28)], Color(1.0, 0.45, 0.4))
+		"chang":
+			for sgn in [-1.0, 1.0]:
+				_poly(_ell(sgn * 0.3, -0.02, 0.15, 0.2, 14), tint.darkened(0.06))
+	_circle(Vector2(0, 0.0), 0.29, tint)
+	if v == "nok":
+		_poly([Vector2(-0.07, 0.04), Vector2(0.07, 0.04), Vector2(0, 0.16)], Color(1.0, 0.75, 0.3))
+	if v == "chang":
+		_stroke([Vector2(0, 0.1), Vector2(0.02, 0.3), Vector2(0.1, 0.36)], tint.darkened(0.05), 2.4)
+	_face(Vector2(0, -0.02), 0.1)
+	_dot(Vector2(-0.17, 0.08), 0.04, Color(1.0, 0.6, 0.65, 0.8))
+	_dot(Vector2(0.17, 0.08), 0.04, Color(1.0, 0.6, 0.65, 0.8))
+	_shine(Vector2(-0.12, -0.16), 0.06, 0.035)

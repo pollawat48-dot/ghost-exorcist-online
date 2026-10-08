@@ -1,4 +1,5 @@
 extends Node3D
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 ## กล้องมุมสูงแบบ RO: ตามผู้เล่น, ล้อเมาส์ซูม, คลิกขวาลากเพื่อหมุน
 
 var target: Node3D
@@ -24,6 +25,12 @@ func snap() -> void:
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_process_body(delta)
+	PerfOverlay.add("กล้อง", Time.get_ticks_usec() - t0)
+
+
+func _process_body(delta: float) -> void:
 	if target != null:
 		position = position.lerp(target.global_position, 1.0 - exp(-delta * 8.0))
 	_update_camera()

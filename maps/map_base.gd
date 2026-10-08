@@ -6,6 +6,7 @@ extends Node3D
 
 const K = preload("res://maps/props/mesh_kit.gd")
 const Prop = preload("res://maps/props/thai_prop.gd")
+const Critter = preload("res://maps/props/critter.gd")
 const FOLIAGE_SHADER = preload("res://maps/thailand/foliage.gdshader")
 
 const CELL := 32
@@ -148,6 +149,23 @@ func _scatter(kind: String, rect: Rect2, count: int, avoid_paths: bool) -> void:
 			added += 1
 
 
+## สัตว์/ชาวบ้านเดินเล่นรอบจุด center (ของประดับ ไม่กันทางเดิน)
+func _add_critters(kind: String, center: Vector2, roam: float, count: int) -> void:
+	for i in count:
+		var c := Critter.new()
+		c.kind = kind
+		c.variant = _rng.randi() % 64
+		c.roam = roam
+		c.map = self
+		var p := center
+		for k in 10:
+			p = center + Vector2(_rng.randf_range(-roam, roam), _rng.randf_range(-roam, roam)) * 0.5
+			if is_walkable(p) and not is_water(p):
+				break
+		c.home = p
+		props_root.add_child(c)
+
+
 func _clear_of_props(p: Vector2, dist: float) -> bool:
 	for other in _placed:
 		if other.distance_to(p) < dist:
@@ -179,6 +197,16 @@ func _tuft_mesh(blades: int, height: float, spread: float, base: Color, tip: Col
 
 
 func _foliage(mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color], name_: String) -> void:
+	if K.detail < 1.0:
+		# ระดับภาพต่ำ (มือถือ): หญ้า/ต้นข้าวเหลือราว 60% กระจายเท่าเดิม
+		var keep_t: Array[Transform3D] = []
+		var keep_c: Array[Color] = []
+		for i in transforms.size():
+			if i % 5 < 3:
+				keep_t.append(transforms[i])
+				keep_c.append(colors[i])
+		transforms = keep_t
+		colors = keep_c
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true

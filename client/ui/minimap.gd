@@ -1,6 +1,7 @@
 extends Control
 ## แผนที่ย่อมุมขวาบน: วาดภาพพื้นจากข้อมูลแผนที่ครั้งเดียว แล้วจุดผู้เล่น/ผีทุกเฟรม
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const P = preload("res://client/ui/palette.gd")
 const PX := 20.0  ## หน่วยเกมต่อ 1 พิกเซลของภาพแผนที่
 
@@ -35,11 +36,24 @@ func _color_at(p: Vector2) -> Color:
 	return map.minimap_color(p)
 
 
-func _process(_delta: float) -> void:
-	queue_redraw()
+var _redraw_wait := 0.0
+
+
+## วาดแผนที่ย่อใหม่ 10 ครั้งต่อวินาทีพอ (จุดผี/เพื่อนขยับช้าบนแผนที่ย่อ)
+func _process(delta: float) -> void:
+	_redraw_wait -= delta
+	if _redraw_wait <= 0.0:
+		_redraw_wait = 0.1
+		queue_redraw()
 
 
 func _draw() -> void:
+	var t0 := Time.get_ticks_usec()
+	_draw_map()
+	PerfOverlay.add("แผนที่ย่อ", Time.get_ticks_usec() - t0)
+
+
+func _draw_map() -> void:
 	var frame := Rect2(Vector2.ZERO, size)
 	draw_style_box(P.panel_style(16), frame)
 	if tex == null:

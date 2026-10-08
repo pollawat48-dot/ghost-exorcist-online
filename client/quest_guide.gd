@@ -123,6 +123,17 @@ func _walk_to_portal(p: Node3D) -> void:
 				p.attack_target = null
 				p.command_move(w.pos)
 			return
+	# ข้ามประเทศ: เดินไปหาไต้ก๋งที่ท่าเรือแล้วขึ้นเรือสำเภา
+	if hop == World.PORTS.get(World.country_of(hop), ""):
+		for n in main.npcs.get_children():
+			if n.role() == "boat":
+				if p.pos.distance_to(n.pos) <= 70.0:
+					p.attack_target = null
+					main.sail_to(hop)
+				elif not _heading_to(p, n.pos):
+					p.attack_target = null
+					p.command_move(n.pos)
+				return
 	main.hud.add_log("หาทางไป%sไม่เจอ" % World.map_name(goal_map))
 	stop()
 
@@ -195,6 +206,10 @@ func _spawn_spot(p: Node3D) -> Vector2:
 	return best
 
 
+func _boat_ready() -> bool:
+	return Quests.has_boat_pass(main.player.state) and main.player.state["level"] >= World.BOAT_LEVEL
+
+
 # ---------- เส้นทางระหว่างแผนที่ ----------
 
 ## แผนที่ที่ตรงเงื่อนไข: แผนที่ปัจจุบันก่อน แล้วไล่ตามลำดับโลก (รวมถ้ำที่ค้นพบแล้ว)
@@ -257,6 +272,11 @@ func info(map_id: String) -> Dictionary:
 		links.append(w["to"])
 	if not World.is_cave(map_id) and map_id in main.player.state["caves"] and m.cave_spot != Vector2.INF:
 		links.append(World.CAVE_PREFIX + map_id)
+	# ท่าเรือ: ถ้าผ่านเควสขึ้นเรือแล้ว นับว่าเชื่อมไปท่าเรือของอีกประเทศได้
+	for n in m.npcs:
+		if n.get("role", "") == "boat" and _boat_ready():
+			var other: String = "cn" if World.country_of(map_id) == "th" else "th"
+			links.append(World.PORTS[other])
 	m.free()
 	_maps[map_id] = {"ghosts": ghosts, "npcs": npc_ids, "portals": links}
 	return _maps[map_id]

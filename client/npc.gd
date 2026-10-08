@@ -3,6 +3,8 @@ extends Node3D
 ## เหนือหัวมีป้ายบอกหน้าที่ และเครื่องหมาย ! (มีเควสให้รับ) / ? (มีเควสให้ส่ง)
 
 const K = preload("res://maps/props/mesh_kit.gd")
+const M = preload("res://maps/props/model_lib.gd")
+const Batcher = preload("res://maps/props/prop_batcher.gd")
 
 const TALK_RADIUS := 70.0
 
@@ -77,6 +79,16 @@ func _ready() -> void:
 			# งอบสาน
 			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
 			K.cyl(head, 0.03, 0.62, 0.3, Vector3(0, 0.42, -0.04), K.mat(Color(0.92, 0.8, 0.55)), 16)
+		"chinese":
+			# หมวกกะโหลกจีนทรงกลม (กวาปี้เม่า) ขอบสีผ้าคาดเอว จุกแดงบนยอด เปียยาวด้านหลัง
+			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
+			K.sphere(head, 0.4, Vector3(0, 0.2, -0.06), K.mat(Color(0.22, 0.18, 0.26)), 18, Vector3(1.0, 0.62, 1.0))
+			var rim := TorusMesh.new()
+			rim.inner_radius = 0.36
+			rim.outer_radius = 0.42
+			K.add(head, rim, Vector3(0, 0.2, -0.05), sash, Vector3(-0.12, 0, 0))
+			K.sphere(head, 0.07, Vector3(0, 0.46, -0.08), K.mat(Color(0.95, 0.3, 0.32)), 8)
+			K.beam(head, Vector3(0, 0.0, -0.36), Vector3(0, -0.6, -0.42), 0.07, hair)
 		_:
 			K.sphere(head, 0.39, Vector3(0, 0.14, -0.1), hair, 18, Vector3(1.0, 0.78, 1.0))
 	for x in [-0.14, 0.14]:
@@ -123,6 +135,33 @@ func _ready() -> void:
 		# ร่มกระดาษสีชมพู
 		K.cyl(self, 0.03, 0.03, 2.2, Vector3(1.4, 1.1, -0.15), K.mat(Color(0.6, 0.42, 0.34)), 6)
 		K.cyl(self, 0.02, 1.0, 0.4, Vector3(1.4, 2.25, -0.15), K.mat(Color(1.0, 0.7, 0.75)), 16)
+	elif role() == "pet":
+		# ครูฝึกสัตว์: ลูกหมากับแมวนั่งข้างตัว ชามอาหาร และห่วงฝึกกระโดด
+		for e in [["cube-pets/animal-dog", Vector3(0.95, 0, 0.35), 0.5, -0.6], ["cube-pets/animal-cat", Vector3(-0.9, 0, 0.4), 0.45, 0.7]]:
+			var pet := M.spawn(self, e[0], e[1], e[2], e[3])
+			if pet != null:
+				M.play(pet, "idle", 1.0)
+		K.cyl(self, 0.2, 0.15, 0.1, Vector3(0.45, 0.05, 0.75), K.mat(Color(0.55, 0.75, 1.0)), 12)
+		K.sphere(self, 0.15, Vector3(0.45, 0.1, 0.75), K.mat(Color(0.85, 0.6, 0.4)), 8, Vector3(1, 0.4, 1))
+		var hoop := TorusMesh.new()
+		hoop.inner_radius = 0.38
+		hoop.outer_radius = 0.45
+		var h := K.add(self, hoop, Vector3(1.55, 0.6, -0.2), K.mat(Color(1.0, 0.6, 0.7)))
+		h.rotation.x = PI / 2
+		h.rotation.z = 0.3
+		for x in [1.2, 1.9]:
+			K.cyl(self, 0.03, 0.03, 0.6, Vector3(x, 0.3, -0.2 + (x - 1.55) * 0.3), K.mat(Color(0.75, 0.55, 0.42)), 6)
+	elif role() == "boat":
+		# นายท้ายเรือ: ท่าไม้เล็กๆ กับเรือสำเภาจอดข้างตัว ถือพาย
+		K.box(self, Vector3(1.6, 0.12, 2.6), Vector3(1.5, 0.12, 0.2), K.mat(Color(0.72, 0.55, 0.4)))
+		for z in [-0.9, 0.9]:
+			K.cyl(self, 0.07, 0.07, 0.5, Vector3(2.2, -0.1, z), K.mat(Color(0.5, 0.38, 0.3)), 6)
+		K.sphere(self, 0.95, Vector3(3.6, 0.35, 0.2), K.mat(Color(0.62, 0.42, 0.32)), 14, Vector3(1.0, 0.5, 2.3))
+		K.box(self, Vector3(0.9, 0.5, 1.0), Vector3(3.6, 0.8, 0.2), K.mat(Color(0.78, 0.6, 0.45)))
+		K.cyl(self, 0.06, 0.06, 3.2, Vector3(3.6, 2.2, 0.2), K.mat(Color(0.55, 0.4, 0.32)), 6)
+		K.box(self, Vector3(0.05, 1.8, 1.5), Vector3(3.6, 2.4, 0.2), K.mat(Color(0.98, 0.84, 0.6)))
+		K.box(self, Vector3(0.06, 0.45, 0.3), Vector3(3.6, 3.7, 0.2), K.mat(Color(0.95, 0.4, 0.4)))
+		K.beam(self, Vector3(0.35, 0.2, 0.3), Vector3(0.6, 1.5, -0.1), 0.05, K.mat(Color(0.7, 0.52, 0.38)))
 	K.label(self, data["name"], Vector3(0, 2.05, 0), Color(0.75, 1.0, 0.8), 34)
 	marker = K.label(self, "", Vector3(0, 2.7, 0), Color(1.0, 0.85, 0.3), 90)
 	var light := OmniLight3D.new()
@@ -133,6 +172,8 @@ func _ready() -> void:
 	light.set_meta("base_energy", 1.2)
 	light.add_to_group("night_light")
 	add_child(light)
+	# รวมชิ้นส่วนตัวละคร (ตัวที่ขยับขึ้นลง) และแผงร้านเป็น mesh ก้อนเดียว ลดการวาดบนมือถือ
+	Batcher.batch(self, [body])
 
 
 ## เครื่องหมายเหนือหัว: "!" มีเควสใหม่, "?" มีเควสให้ส่ง, ร้านค้าแสดงรูปถุงเงิน
@@ -140,6 +181,7 @@ func set_marker(state: String) -> void:
 	marker_state = state
 	if marker == null:
 		return
+	marker.font_size = 90
 	match state:
 		"ready":
 			marker.text = "?"
@@ -151,6 +193,14 @@ func set_marker(state: String) -> void:
 			marker.text = "เปลี่ยนอาชีพ"
 			marker.font_size = 40
 			marker.modulate = Color(0.85, 0.75, 1.0)
+		"pet":
+			marker.text = "พัฒนาร่างสัตว์เลี้ยง"
+			marker.font_size = 36
+			marker.modulate = Color(0.6, 0.95, 1.0)
+		"boat":
+			marker.text = "เรือข้ามประเทศ"
+			marker.font_size = 38
+			marker.modulate = Color(0.6, 0.85, 1.0)
 		"shop":
 			marker.text = "ร้านค้า"
 			marker.font_size = 40
