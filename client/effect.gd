@@ -7,7 +7,7 @@ extends Node3D
 const K = preload("res://maps/props/mesh_kit.gd")
 const Graphics = preload("res://client/graphics.gd")
 
-const PARTICLE_SCALE := {"low": 0.45, "medium": 0.75, "high": 1.0, "ultra": 1.3}
+const PARTICLE_SCALE := {"lowest": 0.3, "low": 0.45, "medium": 0.75, "high": 1.0, "ultra": 1.3}
 
 var kind := "ring"
 var life := 0.4
@@ -173,7 +173,7 @@ func _ball(r: float) -> SphereMesh:
 
 
 func _add_light(c: Color, energy: float, rng: float) -> void:
-	if Graphics.level() == "low":
+	if Graphics.level() in ["lowest", "low"]:
 		return
 	light = OmniLight3D.new()
 	light.light_color = c

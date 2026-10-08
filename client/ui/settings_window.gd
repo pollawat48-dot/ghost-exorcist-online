@@ -3,6 +3,7 @@ extends "res://client/ui/game_window.gd"
 
 const Sound = preload("res://client/audio/sound.gd")
 const Graphics = preload("res://client/graphics.gd")
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 
 signal logout_requested
 
@@ -39,13 +40,19 @@ func _build() -> void:
 	var gr := row()
 	for l in Graphics.LEVELS:
 		var b := P.button(Graphics.NAMES[l], P.PINK if l == Graphics.level() else Color(1, 1, 1, 0.9), 14)
-		b.custom_minimum_size.x = 86
+		b.custom_minimum_size.x = 72
 		b.pressed.connect(func():
 			Graphics.set_level(get_tree(), l)
 			refresh())
 		gr.add_child(b)
-	var hint := P.label("สูง/สูงสุด: ภาพคม เงาละเอียด แสงสะท้อน โมเดลเนียน (ใช้เครื่องแรงขึ้น)\nมือถือแนะนำ กลาง หรือ ต่ำ", 12, P.TEXT.lightened(0.2))
+	var hint := P.label("สูง/สูงสุด: ภาพคม เงาละเอียด แสงสะท้อน โมเดลเนียน (ใช้เครื่องแรงขึ้น)\nมือถือแนะนำ ประหยัด หรือ ต่ำ", 12, P.TEXT.lightened(0.2))
 	content.add_child(hint)
+	var fps := CheckBox.new()
+	fps.text = "แสดง FPS และภาระเครื่อง (มุมซ้ายบน)"
+	fps.add_theme_color_override("font_color", P.TEXT)
+	fps.button_pressed = PerfOverlay.enabled()
+	fps.toggled.connect(func(on: bool): PerfOverlay.set_enabled(get_tree(), on))
+	content.add_child(fps)
 	section("บัญชี")
 	content.add_child(P.label("ตัวละครจะถูกบันทึกก่อนออก", 13, P.TEXT.lightened(0.2)))
 	var out := P.button("ออกไปหน้าเมนู / เปลี่ยนตัวละคร", P.PINK, 15)

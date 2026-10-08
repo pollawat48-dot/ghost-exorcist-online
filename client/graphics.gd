@@ -7,12 +7,16 @@ extends RefCounted
 
 const K = preload("res://maps/props/mesh_kit.gd")
 
-const LEVELS := ["low", "medium", "high", "ultra"]
-const NAMES := {"low": "ต่ำ", "medium": "กลาง", "high": "สูง", "ultra": "สูงสุด"}
+const LEVELS := ["lowest", "low", "medium", "high", "ultra"]
+const NAMES := {"lowest": "ประหยัด", "low": "ต่ำ", "medium": "กลาง", "high": "สูง", "ultra": "สูงสุด"}
 const PRESETS := {
+	# ประหยัด (ค่าเริ่มต้นมือถือ): ไม่มีเงาแดด ไม่มีแสงฟุ้ง แสงรอบข้างเป็นสีคงที่ เรนเดอร์ 60% ของจอ
+	"lowest": {"msaa": Viewport.MSAA_DISABLED, "fxaa": false, "scale": 0.6,
+		"shadow_size": 1024, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 0, "shadow_dist": 20.0,
+		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.6, "glow": false, "sky_light": false},
 	"low": {"msaa": Viewport.MSAA_DISABLED, "fxaa": false, "scale": 0.75,
 		"shadow_size": 2048, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 1, "shadow_dist": 28.0,
-		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.75},
+		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.75, "glow": false, "sky_light": false},
 	"medium": {"msaa": Viewport.MSAA_2X, "fxaa": false, "scale": 1.0,
 		"shadow_size": 4096, "shadow_q": RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, "splits": 4, "shadow_dist": 55.0,
 		"ssao": true, "ssil": false, "ssr": false, "vol_fog": false, "detail": 1.5},
@@ -30,7 +34,7 @@ static var _level := ""
 
 ## ระดับเริ่มต้น: มือถือ = ต่ำ (จอมือถือความละเอียดสูง วาดหนักกว่า PC), PC = สูง
 static func default_level() -> String:
-	return "low" if OS.has_feature("mobile") else "high"
+	return "lowest" if OS.has_feature("mobile") else "high"
 
 
 static func level() -> String:
@@ -97,11 +101,17 @@ static func apply_environment(env: Environment, sun: DirectionalLight3D) -> void
 	env.ssr_fade_in = 0.15
 	env.ssr_fade_out = 2.0
 	env.volumetric_fog_enabled = p["vol_fog"]
+	env.glow_enabled = p.get("glow", true)
+	# แสงรอบข้างจากท้องฟ้าต้องวาดแผนที่แสงท้องฟ้าใหม่ทุกครั้งที่ฟ้าเปลี่ยนสี ระดับต่ำใช้สีคงที่แทน
+	var sky_light: bool = p.get("sky_light", true)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY if sky_light else Environment.AMBIENT_SOURCE_COLOR
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_BG if sky_light else Environment.REFLECTION_SOURCE_DISABLED
 	env.volumetric_fog_density = 0.004
 	env.volumetric_fog_length = 48.0
 	env.volumetric_fog_detail_spread = 2.0
 	env.volumetric_fog_anisotropy = 0.4
 	if sun != null:
+		sun.shadow_enabled = p["splits"] > 0
 		# ระดับต่ำ: เงาชั้นเดียว (orthogonal) วาดของที่ทอดเงาเพียงรอบเดียว
 		sun.directional_shadow_mode = {1: DirectionalLight3D.SHADOW_ORTHOGONAL, 2: DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS}.get(p["splits"], DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS)
 		sun.directional_shadow_max_distance = p["shadow_dist"]
