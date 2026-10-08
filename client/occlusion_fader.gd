@@ -2,9 +2,12 @@ extends Node
 ## ทำให้บ้าน/ต้นไม้ที่บังตัวผู้เล่นโปร่งใสลง (แบบเกม RO) เพื่อให้เห็นตัวละครเสมอ
 ## ใช้ GeometryInstance3D.transparency จึงไม่ต้องแยกวัสดุของแต่ละชิ้น
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const CHECK_RADIUS := 16.0  ## เมตร: ตรวจเฉพาะของที่อยู่ใกล้ผู้เล่น
 const FADED := 0.65
 const SCREEN_MARGIN := 24.0
+const AWAKE_RADIUS := 45.0  ## เมตร: ของประดับ/สัตว์ที่ไกลกว่านี้หยุดขยับ (นอกจอ)
+const EVERY := 4  ## ตรวจทุกๆ กี่เฟรม (ค่อยๆ จางอยู่แล้ว ไม่ต้องทุกเฟรม)
 
 var camera: Camera3D
 var player: Node3D
@@ -13,7 +16,10 @@ var _cache := {}  ## prop -> {"meshes": Array, "aabb": AABB, "fade": float}
 ## ตัวเรนเดอร์ Compatibility (มือถือ) ไม่รองรับ GeometryInstance3D.transparency
 ## จึงสลับไปใช้วัสดุโปร่งแสงสำเนาแทน (จางทันทีแทนค่อยๆ จาง)
 var _compat: bool = RenderingServer.get_rendering_device() == null
-var _faded_mats := {}  ## instance id ของวัสดุเดิม -> วัสดุโปร่งแสง
+var _faded_mats := {}
+var _frame := 0
+var _acc := 0.0
+var _awake := {}  ## prop -> bool  ## instance id ของวัสดุเดิม -> วัสดุโปร่งแสง
 
 
 func setup(cam: Camera3D, player_ref: Node3D, props_root: Node3D) -> void:
@@ -21,19 +27,38 @@ func setup(cam: Camera3D, player_ref: Node3D, props_root: Node3D) -> void:
 	player = player_ref
 	props = props_root
 	_cache.clear()
+	_awake.clear()
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_process_body(delta)
+	PerfOverlay.add("บังจอ", Time.get_ticks_usec() - t0)
+
+
+func _process_body(delta: float) -> void:
 	if camera == null or player == null or props == null:
+		return
+	_frame += 1
+	_acc += delta
+	if _frame % EVERY != 0:
 		return
 	var target := player.global_position + Vector3(0, 0.8, 0)
 	var screen := camera.unproject_position(target)
 	var player_depth := camera.global_position.distance_to(target)
-	var step := delta * 5.0
+	var step := _acc * 5.0
+	_acc = 0.0
+	var wake_check := _frame % (EVERY * 8) == 0
 	for prop in props.get_children():
+		var dist := Vector2(prop.global_position.x - target.x, prop.global_position.z - target.z).length()
+		if wake_check and prop.has_method("set_awake"):
+			var on := dist < AWAKE_RADIUS
+			if _awake.get(prop, true) != on:
+				_awake[prop] = on
+				prop.set_awake(on)
 		if prop.is_in_group("no_fade"):
 			continue
-		var near := Vector2(prop.global_position.x - target.x, prop.global_position.z - target.z).length() < CHECK_RADIUS
+		var near := dist < CHECK_RADIUS
 		var entry: Dictionary = _cache.get(prop, {})
 		if not near and entry.is_empty():
 			continue

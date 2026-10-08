@@ -2,6 +2,7 @@ extends Node3D
 ## สิ่งของในฉากธีมไทยแบบ 3D low-poly สร้างจากรูปทรงพื้นฐาน (จุดอ้างอิงอยู่ที่ฐาน, ด้านหน้าหันไปทาง +z)
 ## ภายหลังเปลี่ยนเป็นโมเดลจริง (.glb) ทีละชนิดได้โดยใช้ kind เดิม
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const Batcher = preload("res://maps/props/prop_batcher.gd")
 const K = preload("res://maps/props/mesh_kit.gd")
 const M = preload("res://maps/props/model_lib.gd")
@@ -81,6 +82,7 @@ const COTTAGE_ROOFS := [Color(0.93, 0.5, 0.5), Color(0.45, 0.72, 0.66), Color(0.
 const HAUNT_WOOD := Color(0.6, 0.54, 0.62)
 const HAUNT_DARK := Color(0.4, 0.34, 0.44)
 
+var wants_process := false  ## มีส่วนที่ขยับเอง (กิ่งไหว เปลวไฟ ดวงไฟลอย)
 var kind := ""
 var variant := 0
 var t := 0.0
@@ -148,7 +150,8 @@ func _ready() -> void:
 			else:
 				# ของธีมจีน (maps/props/china_prop.gd)
 				animated = ChinaProp.build(self, kind, variant)
-	set_process(kind in SWAYING or animated)
+	wants_process = kind in SWAYING or animated
+	set_process(wants_process)
 	# รวมชิ้นส่วนเป็น mesh เดียวต่อวัสดุ (ลดจำนวนการสั่งวาด ส่วนที่ขยับรวมแยกในโหนดของมัน)
 	var moving: Array = []
 	moving.append_array(_sway_nodes)
@@ -161,7 +164,18 @@ func footprint() -> Rect2:
 	return FOOTPRINTS.get(kind, ChinaProp.footprint(kind))
 
 
+## ตัวจัดการระยะ (client/occlusion_fader.gd) ปิดการขยับของที่อยู่ไกลจากผู้เล่น ประหยัด CPU มือถือ
+func set_awake(on: bool) -> void:
+	set_process(on and wants_process)
+
+
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_process_body(delta)
+	PerfOverlay.add("ของประดับ", Time.get_ticks_usec() - t0)
+
+
+func _process_body(delta: float) -> void:
 	t += delta
 	for i in _sway_nodes.size():
 		_sway_nodes[i].rotation.z = sin(t * 1.2 + i * 0.7 + variant) * 0.04

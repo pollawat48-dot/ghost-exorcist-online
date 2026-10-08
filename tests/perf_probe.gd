@@ -22,6 +22,21 @@ func _run() -> void:
 		# ตัวเลือกทดลอง: ปิดบางส่วนเพื่อดูว่าส่วนไหนกินการวาด
 		if a == "night":
 			main.ambience.time_of_day = 0.7
+		if a == "nocritters":
+			for c in main.map.props_root.get_children():
+				if c.has_method("set_awake") and c.get("kind") != null and not c.has_method("_night_light"):
+					c.queue_free()
+		if a == "nolabels":
+			for l in root.find_children("*", "Label3D", true, false):
+				l.visible = false
+		if a == "noui":
+			main.hud.visible = false
+			for c in main.hud.get_children():
+				if c is CanvasItem:
+					c.visible = false
+		if a == "noghosts":
+			for g in main.ghosts.get_children():
+				g.queue_free()
 		if a == "nomoon":
 			main.ambience.moon.visible = false
 		if a == "noshadow":
@@ -42,10 +57,12 @@ func _run() -> void:
 			if m != null and m.next_pass != null:
 				outlined += 1
 	var t0 := Time.get_ticks_usec()
+	var proc := 0.0
 	for i in 60:
 		await process_frame
+		proc += Performance.get_monitor(Performance.TIME_PROCESS)
 	var ms := (Time.get_ticks_usec() - t0) / 60000.0
-	print("PERF %s level=%s meshes=%d outlined=%d draw_calls=%d objects=%d prims=%d frame_ms=%.1f nodes=%d" % [" ".join(args), G.level(), meshes, outlined,
+	print("PERF proc=%.1fms %s level=%s meshes=%d outlined=%d draw_calls=%d objects=%d prims=%d frame_ms=%.1f nodes=%d" % [proc / 60.0 * 1000.0, " ".join(args), G.level(), meshes, outlined,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), ms, Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
 	quit()

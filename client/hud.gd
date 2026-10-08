@@ -6,6 +6,7 @@ extends CanvasLayer
 ## หน้าต่าง: ตัวละคร (C), สกิล (K), กระเป๋า (I), เควส (J), แฟชั่น, ร้าน CC, ออโต้, เลื่อนขั้นคลาส, ร้านค้า, เควสจาก NPC
 ## สลบ: ป้ายกลางจอพร้อมปุ่มเกิดใหม่ (ผู้เล่นกดเอง) · ขุดแร่: หลอดขุดเหนือหัว
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const ItemDB = preload("res://shared/data/items.gd")
 const World = preload("res://shared/data/world.gd")
 const Progression = preload("res://shared/combat/progression.gd")
@@ -588,6 +589,12 @@ func setup_minimap(map: Node3D, npc_root: Node = null, portal_root: Node = null,
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_hud_process(delta)
+	PerfOverlay.add("หน้าจอ", Time.get_ticks_usec() - t0)
+
+
+func _hud_process(delta: float) -> void:
 	overlay.queue_redraw()
 	if invite_timer > 0.0:
 		invite_timer -= delta
@@ -616,6 +623,12 @@ func _process(delta: float) -> void:
 func _draw_overhead() -> void:
 	if camera == null or player == null:
 		return
+	var t0 := Time.get_ticks_usec()
+	_draw_overhead_bars()
+	PerfOverlay.add("หลอดเลือด", Time.get_ticks_usec() - t0)
+
+
+func _draw_overhead_bars() -> void:
 	_foot_bar(player.global_position, float(player.hp) / player.stats["max_hp"], 60.0, P.HP if player.hp * 3 > player.stats["max_hp"] else P.HP_LOW)
 	_draw_fishing()
 	_draw_mining()

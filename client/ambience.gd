@@ -4,6 +4,7 @@ extends Node3D
 
 signal phase_changed(text: String)
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const K = preload("res://maps/props/mesh_kit.gd")
 const Effect = preload("res://client/effect.gd")
 const Graphics = preload("res://client/graphics.gd")
@@ -113,6 +114,12 @@ func _on_graphics_changed() -> void:
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_process_body(delta)
+	PerfOverlay.add("ฟ้า", Time.get_ticks_usec() - t0)
+
+
+func _process_body(delta: float) -> void:
 	tick(delta)
 
 

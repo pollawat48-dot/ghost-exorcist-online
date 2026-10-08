@@ -6,6 +6,12 @@ const P = preload("res://client/ui/palette.gd")
 const Graphics = preload("res://client/graphics.gd")
 
 static var config_path := "user://settings.cfg"
+## เวลาที่แต่ละส่วนของเกมใช้ (ไมโครวินาที สะสมช่วงละครึ่งวินาที) ให้ส่วนต่างๆ เรียก add() เอง
+static var sections := {}
+
+
+static func add(section: String, usec: int) -> void:
+	sections[section] = sections.get(section, 0) + usec
 
 var label: Label
 var _t := 0.0
@@ -62,6 +68,14 @@ func _process(delta: float) -> void:
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0),
 			int(size.x), int(size.y), Graphics.NAMES[Graphics.level()]]
+		# ส่วนที่กินเวลามากสุด 5 อันดับ (มิลลิวินาทีต่อเฟรม)
+		var keys := sections.keys()
+		keys.sort_custom(func(a, b): return sections[a] > sections[b])
+		var parts: Array[String] = []
+		for k in keys.slice(0, 5):
+			parts.append("%s %.1f" % [k, sections[k] / 1000.0 / maxf(1.0, _frames)])
+		label.text += "\n" + "  ".join(parts)
+	sections.clear()
 	_t = 0.0
 	_frames = 0
 	_worst = 0.0

@@ -659,21 +659,34 @@ func nearest_ghost(radius: float) -> Node3D:
 
 
 func tick(delta: float) -> void:
+	var t := Time.get_ticks_usec()
 	auto.tick(delta)
 	guide.tick(delta)
+	t = _mark("ออโต้", t)
 	player.tick(delta)
+	t = _mark("ผู้เล่น", t)
 	_tick_talk()
 	_tick_portals(delta)
 	for g in ghosts.get_children():
 		if g.has_method("tick"):
 			g.tick(delta)
+	t = _mark("ผี", t)
 	_tick_respawns(delta)
 	_tick_boss(delta)
 	for r in rocks.get_children():
 		r.tick(delta)
 	_tick_pickups()
 	_tick_fish_pending()
+	t = _mark("อื่นๆ", t)
 	_tick_net(delta)
+	_mark("เน็ต", t)
+
+
+## จับเวลาส่วนของเกมให้ตัวบอก FPS แสดงว่าส่วนไหนหนัก
+func _mark(section: String, since: int) -> int:
+	var now := Time.get_ticks_usec()
+	PerfOverlay.add(section, now - since)
+	return now
 
 
 func _unhandled_input(event: InputEvent) -> void:

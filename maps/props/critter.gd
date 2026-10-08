@@ -2,6 +2,7 @@ extends Node3D
 ## สัตว์เลี้ยงและชาวบ้านที่เดินเล่นในฉาก (ของประดับ ไม่มีผลกับเกม) ใช้โมเดลมีท่าทางจาก Kenney
 ## เดินสุ่มรอบจุดบ้านเฉพาะบนพื้นที่เดินได้ หยุดยืนเป็นพักๆ ทุกเครื่องเห็นไม่ตรงกันได้ (ไม่ส่งผ่านเซิร์ฟเวอร์)
 
+const PerfOverlay = preload("res://client/ui/perf_overlay.gd")
 const K = preload("res://maps/props/mesh_kit.gd")
 const M = preload("res://maps/props/model_lib.gd")
 
@@ -55,7 +56,21 @@ func _ready() -> void:
 	M.play(_model, "idle")
 
 
+## ตัวจัดการระยะปิดการเดิน/ท่าทางของสัตว์ที่อยู่ไกลผู้เล่น (มองไม่เห็นอยู่แล้ว)
+func set_awake(on: bool) -> void:
+	set_process(on)
+	var ap := _model.find_child("AnimationPlayer", true, false) as AnimationPlayer if _model != null else null
+	if ap != null:
+		ap.active = on
+
+
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_process_body(delta)
+	PerfOverlay.add("สัตว์", Time.get_ticks_usec() - t0)
+
+
+func _process_body(delta: float) -> void:
 	if _wait > 0.0:
 		_wait -= delta
 		if _wait <= 0.0:
