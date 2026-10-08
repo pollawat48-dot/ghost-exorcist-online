@@ -286,6 +286,7 @@ func _place(kind: String, pos: Vector2, radius: float, gap: float) -> bool:
 func _terrain_material(shader: Shader) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = shader
+	mat.set_shader_parameter("detail_octaves", K.ground_octaves)
 	mat.set_shader_parameter("canal_x", CANAL_X)
 	mat.set_shader_parameter("canal_water", CANAL_WATER)
 	mat.set_shader_parameter("canal_bank", CANAL_BANK)

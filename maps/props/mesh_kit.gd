@@ -15,6 +15,11 @@ static var detail := 1.0
 static var _materials := {}
 static var _meshes := {}
 static var _outline: StandardMaterial3D
+## เส้นขอบเปิด/ปิดได้ตามระดับภาพ (ระดับประหยัดปิด ลดงานวาดเกือบครึ่ง) จึงจำวัสดุที่ต้องมีเส้นขอบไว้
+static var outlines_on := true
+## ชั้นลายละเอียดของพื้น (shader ดิน/หญ้า) ตั้งตามระดับภาพ
+static var ground_octaves := 4
+static var _outlined: Array[BaseMaterial3D] = []
 static var _font: Font
 
 
@@ -36,6 +41,21 @@ static func outline() -> StandardMaterial3D:
 	return _outline
 
 
+static func attach_outline(m: BaseMaterial3D) -> void:
+	m.set_meta("outlined", true)
+	_outlined.append(m)
+	m.next_pass = outline() if outlines_on else null
+
+
+static func set_outlines(on: bool) -> void:
+	if on == outlines_on:
+		return
+	outlines_on = on
+	for m in _outlined:
+		if is_instance_valid(m):
+			m.next_pass = outline() if on else null
+
+
 static func to3d(p: Vector2, height: float = 0.0) -> Vector3:
 	return Vector3(p.x * S, height, p.y * S)
 
@@ -55,7 +75,7 @@ static func mat(color: Color, emission: float = 0.0, roughness: float = 0.85, me
 	m.rim = 0.2
 	m.rim_tint = 0.6
 	if outlined and color.a >= 1.0 and emission < 2.0:
-		m.next_pass = outline()
+		attach_outline(m)
 	if emission > 0.0:
 		m.emission_enabled = true
 		m.emission = color

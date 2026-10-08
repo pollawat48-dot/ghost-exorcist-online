@@ -63,7 +63,7 @@ static func _toon(src: BaseMaterial3D, tint: Color, outlined: bool) -> StandardM
 	if src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
 		m.transparency = src.transparency
 	elif outlined:
-		m.next_pass = K.outline()
+		K.attach_outline(m)
 	_materials[key] = m
 	return m
 

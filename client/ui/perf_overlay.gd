@@ -60,10 +60,12 @@ func _process(delta: float) -> void:
 		var size: Vector2 = Vector2(vp.get_visible_rect().size) * vp.scaling_3d_scale
 		var gpu := RenderingServer.viewport_get_measured_render_time_gpu(rid)
 		# ตัวเรนเดอร์มือถือ (OpenGL) วัดเวลา GPU ไม่ได้ จะได้ 0 จึงไม่แสดง
-		label.text = "FPS %d  (ช้าสุด %.0f ms)\nเกม %.1f ms  สั่งวาด %.1f ms%s\nวาด %d ครั้ง  %dk เหลี่ยม\n%dx%d  ภาพ:%s" % [
+		label.text = "FPS %d  (ช้าสุด %.0f ms)\nเกม %.1f ms  สั่งวาด %.1f ms  รอการ์ดจอ/จอ %.1f ms%s\nวาด %d ครั้ง  %dk เหลี่ยม\n%dx%d  ภาพ:%s" % [
 			roundi(_frames / _t), _worst * 1000.0,
 			Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 			RenderingServer.viewport_get_measured_render_time_cpu(rid),
+			# เวลาต่อเฟรมที่เหลือ = รอการ์ดจอวาดเสร็จ หรือรอจังหวะรีเฟรชจอ
+			maxf(0.0, _t * 1000.0 / _frames - Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0 - RenderingServer.viewport_get_measured_render_time_cpu(rid)),
 			("  GPU %.1f ms" % gpu) if gpu > 0.0 else "",
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0),

@@ -10,10 +10,10 @@ const K = preload("res://maps/props/mesh_kit.gd")
 const LEVELS := ["lowest", "low", "medium", "high", "ultra"]
 const NAMES := {"lowest": "ประหยัด", "low": "ต่ำ", "medium": "กลาง", "high": "สูง", "ultra": "สูงสุด"}
 const PRESETS := {
-	# ประหยัด (ค่าเริ่มต้นมือถือ): ไม่มีเงาแดด ไม่มีแสงฟุ้ง แสงรอบข้างเป็นสีคงที่ เรนเดอร์ 60% ของจอ
+	# ประหยัด (ค่าเริ่มต้นมือถือ): ไม่มีเงาแดด ไม่มีเส้นขอบ ไม่มีแสงฟุ้ง แสงรอบข้างเป็นสีคงที่ เรนเดอร์ 60% ของจอ
 	"lowest": {"msaa": Viewport.MSAA_DISABLED, "fxaa": false, "scale": 0.6,
 		"shadow_size": 1024, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 0, "shadow_dist": 20.0,
-		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.6, "glow": false, "sky_light": false},
+		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.6, "glow": false, "sky_light": false, "outline": false, "ground_octaves": 2},
 	"low": {"msaa": Viewport.MSAA_DISABLED, "fxaa": false, "scale": 0.75,
 		"shadow_size": 2048, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 1, "shadow_dist": 28.0,
 		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.75, "glow": false, "sky_light": false},
@@ -51,6 +51,8 @@ static func level() -> String:
 			cfg.set_value("graphics", "mobile_reset", 1)
 			cfg.save(config_path)
 		K.detail = PRESETS[_level]["detail"]
+		K.set_outlines(PRESETS[_level].get("outline", true))
+		K.ground_octaves = PRESETS[_level].get("ground_octaves", 4)
 	return _level
 
 
@@ -64,6 +66,8 @@ static func set_level(tree: SceneTree, l: String) -> void:
 		return
 	_level = l
 	K.detail = PRESETS[l]["detail"]
+	K.set_outlines(PRESETS[l].get("outline", true))
+	K.ground_octaves = PRESETS[l].get("ground_octaves", 4)
 	var cfg := ConfigFile.new()
 	cfg.load(config_path)
 	cfg.set_value("graphics", "level", l)

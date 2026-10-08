@@ -47,6 +47,20 @@ float fbm(vec2 p) {
 	return v;
 }
 
+// ลายละเอียดบนพื้น ระดับประหยัดใช้ชั้นน้อยลง ลดงานการ์ดจอมือถือ
+uniform int detail_octaves = 4;
+
+float fbm_d(vec2 p) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 4; i++) {
+		v += a * (i < detail_octaves ? vnoise(p) : 0.5);
+		p *= 2.0;
+		a *= 0.5;
+	}
+	return v;
+}
+
 float seg_dist(vec2 p, vec2 a, vec2 b) {
 	vec2 pa = p - a;
 	vec2 ba = b - a;
@@ -68,33 +82,33 @@ void vertex() {
 
 void fragment() {
 	vec2 p = wp;
-	float n = fbm(p * 0.004);
-	float fine = fbm(p * 0.08);
+	float n = fbm_d(p * 0.004);
+	float fine = fbm_d(p * 0.08);
 
 	vec3 col = mix(grass_a, grass_b, smoothstep(0.3, 0.7, n));
-	col = mix(col, tint, smoothstep(0.5, 0.78, fbm(p * 0.002 + 7.0)) * tint_amount);
+	col = mix(col, tint, smoothstep(0.5, 0.78, fbm_d(p * 0.002 + 7.0)) * tint_amount);
 	col *= 0.93 + 0.1 * fine;
 
 	for (int i = 0; i < patch_count; i++) {
 		float gd = length(p - patches[i].xy);
-		float dry = 1.0 - smoothstep(patches[i].z - 120.0, patches[i].z + fbm(p * 0.02) * 60.0, gd);
+		float dry = 1.0 - smoothstep(patches[i].z - 120.0, patches[i].z + fbm_d(p * 0.02) * 60.0, gd);
 		col = mix(col, patch_col * (0.92 + 0.12 * fine), dry * 0.8);
 	}
 
 	if (plaza.z > 0.0) {
-		float td = rect_sdf(p, plaza) + (fbm(p * 0.03) - 0.5) * 40.0;
+		float td = rect_sdf(p, plaza) + (fbm_d(p * 0.03) - 0.5) * 40.0;
 		if (td < 0.0) {
 			vec2 t = mod(p - plaza.xy, 40.0);
 			vec3 stone = plaza_col * (0.94 + 0.08 * hash(floor((p - plaza.xy) / 40.0)));
 			if (t.x < 2.0 || t.y < 2.0) {
 				stone *= 0.8;
 			}
-			stone = mix(stone, grass_b, smoothstep(0.55, 0.75, fbm(p * 0.02)) * 0.6);
+			stone = mix(stone, grass_b, smoothstep(0.55, 0.75, fbm_d(p * 0.02)) * 0.6);
 			col = stone;
 		}
 	}
 
-	float cd = rect_sdf(p, camp) + (fbm(p * 0.03) - 0.5) * 50.0;
+	float cd = rect_sdf(p, camp) + (fbm_d(p * 0.03) - 0.5) * 50.0;
 	col = mix(camp_col * (0.94 + 0.08 * fine), col, smoothstep(-20.0, 10.0, cd));
 
 	float pd = 1e6;
@@ -106,17 +120,17 @@ void fragment() {
 
 	float rough = 0.95;
 	for (int i = 0; i < pond_count; i++) {
-		float wd = length(p - ponds[i].xy) + (fbm(p * 0.015) - 0.5) * 40.0;
+		float wd = length(p - ponds[i].xy) + (fbm_d(p * 0.015) - 0.5) * 40.0;
 		float bank = 1.0 - smoothstep(ponds[i].z - 10.0, ponds[i].z + 14.0, wd);
 		col = mix(col, patch_col * 0.85, bank * 0.6);
 		if (wd < ponds[i].z - 12.0) {
 			float ripple = sin(wd * 0.25 - TIME * 1.5) * 0.5 + 0.5;
-			col = water_col * (0.92 + 0.12 * ripple) + vec3(0.15) * smoothstep(0.7, 1.0, fbm(p * 0.01 + TIME * 0.05));
+			col = water_col * (0.92 + 0.12 * ripple) + vec3(0.15) * smoothstep(0.7, 1.0, fbm_d(p * 0.01 + TIME * 0.05));
 			rough = 0.25;
 		}
 	}
 
-	float stroke = sin(p.x * 0.35 + fbm(p * 0.05) * 6.0) * 0.5 + 0.5;
+	float stroke = sin(p.x * 0.35 + fbm_d(p * 0.05) * 6.0) * 0.5 + 0.5;
 	col *= 0.97 + 0.04 * stroke;
 	ALBEDO = col;
 	ROUGHNESS = rough;

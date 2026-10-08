@@ -116,7 +116,7 @@ static func _colorable(mat: Material) -> bool:
 static func _class_key(m: StandardMaterial3D) -> String:
 	return "%.3f|%.3f|%d|%d|%d|%.2f|%.2f|%d|%d|%d" % [m.roughness, m.metallic, m.diffuse_mode, m.specular_mode,
 		int(m.rim_enabled), m.rim, m.rim_tint, m.cull_mode, m.shading_mode,
-		m.next_pass.get_instance_id() if m.next_pass != null else 0]
+		int(m.has_meta("outlined"))]
 
 
 static func _shared_mat(key: String, src: StandardMaterial3D) -> StandardMaterial3D:
@@ -125,6 +125,10 @@ static func _shared_mat(key: String, src: StandardMaterial3D) -> StandardMateria
 		m.albedo_color = Color.WHITE
 		m.vertex_color_use_as_albedo = true
 		m.vertex_color_is_srgb = true
+		m.remove_meta("outlined")
+		m.next_pass = null
+		if src.has_meta("outlined"):
+			K.attach_outline(m)
 		_shared[key] = m
 	return _shared[key]
 

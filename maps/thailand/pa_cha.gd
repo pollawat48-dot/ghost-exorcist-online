@@ -188,6 +188,7 @@ func _build_ground() -> void:
 	ground.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = GROUND_SHADER
+	mat.set_shader_parameter("detail_octaves", K.ground_octaves)
 	var segs := PackedVector2Array()
 	for seg in PATH_SEGS:
 		segs.append(seg[0])
