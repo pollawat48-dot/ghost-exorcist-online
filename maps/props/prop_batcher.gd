@@ -58,6 +58,9 @@ static func _collect(root: Node3D, node: Node, xf: Transform3D, skip: Array, gro
 	for c in node.get_children():
 		if not c is Node3D or c in skip:
 			continue
+		# ข้ามโมเดลจากไฟล์ที่มีท่าทางเคลื่อนไหวของตัวเอง (สัตว์เลี้ยง .glb)
+		if c.scene_file_path != "" and not c.find_children("*", "AnimationPlayer", true, false).is_empty():
+			continue
 		var n3 := c as Node3D
 		var cxf := xf * n3.transform
 		if c is MeshInstance3D and _mergeable(c):

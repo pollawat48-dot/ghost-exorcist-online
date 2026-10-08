@@ -9,6 +9,7 @@ const GhostDB = preload("res://shared/data/ghosts.gd")
 const DamageText = preload("res://client/damage_text.gd")
 const Effect = preload("res://client/effect.gd")
 const ChinaModels = preload("res://client/ghost_models_china.gd")
+const Batcher = preload("res://maps/props/prop_batcher.gd")
 
 signal died(ghost: Node3D)
 
@@ -86,6 +87,8 @@ func _ready() -> void:
 		K.label(self, "★ %s Lv.%d ★" % [data["name"], data["level"]], Vector3(0, label_y * base_scale * 0.95 + 0.6, 0), Color(1, 0.85, 0.4), 44)
 	else:
 		K.label(self, "%s Lv.%d" % [data["name"], data["level"]], Vector3(0, label_y, 0), Color(1, 0.88, 0.88), 34)
+	# รวมชิ้นส่วนที่ไม่ขยับเป็น mesh เดียว (ชายผ้า/ริบบิ้นที่แกว่งรวมแยกในตัวเอง) ลดการวาดบนมือถือ
+	Batcher.batch(model, dangles)
 	_sync()
 
 

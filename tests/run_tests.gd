@@ -1209,7 +1209,7 @@ func _test_quest_guide() -> void:
 	check(vp.msaa_3d == Viewport.MSAA_8X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED and main.ambience.env.ssil_enabled and main.ambience.env.volumetric_fog_enabled, "ระดับสูงสุด: ลบรอยหยัก 8x ไม่เบลอ มีแสงสะท้อนและหมอกมีแสง")
 	check(K.detail == 2.5 and main.map.map_id == map_before and player.pos.distance_to(stand) < 1.0, "เปลี่ยนระดับแล้วสร้างฉากใหม่ ยืนที่เดิม")
 	Graphics.set_level(main.get_tree(), "low")
-	check(vp.msaa_3d == Viewport.MSAA_DISABLED and vp.scaling_3d_scale < 1.0 and not main.ambience.env.ssao_enabled and K.detail < 1.0 and Graphics.PRESETS["low"]["splits"] == 2, "ระดับต่ำ: ปิดเอฟเฟกต์หนักๆ เรนเดอร์เล็กลง โมเดลเหลี่ยมน้อยลงสำหรับมือถือ")
+	check(vp.msaa_3d == Viewport.MSAA_DISABLED and vp.scaling_3d_scale < 1.0 and not main.ambience.env.ssao_enabled and K.detail < 1.0 and Graphics.PRESETS["low"]["splits"] == 1, "ระดับต่ำ: ปิดเอฟเฟกต์หนักๆ เรนเดอร์เล็กลง โมเดลเหลี่ยมน้อยลงสำหรับมือถือ")
 	var prop_meshes: int = main.map.props_root.find_children("*", "MeshInstance3D", true, false).size()
 	check(prop_meshes < main.map.props_root.get_child_count() * 4 and main.map.props_root.find_children("Batched", "MeshInstance3D", true, false).size() > 0, "ของประดับรวมชิ้นส่วนเป็น mesh เดียวต่อวัสดุ (ลดการสั่งวาดบนมือถือ)")
 	var gcfg := ConfigFile.new()

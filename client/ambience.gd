@@ -101,6 +101,10 @@ func _ready() -> void:
 func _on_graphics_changed() -> void:
 	Graphics.apply_viewport(get_viewport())
 	Graphics.apply_environment(env, sun)
+	# แสงจันทร์: เงาแบบเดียวกับแดด แต่ระดับต่ำ (มือถือ) ไม่มีเงาจันทร์เลย
+	moon.shadow_enabled = Graphics.level() != "low"
+	moon.directional_shadow_mode = sun.directional_shadow_mode
+	moon.directional_shadow_max_distance = sun.directional_shadow_max_distance
 
 
 func _process(delta: float) -> void:
@@ -121,6 +125,9 @@ func tick(delta: float) -> void:
 	sun.light_energy = 1.0 * (1.0 - night) * (1.0 - gloom * 0.35)
 	sun.light_color = Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.65, 0.5), dusk)
 	moon.light_energy = 0.45 * night
+	# ไฟที่มืดสนิทยังเสียแรงวาดแผนที่เงา ปิดไว้เลย (กลางวันไม่มีแสงจันทร์ กลางคืนไม่มีแดด)
+	moon.visible = night > 0.02
+	sun.visible = sun.light_energy > 0.01
 
 	sky_mat.sky_top_color = Color(0.55, 0.76, 0.98).lerp(Color(0.7, 0.55, 0.85), dusk).lerp(Color(0.16, 0.16, 0.36), clampf(night * 1.5 - 0.5, 0.0, 1.0))
 	sky_mat.sky_horizon_color = Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.72, 0.62), dusk).lerp(Color(0.32, 0.3, 0.52), clampf(night * 1.5 - 0.5, 0.0, 1.0))

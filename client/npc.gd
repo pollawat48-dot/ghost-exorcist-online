@@ -4,6 +4,7 @@ extends Node3D
 
 const K = preload("res://maps/props/mesh_kit.gd")
 const M = preload("res://maps/props/model_lib.gd")
+const Batcher = preload("res://maps/props/prop_batcher.gd")
 
 const TALK_RADIUS := 70.0
 
@@ -171,6 +172,8 @@ func _ready() -> void:
 	light.set_meta("base_energy", 1.2)
 	light.add_to_group("night_light")
 	add_child(light)
+	# รวมชิ้นส่วนตัวละคร (ตัวที่ขยับขึ้นลง) และแผงร้านเป็น mesh ก้อนเดียว ลดการวาดบนมือถือ
+	Batcher.batch(self, [body])
 
 
 ## เครื่องหมายเหนือหัว: "!" มีเควสใหม่, "?" มีเควสให้ส่ง, ร้านค้าแสดงรูปถุงเงิน

@@ -18,6 +18,19 @@ func _run() -> void:
 	for a in args:
 		if a.begins_with("map:"):
 			main.load_map(a.substr(4))
+	for a in args:
+		# ตัวเลือกทดลอง: ปิดบางส่วนเพื่อดูว่าส่วนไหนกินการวาด
+		if a == "night":
+			main.ambience.time_of_day = 0.7
+		if a == "nomoon":
+			main.ambience.moon.visible = false
+		if a == "noshadow":
+			main.ambience.sun.shadow_enabled = false
+			main.ambience.moon.shadow_enabled = false
+		if a == "nooutline":
+			var K = load("res://maps/props/mesh_kit.gd")
+			for m in K._materials.values():
+				m.next_pass = null
 	for i in 60:
 		await process_frame
 	var meshes := 0
@@ -32,7 +45,7 @@ func _run() -> void:
 	for i in 60:
 		await process_frame
 	var ms := (Time.get_ticks_usec() - t0) / 60000.0
-	print("PERF level=%s meshes=%d outlined=%d draw_calls=%d objects=%d prims=%d frame_ms=%.1f nodes=%d" % [G.level(), meshes, outlined,
+	print("PERF %s level=%s meshes=%d outlined=%d draw_calls=%d objects=%d prims=%d frame_ms=%.1f nodes=%d" % [" ".join(args), G.level(), meshes, outlined,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), ms, Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
 	quit()

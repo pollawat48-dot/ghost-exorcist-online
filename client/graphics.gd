@@ -11,7 +11,7 @@ const LEVELS := ["low", "medium", "high", "ultra"]
 const NAMES := {"low": "ต่ำ", "medium": "กลาง", "high": "สูง", "ultra": "สูงสุด"}
 const PRESETS := {
 	"low": {"msaa": Viewport.MSAA_DISABLED, "fxaa": false, "scale": 0.75,
-		"shadow_size": 2048, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 2, "shadow_dist": 32.0,
+		"shadow_size": 2048, "shadow_q": RenderingServer.SHADOW_QUALITY_HARD, "splits": 1, "shadow_dist": 28.0,
 		"ssao": false, "ssil": false, "ssr": false, "vol_fog": false, "detail": 0.75},
 	"medium": {"msaa": Viewport.MSAA_2X, "fxaa": false, "scale": 1.0,
 		"shadow_size": 4096, "shadow_q": RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, "splits": 4, "shadow_dist": 55.0,
@@ -102,7 +102,8 @@ static func apply_environment(env: Environment, sun: DirectionalLight3D) -> void
 	env.volumetric_fog_detail_spread = 2.0
 	env.volumetric_fog_anisotropy = 0.4
 	if sun != null:
-		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if p["splits"] == 4 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		# ระดับต่ำ: เงาชั้นเดียว (orthogonal) วาดของที่ทอดเงาเพียงรอบเดียว
+		sun.directional_shadow_mode = {1: DirectionalLight3D.SHADOW_ORTHOGONAL, 2: DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS}.get(p["splits"], DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS)
 		sun.directional_shadow_max_distance = p["shadow_dist"]
 		sun.directional_shadow_blend_splits = p["splits"] == 4
 		# เงาขอบคมแต่ไม่แตก: เบลอน้อย และใช้ขนาดดวงอาทิตย์ทำให้ขอบเงานุ่มตามระยะ (เฉพาะระดับสูง)
